@@ -1,0 +1,92 @@
+name: Imar18Studio CI
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check no real field data in repository (AC-PILOT-08)
+        shell: pwsh
+        run: ./scripts/check-no-real-data.ps1
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore Imar18Studio.sln
+      - run: dotnet build Imar18Studio.sln -c Release --no-restore -warnaserror
+      - run: dotnet test Imar18Studio.sln -c Release --no-build --filter "Category!=FullCad&Category!=UiSnapshot&Category!=RealData" --logger trx --collect:"XPlat Code Coverage"
+      - run: dotnet test tests/Imar18.Architecture.Tests/Imar18.Architecture.Tests.csproj -c Release --no-build --filter "Category!=RealData" --logger trx
+      - run: dotnet test tests/Imar18.Pilot.Tests/Imar18.Pilot.Tests.csproj -c Release --no-build --filter "Category!=RealData" --logger trx
+      - name: Zero-Test Gate (Sıfır Test Kapısı)
+        shell: pwsh
+        run: |
+          $trxFiles = Get-ChildItem -Path . -Filter "*.trx" -Recurse
+          if (-not $trxFiles -or $trxFiles.Count -eq 0) {
+            Write-Error "SIFIR TEST HATASI: Hiçbir .trx test sonuç dosyası üretilmedi!"
+            exit 1
+          }
+          foreach ($file in $trxFiles) {
+            [xml]$xml = Get-Content $file.FullName
+            $total = [int]$xml.TestRun.ResultSummary.Counters.total
+            Write-Host "$($file.Name) -> Toplam Çalışan Test: $total"
+            if ($total -le 0) {
+              Write-Error "SIFIR TEST HATASI: $($file.FullName) içinde 0 test çalıştı!"
+              exit 1
+            }
+          }
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: "**/*.trx"
+          retention-days: 7
+
+  security:
+    runs-on: windows-latest
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore Imar18Studio.sln
+      - name: Check vulnerable packages
+        shell: pwsh
+        run: |
+          $out = dotnet list Imar18Studio.sln package --vulnerable --include-transitive | Out-String
+          Write-Host $out
+          if ($out -match "has the following vulnerable packages") {
+            Write-Error "Vulnerable package detected!"
+            exit 1
+          }
+      - run: dotnet test tests/Imar18.Infrastructure.Tests/Imar18.Infrastructure.Tests.csproj -c Release --filter "FullyQualifiedName~Security|FullyQualifiedName~Guvenlik|FullyQualifiedName~AuditLog|Category=Smoke"
+
+  release-gate:
+    needs: [build-test, security]
+    runs-on: windows-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      # Faz 20 stub: ProductionGate filtresi (dotnet publish adımı Faz 20'ye kadar eklenmez)
+      - run: dotnet test Imar18Studio.sln -c Release --filter "FullyQualifiedName~ProductionGate|Category=Smoke"

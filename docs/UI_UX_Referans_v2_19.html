@@ -1,0 +1,1990 @@
+<!DOCTYPE html>
+<html lang="tr" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Imar18Studio v2.19 — Kurumsal UI/UX Referans Stüdyosu (6 Gerçek İmar Adası Geometrisi Simülatörlü)</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            cad: {
+              bg: '#0F1115',
+              panel: '#181B22',
+              card: '#212631',
+              border: '#2D3443',
+              accent: '#3B82F6'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background-color: #090A0D; color: #E2E8F0; user-select: none; margin: 0; }
+    .cad-grid {
+      background-color: #0D0F13;
+      background-image: 
+        linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(to right, rgba(59,130,246,0.06) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(59,130,246,0.06) 1px, transparent 1px);
+      background-size: 20px 20px, 20px 20px, 100px 100px, 100px 100px;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #181B22; }
+    ::-webkit-scrollbar-thumb { background: #363F52; border-radius: 3px; }
+    .parcel-poly { transition: fill 0.18s, stroke 0.18s; cursor: pointer; }
+    .parcel-poly:hover { filter: brightness(1.22); }
+    .panel-transition { transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1); }
+    *:focus-visible { outline: 2px solid #60A5FA; outline-offset: 1px; }
+    body.pafta-light .cad-grid {
+      background-color: #F8FAFC !important;
+      background-image:
+        linear-gradient(to right, rgba(15,23,42,0.06) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(15,23,42,0.06) 1px, transparent 1px),
+        linear-gradient(to right, rgba(37,99,235,0.14) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(37,99,235,0.14) 1px, transparent 1px) !important;
+    }
+    body.pafta-light #svg-wrapper svg text { filter: drop-shadow(0px 0px 2px rgba(15,23,42,0.85)); }
+    @keyframes dashFlow { to { stroke-dashoffset: -24; } }
+    .alloc-vector-line { animation: dashFlow 0.9s linear infinite; }
+  </style>
+</head>
+<body class="h-screen w-screen flex items-center justify-center overflow-hidden font-sans">
+
+  <!-- EKRAN ÇÖZÜNÜRLÜK SİMÜLATÖR ÇERÇEVESİ -->
+  <div id="app-viewport" class="w-full h-full bg-cad-bg flex flex-col overflow-hidden border border-cad-border shadow-2xl transition-all duration-300 relative">
+
+    <!-- BİLDİRİM TOAST KUTUSU -->
+    <div id="toast-container" class="fixed top-14 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-sm"></div>
+
+    <!-- 1. ÜST PENCERE BARI, EVRE KİLİDİ & VIEWPORT KONTROLLERİ -->
+    <header class="min-h-[48px] bg-cad-panel border-b border-cad-border px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 shrink-0">
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-700 flex items-center justify-center font-bold text-white text-xs shadow">18</div>
+        <div>
+          <span class="font-bold text-white tracking-tight text-sm">Imar18Studio</span>
+          <span class="text-[10px] font-mono text-blue-300 bg-blue-950/80 border border-blue-700/60 px-1.5 py-0.5 rounded ml-1">v2.19</span>
+          <span class="hidden sm:inline-block text-[11px] text-slate-300 ml-1 px-2 py-0.5 bg-cad-card rounded border border-cad-border font-mono">Serdivan_105Ada.imr18</span>
+        </div>
+        <!-- Evre / Mod Anahtarı -->
+        <button id="btn-phase-mode" onclick="togglePhaseMode()" title="Pilot ve Pilot Sonrası görünüm farklarını test et" class="text-[11px] font-semibold bg-amber-950/80 text-amber-300 border border-amber-700/70 px-2 py-0.5 rounded-full flex items-center gap-1.5 hover:bg-amber-900/70 transition">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+          <span id="phase-mode-lbl">EVRE 1: PİLOT (Sentetik Veri • Taslak Modu)</span>
+        </button>
+        <span class="hidden xl:flex text-[11px] text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded-full items-center gap-1 font-mono">
+          ITRF96 TM30 (örnek, projeden girilir) • TPYS_2022
+        </span>
+      </div>
+
+      <!-- Orta: Responsive Ekran Testi & Dock Kontrolleri -->
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <div class="hidden lg:flex items-center bg-cad-card border border-cad-border rounded-md p-0.5 text-[11px]">
+          <button onclick="setViewport('full')" id="vp-full" class="px-2 py-0.5 rounded bg-blue-600 text-white font-medium">🖥️ Tam</button>
+          <button onclick="setViewport('laptop')" id="vp-laptop" class="px-2 py-0.5 rounded text-slate-300 hover:bg-slate-700">💻 13" Laptop</button>
+          <button onclick="setViewport('tablet')" id="vp-tablet" class="px-2 py-0.5 rounded text-slate-300 hover:bg-slate-700">📱 Dar</button>
+        </div>
+
+        <div class="flex items-center bg-cad-card border border-cad-border rounded-md p-0.5 text-[11px]">
+          <button onclick="toggleDock('left')" id="btn-dock-left" title="Sol Katman & Ada Geometrisi Panelini Aç/Kapat" class="px-2 py-0.5 rounded bg-slate-700 text-white font-medium">◧ Sol</button>
+          <button onclick="toggleDock('bottom')" id="btn-dock-bottom" title="Alt Canlı Cetveli Aç/Kapat" class="px-2 py-0.5 rounded bg-slate-700 text-white font-medium mx-0.5">⬓ Cetvel</button>
+          <button onclick="toggleDock('right')" id="btn-dock-right" title="Sağ Parsel Denetçisini Aç/Kapat" class="px-2 py-0.5 rounded bg-slate-700 text-white font-medium">◨ Denetçi</button>
+        </div>
+      </div>
+
+      <!-- Sağ: Undo/Redo, Audit Log, Kısayollar & Onay/Çıktı -->
+      <div class="flex items-center gap-1.5">
+        <button onclick="undoAction()" id="btn-undo" title="Geri Al (Ctrl+Z)" class="px-2 py-1 bg-cad-card hover:bg-slate-700 border border-cad-border rounded text-xs text-slate-300 font-mono disabled:opacity-40">
+          ↶ Geri
+        </button>
+        <button onclick="redoAction()" id="btn-redo" title="Yinele (Ctrl+Y)" class="px-2 py-1 bg-cad-card hover:bg-slate-700 border border-cad-border rounded text-xs text-slate-300 font-mono disabled:opacity-40">
+          ↷ İleri
+        </button>
+        <button onclick="toggleAuditModal()" class="px-2.5 py-1 bg-cad-card hover:bg-slate-700 border border-cad-border rounded text-xs text-cyan-300 font-mono flex items-center gap-1">
+          📜 Audit (<span id="audit-count-lbl">3</span>)
+        </button>
+        <button onclick="togglePaftaTheme()" id="btn-pafta-theme" title="Koyu CAD Stüdyosu / Açık Pafta Kağıt Teması Geçişi" class="px-2 py-1 bg-cad-card hover:bg-slate-700 border border-cad-border rounded text-xs text-amber-300 font-mono">
+          ☀️ Açık Pafta
+        </button>
+        <button onclick="toggleShortcutsModal()" title="WCAG 2.2 AA Klavye Kısayolları (F1)" class="px-2 py-1 bg-cad-card hover:bg-slate-700 border border-cad-border rounded text-xs text-slate-300 font-mono">
+          ⌨️ F1
+        </button>
+        <button onclick="goStep(5)" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded font-semibold text-xs shadow">
+          Onay & Çıktı ➔
+        </button>
+      </div>
+    </header>
+
+    <!-- 2. RESPONSIVE 5 ADIMLI SİHİRBAZ (STEPPER) & REVİZYON / ONAY DURUM BARI -->
+    <nav class="bg-[#13161C] border-b border-cad-border px-3 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+      <div class="flex items-center gap-1 sm:gap-2 overflow-x-auto py-0.5 flex-1" id="stepper-bar"></div>
+      <div class="flex items-center gap-2 shrink-0 flex-wrap">
+        <span id="revision-badge" class="text-[11px] font-mono px-2 py-1 rounded bg-cad-card border border-cad-border text-slate-300">
+          Rev: #R101 (A8F2..9C)
+        </span>
+        <span id="approval-status-pill" class="text-[11px] font-semibold px-2.5 py-1 rounded border bg-amber-950/80 border-amber-700 text-amber-300">
+          ⏳ Mühendis Onayı Bekleniyor
+        </span>
+        <div id="global-status-pill" class="text-[11px] font-medium px-2.5 py-1 rounded border shrink-0"></div>
+      </div>
+    </nav>
+
+    <!-- 3. ANA SAHNE (5 ADIM) -->
+    <main class="flex-1 overflow-hidden relative flex flex-col">
+
+      <!-- ==================== ADIM 1: ÇOKLU CAD (DXF / DWG / NCZ) & GİRDİLER ==================== -->
+      <section id="step-1" class="step-view hidden flex-1 p-4 sm:p-6 overflow-y-auto">
+        <div class="max-w-6xl mx-auto space-y-5">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 class="text-lg sm:text-xl font-bold text-white">1. Çoklu CAD (DXF / DWG / NCZ) ve Tapu/Kroki Girdileri</h1>
+              <p class="text-slate-400 text-xs mt-1">
+                <span class="text-cyan-400 font-mono">D28 / FR-F2.9:</span> AutoCAD (`.dxf`, `.dwg`) Kartezyen $(X,Y)$ ve Netcad (`.ncz`) Jeodezik $(Y,X)$ dosyaları <code class="text-blue-300">ICadFormatAdapter</code> kapısında otomatik normalize edilir ve $Z=0$ düzlemine indirgenir.
+              </p>
+            </div>
+            <div class="flex items-center gap-2 bg-cad-panel border border-cad-border rounded-lg p-1.5 text-xs">
+              <span class="text-slate-400 px-2">Aktif CAD Kaynağı:</span>
+              <button onclick="switchCadFormat('NCZ')" id="fmt-NCZ" class="px-2.5 py-1 rounded bg-blue-600 text-white font-mono font-semibold">.NCZ (Netcad)</button>
+              <button onclick="switchCadFormat('DWG')" id="fmt-DWG" class="px-2.5 py-1 rounded text-slate-300 hover:bg-slate-700 font-mono">.DWG (AutoCAD)</button>
+              <button onclick="switchCadFormat('DXF')" id="fmt-DXF" class="px-2.5 py-1 rounded text-slate-300 hover:bg-slate-700 font-mono">.DXF (Katmanlı)</button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Kart 1: Çoklu CAD Harita Girdisi -->
+            <div class="bg-cad-panel border-2 border-emerald-500/40 rounded-xl p-4 flex flex-col justify-between">
+              <div>
+                <div class="flex justify-between items-center mb-3">
+                  <span id="cad-input-badge" class="px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 font-bold text-xs border border-emerald-500/30">1. NETCAD (.NCZ) HARİTA</span>
+                  <span class="text-xs text-emerald-400 font-mono">✓ AC-CAD-01..02</span>
+                </div>
+                <div id="cad-file-title" class="font-semibold text-white font-mono text-sm">Serdivan_105Ada_Halihazir.ncz</div>
+                <p id="cad-file-desc" class="text-xs text-slate-400 mt-1.5">
+                  NativeNczBinaryParser • Jeodezik $(Y=\text{Sağa}, X=\text{Yukarı}) \to \text{NTS } (x=Y, y=X)$ eşlendi • 14 Kadastro Parseli • $Z \neq 0$ kotları $Z=0$ yatay izdüşüme indirgendi.
+                </p>
+                <div class="mt-3 p-2 bg-cad-card rounded border border-cad-border text-[11px] font-mono text-slate-300 space-y-1">
+                  <div class="flex justify-between"><span>CRS / Dilim:</span><span class="text-emerald-400">ITRF96 TM 30° (örnek, projeden girilir)</span></div>
+                  <div class="flex justify-between"><span>Karakter Kodlaması:</span><span class="text-cyan-300">Windows-1254 (Türkçe)</span></div>
+                  <div class="flex justify-between"><span>Topoloji (NTS IsValid):</span><span class="text-emerald-400">✓ Geçerli (0 Self-Intersect)</span></div>
+                </div>
+              </div>
+              <button onclick="goStep(4)" class="mt-4 w-full py-1.5 bg-cad-card hover:bg-slate-700 border border-cad-border rounded text-xs font-medium">CAD Katmanlarını Stüdyoda Gör</button>
+            </div>
+
+            <!-- Kart 2: Tapu / TAKBİS Kayıtları -->
+            <div class="bg-cad-panel border-2 border-emerald-500/40 rounded-xl p-4 flex flex-col justify-between">
+              <div>
+                <div class="flex justify-between items-center mb-3">
+                  <span class="px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 font-bold text-xs border border-blue-500/30">2. TAPU / TAKBİS (VEKTÖREL)</span>
+                  <span class="text-xs text-emerald-400 font-mono">✓ 26 Malik (Anonim)</span>
+                </div>
+                <div class="font-semibold text-white font-mono text-sm">Tapu_TAKBIS_105Ada_Sentetik.pdf</div>
+                <p class="text-xs text-slate-400 mt-1.5">
+                  PdfPig Vektörel Okuyucu • Toplam Tapu Alanı: <b class="text-white">1,666.67 m²</b> • EBOB sadeleştirmeli <code class="text-cyan-300">Fraction(BigInteger)</code> hisse kontrolü tamamlandı.
+                </p>
+                <div class="mt-3 p-2 bg-cad-card rounded border border-cad-border text-[11px] font-mono text-slate-300 space-y-1">
+                  <div class="flex justify-between"><span>Hisse Toplam Kontrolü:</span><span class="text-emerald-400">∑ Pay/Payda = 1/1 (Tam)</span></div>
+                  <div class="flex justify-between"><span>Veri Gizliliği (AC-PILOT-08):</span><span class="text-amber-300">Sentetik / Maskeli Veri</span></div>
+                  <div class="flex justify-between"><span>OCR Modülü (Faz 16):</span><span id="ocr-status-lbl" class="text-slate-400">Pilot'ta Devre Dışı</span></div>
+                </div>
+              </div>
+              <button onclick="goStep(2)" class="mt-4 w-full py-1.5 bg-cad-card hover:bg-slate-700 border border-cad-border rounded text-xs font-medium">Malik & Hisse Kontrolüne Geç</button>
+            </div>
+
+            <!-- Kart 3: Yaklaşık Yer Krokisi & Mevzuat Profili -->
+            <div class="bg-cad-panel border-2 border-amber-500/40 rounded-xl p-4 flex flex-col justify-between">
+              <div>
+                <div class="flex justify-between items-center mb-3">
+                  <span class="px-2.5 py-1 rounded bg-amber-500/10 text-amber-400 font-bold text-xs border border-amber-500/30">3. KROKİ & MEVZUAT PROFİLİ</span>
+                  <span class="text-xs text-amber-400 font-mono">2 Uyuşmazlık</span>
+                </div>
+                <div class="font-semibold text-white font-mono text-sm">TPYS_2022 + Yer_Krokisi.dxf</div>
+                <p class="text-xs text-slate-400 mt-1.5">
+                  Uzman Onaylı Mevzuat Profili (<code class="text-amber-300">TPYS_2022 v1.0.0</code>) • 1 malik isim kısaltması ve 1 parsel tecviz içi alan farkı tespit edildi.
+                </p>
+                <div class="mt-3 p-2 bg-cad-card rounded border border-cad-border text-[11px] font-mono text-slate-300 space-y-1">
+                  <div class="flex justify-between"><span>Tecviz Profili:</span><span class="text-white">TPYS Md. 8(2) & Md. 8(5)</span></div>
+                  <div class="flex justify-between"><span>Profil Checksum:</span><span class="text-emerald-400">✓ SHA-256 Doğrulandı</span></div>
+                  <div class="flex justify-between"><span>Açık Uyarılar:</span><span class="text-amber-400">ERR-TAPU-002, ERR-TECVIZ-001</span></div>
+                </div>
+              </div>
+              <button onclick="goStep(2)" class="mt-4 w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold">Adım 2: Dedektif Ekranına Geç ➔</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== ADIM 2: TAPU-KROKİ & TECVİZ DEDEKTİFİ (ERR-* KATALOĞU) ==================== -->
+      <section id="step-2" class="step-view hidden flex-1 p-4 sm:p-6 overflow-y-auto">
+        <div class="max-w-5xl mx-auto space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h1 class="text-lg sm:text-xl font-bold text-white">2. Tapu – Kroki ve Tecviz Dedektifi (<code class="text-blue-400 font-mono text-base">ErrorCatalog</code>)</h1>
+              <p class="text-slate-400 text-xs">Standart <code class="text-slate-300">ERR-*</code> hata kodlarıyla tespit edilen uyuşmazlıkları inceleyin; her çözüm <code class="text-cyan-300">CommandBus</code> üzerinden <code class="text-cyan-300">AuditLog</code> kaydı üretir.</p>
+            </div>
+            <button onclick="resolveAllIssues()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold shadow">
+              ✓ Tümünü Otomatik Onayla ve Dengele
+            </button>
+          </div>
+
+                    <!-- D1: MÜHENDİS TECVİZ GİRDİSİ (TecvizGirdisi) PANELİ -->
+          <div class="bg-cad-panel border border-blue-500/40 rounded-xl p-4 space-y-2 text-xs">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-blue-300">📐 TecvizGirdisi — Mühendis Yanılma Sınırı Girişi (RG 27.09.2022 / 31966 • D1)</span>
+              <span class="font-mono text-[11px] text-amber-300">Yardımcı Hesaplayıcılar Varsayılan Değildir</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5 font-mono">
+              <div>
+                <label class="text-slate-400 block mb-1">Pafta Ölçeği (1/M)</label>
+                <input id="inp-tecviz-scale" type="number" value="1000" class="w-full bg-cad-card border border-cad-border rounded px-2 py-1 text-white" />
+              </div>
+              <div>
+                <label class="text-slate-400 block mb-1">Üretim Yöntemi</label>
+                <select id="inp-tecviz-method" class="w-full bg-cad-card border border-cad-border rounded px-2 py-1 text-white">
+                  <option value="SAYISAL">Sayısal / Kutupsal</option>
+                  <option value="FOTOGRAMETRIK">Fotogrametrik</option>
+                  <option value="GRAFIK">Grafikten Sayısallaştırma</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-slate-400 block mb-1">Koordinat Kalitesi</label>
+                <select id="inp-tecviz-quality" class="w-full bg-cad-card border border-cad-border rounded px-2 py-1 text-white">
+                  <option value="ARSIV">Arşiv Onaylı</option>
+                  <option value="GECICI">Geçici Koordinatlı</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-slate-400 block mb-1">Tecviz Sınırı (m² — Mühendis Girer)</label>
+                <input id="inp-tecviz-limit" type="number" step="0.01" value="3.97" class="w-full bg-cad-card border border-emerald-500/60 rounded px-2 py-1 text-emerald-300 font-bold" />
+              </div>
+            </div>
+          </div>
+
+          <div id="issue-1" class="bg-cad-panel border-l-4 border-rose-500 border border-cad-border rounded-r-xl p-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="px-2 py-0.5 text-[11px] font-mono font-bold bg-rose-950 text-rose-400 border border-rose-800 rounded">ERR-TAPU-002</span>
+                <span class="px-2 py-0.5 text-[10px] font-bold bg-slate-800 text-slate-300 rounded">Kategori: Tapu/Kroki</span>
+                <span class="font-semibold text-white">TAKBİS "Mustafa KAYA (Sentetik)" ↔ Kroki "M. KAYA"</span>
+              </div>
+              <p class="text-xs text-slate-400">105 Ada 3 Parsel maliki krokide kısaltmalı yazılmış (%92 konum ve soyadı benzerliği). Önerilen Aksiyon: Malik kimliğini eşleştirin.</p>
+            </div>
+            <button onclick="fixIssue(1, 'ERR-TAPU-002 Çözüldü: Malik Eşleştirildi')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium shrink-0">Aynı Malik Olarak Eşleştir</button>
+          </div>
+
+          <div id="issue-2" class="bg-cad-panel border-l-4 border-amber-500 border border-cad-border rounded-r-xl p-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="px-2 py-0.5 text-[11px] font-mono font-bold bg-amber-950 text-amber-400 border border-amber-800 rounded">ERR-TECVIZ-001</span>
+                <span class="px-2 py-0.5 text-[10px] font-bold bg-slate-800 text-slate-300 rounded">TPYS Md. 8(2) Kümülatif</span>
+                <span class="font-semibold text-white">105/4 Parselde Tapu – Gauss Alan Farkı: +1.42 m²</span>
+              </div>
+              <p class="text-xs text-slate-400 font-mono">
+                Tapu: 265.25 m² | Yerel Orijin Gauss: 266.67 m² | ΔA_max(266.67) = 2.30 + 0.01×(266.67−100) = <b class="text-emerald-400">3.97 m² (Tecviz İçinde — örnek; tecviz sınırı mühendis girdisidir)</b>
+              </p>
+            </div>
+            <button onclick="fixIssue(2, 'ERR-TECVIZ-001 Çözüldü: Largest Remainder ile Dağıtıldı')" class="px-3 py-1.5 bg-cad-card hover:bg-slate-700 border border-cad-border text-white rounded text-xs font-medium shrink-0">Largest Remainder ile Dengele</button>
+          </div>
+
+          <div class="bg-cad-panel border-l-4 border-emerald-500 border border-cad-border rounded-r-xl p-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="px-2 py-0.5 text-[11px] font-mono font-bold bg-emerald-950 text-emerald-400 border border-emerald-800 rounded">TC-TECVIZ-002</span>
+                <span class="px-2 py-0.5 text-[10px] font-bold bg-slate-800 text-slate-300 rounded">TPYS Md. 8(5) Hata Çemberi</span>
+                <span class="font-semibold text-white">Köşe Nokta Konum Doğruluğu ($m_p = \pm 0.07\text{ m}$) Zarf Kontrolü</span>
+              </div>
+              <p class="text-xs text-slate-400 font-mono">
+                400n Örnekleme • İç Zarf ($A_{\min}$): 1,661.10 m² ≤ Hesap: 1,666.67 m² ≤ Dış Zarf ($A_{\max}$): 1,672.24 m²
+              </p>
+            </div>
+            <span class="text-xs font-mono text-emerald-400">✓ Doğrulandı</span>
+          </div>
+
+          <div class="flex justify-end pt-2">
+            <button onclick="goStep(3)" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold">Adım 3: DOP & Mahsup Hesabına Geç ➔</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== ADIM 3: DOP, MAHSUP & %45 AŞIM PROTOKOLÜ (PİLOT 2) ==================== -->
+      <section id="step-3" class="step-view hidden flex-1 p-4 sm:p-6 overflow-y-auto">
+        <div class="max-w-6xl mx-auto space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h1 class="text-lg sm:text-xl font-bold text-white">3. DOP, Parsel Mevzuat Sınıfları ve %45 Aşım Karşılama Simülatörü</h1>
+              <p class="text-slate-400 text-xs">AAD Yönetmeliği Md. 14–16 kapsamında kapanan yol, terk, bağış, önceki DOP ve %45 üst sınır aşım protokolünü (<code class="text-blue-300">TC-DOP-001..007</code>) test edin.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="setDopScenario('normal')" id="btn-dop-normal" class="px-3 py-1.5 rounded bg-blue-600 text-white text-xs font-semibold">Senaryo A: Normal (%40.00 DOP)</button>
+              <button onclick="setDopScenario('overflow')" id="btn-dop-overflow" class="px-3 py-1.5 rounded bg-cad-card border border-rose-500/50 text-rose-300 hover:bg-slate-800 text-xs font-semibold">Senaryo B: %45 Aşımı (%48.20 → AAD Md. 15)</button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="bg-cad-panel border border-cad-border rounded-xl p-4 space-y-2.5 font-mono text-xs">
+              <div class="font-sans font-semibold text-white text-sm mb-1">📊 DOPO Hesabı (<code class="text-cyan-300">System.Decimal</code>)</div>
+              <div class="p-2 bg-cad-card rounded border border-cad-border text-[11px] text-slate-300">
+                DOPO = (∑A_giren − ∑A_tahsis) / ∑A_giren ≤ 0.4500000
+              </div>
+              <div class="flex justify-between p-2 bg-cad-card rounded"><span>Düzenlemeye Giren (∑A_giren):</span><b id="dop-in-area">1,666.67 m²</b></div>
+              <div class="flex justify-between p-2 bg-cad-card rounded"><span>Önceki Terk / Bağış Mahsubu:</span><b id="dop-mahsup-area" class="text-cyan-300">42.50 m²</b></div>
+              <div class="flex justify-between p-2 bg-cad-card rounded"><span>Dağıtılacak Net İmar (∑A_tahsis):</span><b id="dop-out-area" class="text-emerald-400">1,000.00 m²</b></div>
+              <div id="dop-rate-box" class="flex justify-between p-2.5 bg-emerald-950/50 border border-emerald-700/50 rounded text-emerald-200">
+                <span>Hesaplanan DOPO:</span><b id="dop-rate-lbl" class="text-white">%40.0000000 (≤ %45 Uygun)</b>
+              </div>
+            </div>
+
+            <div class="bg-cad-panel border border-cad-border rounded-xl p-4 space-y-2.5 text-xs">
+              <div class="font-semibold text-white text-sm">⚖️ AAD Md. 15 — %45 Aşım Karşılama Sırası</div>
+              <p class="text-slate-400 text-[11px]">DOPO %45'i aştığında (<code class="text-rose-400">ERR-DOP-001</code>) aşan kısım aşağıdaki yasal sırayla karşılanır:</p>
+              <div id="dop-overflow-steps" class="space-y-1.5 font-mono text-[11px]">
+                <div class="p-2 rounded bg-cad-card border border-cad-border flex justify-between"><span>1. Tescil Harici Alan:</span><span id="ovf-1" class="text-slate-400">0.00 m²</span></div>
+                <div class="p-2 rounded bg-cad-card border border-cad-border flex justify-between"><span>2. Belediye Özel Mülkiyeti:</span><span id="ovf-2" class="text-slate-400">0.00 m²</span></div>
+                <div class="p-2 rounded bg-cad-card border border-cad-border flex justify-between"><span>3. Muvafakatli Kamu Taşınmazı:</span><span id="ovf-3" class="text-slate-400">0.00 m²</span></div>
+                <div class="p-2 rounded bg-cad-card border border-cad-border flex justify-between"><span>4. Kamulaştırma (KOP/Resmi):</span><span id="ovf-4" class="text-slate-400">0.00 m²</span></div>
+              </div>
+              <button id="btn-apply-aad15" onclick="applyAad15Protocol()" class="hidden w-full py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded font-semibold text-xs">
+                ⚡ AAD Md. 15 Mahsubunu Uygula ve DOPO'yu %45.00'e İndir
+              </button>
+            </div>
+
+            <div class="bg-cad-panel border border-cad-border rounded-xl p-4 space-y-3 text-xs flex flex-col justify-between">
+              <div class="space-y-3">
+                <div class="font-semibold text-white text-sm">📏 İmar Planı & Bisection Kısıtları</div>
+                <div class="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label class="text-slate-400 block mb-1">Asgari Cephe (m)</label>
+                    <input id="inp-min-frontage" type="number" step="0.5" value="13.00" onchange="updatePlanConstraints()" class="w-full bg-cad-card border border-cad-border rounded px-2.5 py-1.5 font-mono text-white" />
+                  </div>
+                  <div>
+                    <label class="text-slate-400 block mb-1">Asgari Derinlik (m)</label>
+                    <input id="inp-min-depth" type="number" step="0.5" value="16.00" onchange="updatePlanConstraints()" class="w-full bg-cad-card border border-cad-border rounded px-2.5 py-1.5 font-mono text-white" />
+                  </div>
+                </div>
+                <div class="p-2.5 bg-cad-card rounded border border-cad-border text-slate-300 font-mono text-[11px] space-y-1">
+                  <div>• Dış Döngü: 75° – 105° Cephe Diklik Taraması</div>
+                  <div>• İç Döngü: Ada Omurgası Paralel Kaydırma</div>
+                  <div>• Kuantizasyon: Canonical Vertex + Decimal Gauss</div>
+                </div>
+              </div>
+              <button onclick="goStep(4)" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold">Adım 4: CAD Stüdyosunu Aç ➔</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== ADIM 4: TAM RESPONSIVE CAD & 6 ADA GEOMETRİSİ STÜDYOSU ==================== -->
+      <section id="step-4" class="step-view flex-1 flex flex-col overflow-hidden">
+
+        <div class="flex-1 flex overflow-hidden relative">
+
+          <!-- SOL DOCK: KATMANLAR, 6 GERÇEK İMAR ADASI GEOMETRİSİ SEÇİCİ & ERRORCATALOG -->
+          <aside id="dock-left" class="w-72 bg-cad-panel border-r border-cad-border p-3 flex flex-col justify-between shrink-0 panel-transition overflow-y-auto">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">CAD Katmanları (<span id="active-cad-ext">.NCZ</span>)</span>
+                <button onclick="toggleDock('left')" class="text-slate-400 hover:text-white text-xs">✕</button>
+              </div>
+              <div class="space-y-1 text-xs">
+                <label class="flex items-center gap-2 p-1 rounded hover:bg-cad-card cursor-pointer">
+                  <input type="checkbox" checked onchange="toggleLayer('layer-grid', this.checked)" class="accent-blue-500" />
+                  <span class="w-2.5 h-2.5 rounded-sm bg-emerald-500"></span> Yeni İmar Parselleri
+                </label>
+                <label class="flex items-center gap-2 p-1 rounded hover:bg-cad-card cursor-pointer">
+                  <input type="checkbox" checked onchange="toggleLayer('layer-points', this.checked)" class="accent-blue-500" />
+                  <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Canonical Köşeler (N1..)
+                </label>
+                <label class="flex items-center gap-2 p-1 rounded hover:bg-cad-card cursor-pointer">
+                  <input type="checkbox" checked onchange="toggleLayer('layer-old', this.checked)" class="accent-blue-500" />
+                  <span class="w-2.5 h-2.5 border border-dashed border-slate-400"></span> Eski Kadastro Parselleri
+                </label>
+                <label class="flex items-center gap-2 p-1 rounded hover:bg-cad-card cursor-pointer">
+                  <input type="checkbox" checked onchange="toggleLayer('layer-vectors', this.checked)" class="accent-blue-500" />
+                  <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Kadastro → İmar Tahsis Okları
+                </label>
+                <label class="flex items-center gap-2 p-1 rounded hover:bg-cad-card cursor-pointer">
+                  <input type="checkbox" onchange="toggleLayer('layer-error-circles', this.checked)" class="accent-blue-500" />
+                  <span class="w-2.5 h-2.5 rounded-full border border-fuchsia-400"></span> TPYS Md. 8(5) Hata Çemberi
+                </label>
+              </div>
+
+              <!-- 6 GERÇEK İMAR ADASI GEOMETRİSİ SİMÜLATÖRÜ -->
+              <div class="mt-3 pt-2.5 border-t border-cad-border">
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="text-[11px] font-bold text-blue-300 uppercase tracking-wider">🏛️ Gerçek Ada Geometrileri (6 Tip)</span>
+                </div>
+                <div class="grid grid-cols-2 gap-1 text-[11px]">
+                  <button onclick="setBlockGeometry('standard')" id="geom-standard" class="py-1 px-2 rounded bg-blue-600 text-white font-medium text-left">1. Düz Dikdörtgen</button>
+                  <button onclick="setBlockGeometry('double')" id="geom-double" class="py-1 px-2 rounded bg-cad-card text-slate-300 hover:bg-slate-700 border border-cad-border text-left">2. Sırt Sırta (Çift)</button>
+                  <button onclick="setBlockGeometry('chamfer')" id="geom-chamfer" class="py-1 px-2 rounded bg-cad-card text-slate-300 hover:bg-slate-700 border border-cad-border text-left">3. Pahlı Köşe (45°)</button>
+                  <button onclick="setBlockGeometry('trapezoid')" id="geom-trapezoid" class="py-1 px-2 rounded bg-cad-card text-slate-300 hover:bg-slate-700 border border-cad-border text-left">4. Yamuk / Trapez</button>
+                  <button onclick="setBlockGeometry('triangle')" id="geom-triangle" class="py-1 px-2 rounded bg-cad-card text-slate-300 hover:bg-slate-700 border border-cad-border text-left">5. Üçgen / Kama</button>
+                  <button onclick="setBlockGeometry('concave')" id="geom-concave" class="py-1 px-2 rounded bg-cad-card text-slate-300 hover:bg-slate-700 border border-cad-border text-left">6. Konkav L/Eğri</button>
+                </div>
+                <div id="geom-rule-explain" class="mt-2 p-2 rounded bg-[#13161C] border border-blue-500/30 text-[11px] text-slate-300 leading-snug">
+                  <b class="text-blue-300">1. Düz Dikdörtgen Ada:</b> Tek yola cepheli, 90° dik kesimli temel referans ada geometrisi.
+                </div>
+              </div>
+
+              <div class="mt-3 pt-2.5 border-t border-cad-border flex items-center justify-between mb-1.5">
+                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">ErrorCatalog Denetimi</span>
+                <span id="err-count-badge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800">1 Kritik</span>
+              </div>
+              <div id="cad-alert-box" class="space-y-1.5 text-xs"></div>
+            </div>
+
+            <div class="mt-3 bg-cad-card border border-cad-border rounded-lg p-2 text-[11px] space-y-1">
+              <div class="flex items-center justify-between text-cyan-400 font-semibold">
+                <span>🎯 Bisection Açı & Hata</span>
+                <span id="bisection-angle-badge" class="font-mono">90.0° • 0.0002m²</span>
+              </div>
+              <div class="flex items-center justify-between text-slate-400 font-mono text-[10px]">
+                <span>Kuantizasyon:</span>
+                <span id="quant-status-badge" class="text-emerald-400">NTS IsValid ✓</span>
+              </div>
+            </div>
+          </aside>
+
+          <!-- MERKEZ: SKIASHARP CAD HARİTA TUVALİ & CANLI RESMÎ CETVEL ÖNİZLEME SEKMELERİ -->
+          <div class="flex-1 cad-grid relative flex flex-col justify-between overflow-hidden" id="cad-canvas-container">
+
+            <!-- ÜST ORTA SEKME ÇUBUĞU: 2D CAD STÜDYO + 4 CANLI RESMÎ CETVEL ÖNİZLEMESİ -->
+            <div class="bg-[#13161C] border-b border-cad-border px-2.5 py-1 flex items-center justify-between gap-2 z-20 shrink-0 flex-wrap">
+              <div class="flex items-center gap-1 overflow-x-auto">
+                <button onclick="setStudioSubTab('cad')" id="subtab-btn-cad" class="px-2.5 py-1 rounded text-[11px] font-semibold bg-blue-600 text-white">🗺️ 1. 2D CAD Tuvali</button>
+                <button onclick="setStudioSubTab('area4')" id="subtab-btn-area4" class="px-2.5 py-1 rounded text-[11px] font-semibold bg-cad-card text-slate-300 hover:bg-slate-700 border border-cad-border">📐 2. 4'lü Alan &amp; Y1 Dengeleme</button>
+                <button onclick="setStudioSubTab('tescil')" id="subtab-btn-tescil" class="px-2.5 py-1 rounded text-[11px] font-semibold bg-cad-card text-slate-300 hover:bg-slate-700 border border-cad-border">📋 3. Tescile Esas Dağıtım (dm²)</button>
+                <button onclick="setStudioSubTab('fen')" id="subtab-btn-fen" class="px-2.5 py-1 rounded text-[11px] font-semibold bg-cad-card text-slate-300 hover:bg-slate-700 border border-cad-border">📗 4. Fen Klasörü (He/M2/Dm2)</button>
+                <button onclick="setStudioSubTab('rolove')" id="subtab-btn-rolove" class="px-2.5 py-1 rounded text-[11px] font-semibold bg-cad-card text-slate-300 hover:bg-slate-700 border border-cad-border">📏 5. FR.521 Rölöve Krokisi</button>
+              </div>
+              <div class="flex items-center gap-2 text-[11px] font-mono">
+                <span class="text-amber-300">🌓 Kadastro↔İmar Perdesi:</span>
+                <input id="swipe-compare-slider" type="range" min="0" max="100" value="100" oninput="onSwipeCompare(this.value)" title="Sola çekerek Eski Kadastro (Sınırlandırma) ile Yeni İmar durumunu karşılaştırın" class="w-24 accent-amber-400 cursor-pointer" />
+                <span id="swipe-pct-lbl" class="text-white font-bold w-9">%100</span>
+              </div>
+            </div>
+
+            <!-- Yüzen (Floating) Harita Araç Çubuğu -->
+            <div id="cad-floating-toolbar" class="p-2.5 flex flex-wrap items-center justify-between gap-2 z-10 pointer-events-none">
+              <div class="bg-cad-panel/90 backdrop-blur border border-cad-border px-2.5 py-1 rounded-md text-[11px] flex items-center gap-2.5 pointer-events-auto shadow flex-wrap">
+                <span class="text-white font-semibold" id="canvas-block-title">Ada: 105 (Düz Dikdörtgen)</span>
+                <span class="text-emerald-400">■ Uygun</span>
+                <span class="text-cyan-400">■ Müşterek (Fraction)</span>
+                <span class="text-rose-400">■ ERR-PLAN-001 (&lt;Min)</span>
+              </div>
+
+              <!-- Zoom & Jeodezik Koordinat Göstergesi -->
+              <div class="flex items-center gap-1.5 pointer-events-auto">
+                <div class="bg-cad-panel/90 backdrop-blur border border-cad-border rounded-md flex items-center text-xs overflow-hidden shadow">
+                  <button onclick="zoomCad(1.18)" title="Yakınlaş (Ctrl++)" class="px-2.5 py-1 hover:bg-slate-700 text-white font-bold">+</button>
+                  <button onclick="resetCamera()" id="zoom-pct-lbl" title="Görünümü Sığdır (Ctrl+0)" class="px-2 py-1 hover:bg-slate-700 font-mono text-[11px] text-blue-300 border-x border-cad-border">100%</button>
+                  <button onclick="zoomCad(0.84)" title="Uzaklaş (Ctrl+-)" class="px-2.5 py-1 hover:bg-slate-700 text-white font-bold">−</button>
+                </div>
+                <div class="hidden sm:block bg-cad-panel/90 backdrop-blur border border-cad-border px-2.5 py-1 rounded-md font-mono text-[11px] text-slate-300 shadow" id="cursor-coords">
+                  Jeodezik X (Kuzey): 4,518,920.00 | Y (Doğu): 451,248.00
+                </div>
+              </div>
+            </div>
+
+            <!-- İnteraktif SVG CAD Sahnesi -->
+            <div class="flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing" id="svg-wrapper" oncontextmenu="onCadContextMenu(event)">
+              <svg id="cad-svg" viewBox="-55 -75 820 430" class="w-full h-full select-none">
+                <defs>
+                  <marker id="arrow-alloc" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#FBBF24" />
+                  </marker>
+                  <clipPath id="imar-swipe-clip">
+                    <rect id="imar-clip-rect" x="-200" y="-200" width="1200" height="800" />
+                  </clipPath>
+                </defs>
+                <g id="camera-group" transform="translate(0,0) scale(1)">
+                  <!-- Eski Kadastro Kesikli Çizgileri ve Kadastro Etiketleri -->
+                  <g id="layer-old" opacity="0.55">
+                    <polygon points="0,-10 210,-15 230,260 -15,250" fill="rgba(245,158,11,0.06)" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="6,6" />
+                    <text x="85" y="135" fill="#FBBF24" font-size="9.5" font-family="JetBrains Mono" opacity="0.85">Kad. 902/1-A (466.67m²)</text>
+                    <polygon points="210,-15 490,-5 470,265 230,260" fill="rgba(245,158,11,0.06)" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="6,6" />
+                    <text x="310" y="135" fill="#FBBF24" font-size="9.5" font-family="JetBrains Mono" opacity="0.85">Kad. 902/1-B (500.00m²)</text>
+                    <polygon points="490,-5 700,5 685,255 470,265" fill="rgba(245,158,11,0.06)" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="6,6" />
+                    <text x="535" y="135" fill="#FBBF24" font-size="9.5" font-family="JetBrains Mono" opacity="0.85">Kad. 902/1-C (700.00m²)</text>
+                  </g>
+
+                  <!-- Dinamik İmar Yolları ve Ada Çevre Rehberleri -->
+                  <g id="layer-roads"></g>
+
+                  <!-- Dinamik Parseller (Swipe ClipPath Destekli) -->
+                  <g id="layer-grid" clip-path="url(#imar-swipe-clip)"></g>
+
+                  <!-- Kadastro -> İmar Canlı Tahsis Akış Okları -->
+                  <g id="layer-vectors"></g>
+
+                  <!-- Sürüklenebilir Kesim Tutamaçları ve Perde Çizgisi -->
+                  <g id="layer-handles"></g>
+
+                  <!-- TPYS Md. 8(5) Hata Çemberleri (Varsayılan Gizli) -->
+                  <g id="layer-error-circles" style="display:none;"></g>
+
+                  <!-- Dinamik Köşe Noktaları -->
+                  <g id="layer-points"></g>
+                </g>
+              </svg>
+
+              <!-- CANLI ÖLÇÜ & PAYDA ROZETİ (HUD) -->
+              <div id="live-hud-pill" class="absolute bottom-3 left-3 bg-cad-panel/95 border border-blue-500/50 rounded-lg px-3 py-1.5 text-[11px] font-mono text-slate-200 shadow-xl pointer-events-none flex items-center gap-3">
+                <span>🎯 Seçili: <b id="hud-parcel-id" class="text-amber-300">105/1 (Geçici: 902/1/A1)</b></span>
+                <span>Alan: <b id="hud-area" class="text-emerald-400">280.00 m²</b></span>
+                <span>Tescil Paydası: <b id="hud-denom" class="text-cyan-300">28000 dm² (TAM)</b></span>
+                <span>Y1 Yol Dengeleme: <b class="text-amber-300">+0.12 m²</b></span>
+              </div>
+
+              <!-- SAĞ-TIK CAD BAĞLAM MENÜSÜ (CONTEXT MENU) -->
+              <div id="cad-context-menu" class="hidden absolute bg-cad-panel border border-blue-500/60 rounded-lg shadow-2xl py-1.5 w-64 z-40 text-xs">
+                <div class="px-3 py-1 border-b border-cad-border font-mono text-[10px] text-blue-300 font-bold" id="ctx-menu-title">PARSEL İŞLEMLERİ (105/1)</div>
+                <button onclick="ctxAction('chamfer')" class="w-full text-left px-3 py-1.5 hover:bg-blue-600/30 text-slate-200 flex justify-between"><span>📐 45° Köşe Pahı Uygula (5×5m)</span><span class="text-slate-400 font-mono">Pah</span></button>
+                <button onclick="ctxAction('merge34')" class="w-full text-left px-3 py-1.5 hover:bg-blue-600/30 text-cyan-300 flex justify-between"><span>🔗 105/3 &amp; 105/4 Müşterek Çöz (Md.17/1-d)</span><span class="text-slate-400 font-mono">EBOB</span></button>
+                <button onclick="ctxAction('widen1')" class="w-full text-left px-3 py-1.5 hover:bg-blue-600/30 text-emerald-300 flex justify-between"><span>↔ Cepheyi 16.00m Sabitle (Alan Kilitli)</span><span class="text-slate-400 font-mono">16m</span></button>
+                <button onclick="ctxAction('balanceY1')" class="w-full text-left px-3 py-1.5 hover:bg-blue-600/30 text-amber-300 flex justify-between"><span>⚖️ Tecviz Farkını Y1 Yolunda Dengele</span><span class="text-slate-400 font-mono">D31</span></button>
+                <button onclick="ctxAction('openFen')" class="w-full text-left px-3 py-1.5 hover:bg-blue-600/30 text-white border-t border-cad-border mt-1 flex justify-between"><span>📗 Fen Klasörü (He/M2/Dm2) Önizle</span><span class="text-slate-400 font-mono">Sekme 4</span></button>
+              </div>
+            </div>
+
+            <!-- CANLI RESMÎ CETVEL VE RÖLÖVE ÖNİZLEME PANELİ (SEKMELER 2, 3, 4, 5) -->
+            <div id="studio-sheet-preview" class="hidden flex-1 bg-[#11141B] p-4 overflow-y-auto">
+              <div id="studio-sheet-content" class="max-w-5xl mx-auto"></div>
+            </div>
+
+            <!-- ALT KOMUT ÇUBUĞU -->
+            <div class="p-2.5 bg-cad-panel/95 border-t border-cad-border flex flex-col gap-1.5 z-10">
+              <div class="flex items-center gap-2">
+                <span id="cmd-mode-badge" class="px-2 py-1 bg-blue-600/20 border border-blue-500/40 text-blue-300 rounded font-semibold text-xs shrink-0 font-mono">
+                  ⌨️ Komut (Ctrl+K)
+                </span>
+                <input id="ai-cmd-input" type="text" aria-label="Türkçe kural tabanlı komut çubuğu" placeholder="Komut yazın: '3 ve 4 nolu parselleri müşterek yap', 'üçgen ada göster', 'sırt sırta ada'..." 
+                       onkeydown="if(event.key==='Enter') executeAiCommand()"
+                       class="flex-1 bg-cad-bg border border-cad-border focus:border-blue-500 rounded px-2.5 py-1 text-xs text-white outline-none font-mono min-w-0" />
+                <button onclick="executeAiCommand()" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold shrink-0">
+                  CommandBus İle Uygula
+                </button>
+              </div>
+              <div class="flex items-center justify-between gap-2 flex-wrap text-[11px]">
+                <div class="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                  <span class="text-slate-400 shrink-0">Hızlı Komutlar:</span>
+                  <button onclick="quickAi('merge34')" class="px-2 py-0.5 bg-cad-card hover:bg-slate-700 border border-cyan-500/40 text-cyan-300 rounded shrink-0">
+                    ⚡ 3 ve 4'ü Müşterek Birleştir (Fraction EBOB)
+                  </button>
+                  <button onclick="quickAi('widen1')" class="px-2 py-0.5 bg-cad-card hover:bg-slate-700 border border-emerald-500/40 text-emerald-300 rounded shrink-0">
+                    ⚡ 1. Parsel Cephesini 16m Yap (Alan Kilitli)
+                  </button>
+                  <button onclick="quickAi('swap12')" class="px-2 py-0.5 bg-cad-card hover:bg-slate-700 border border-amber-500/40 text-amber-300 rounded shrink-0">
+                    ⚡ 1 ve 2. Parseli Yer Değiştir
+                  </button>
+                  <button onclick="resetParcels()" class="px-2 py-0.5 bg-cad-card hover:bg-slate-700 border border-slate-600 text-slate-300 rounded shrink-0">
+                    ↩ İlk Duruma Sıfırla
+                  </button>
+                </div>
+                <div class="flex items-center gap-1 font-mono text-[10px]">
+                  <span class="text-slate-400">OSNAP:</span>
+                  <button onclick="toggleOsnap(this, 'Uç Nokta')" class="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700">🧲 Uç</button>
+                  <button onclick="toggleOsnap(this, 'Orta Nokta')" class="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700">🧲 Orta</button>
+                  <button onclick="toggleOsnap(this, 'Dik 90°')" class="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700">🧲 Dik(90°)</button>
+                  <button onclick="toggleOsnap(this, 'Kesişim')" class="px-1.5 py-0.5 rounded bg-cad-card text-slate-400 border border-cad-border">🧲 Kesişim</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SAĞ DOCK: SEÇİLİ PARSEL DENETÇİSİ -->
+          <aside id="dock-right" class="w-72 bg-cad-panel border-l border-cad-border p-3.5 flex flex-col justify-between shrink-0 panel-transition overflow-y-auto">
+            <div>
+              <div class="flex items-center justify-between border-b border-cad-border pb-2 mb-3">
+                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">📐 Parsel Denetçisi</span>
+                <div class="flex items-center gap-1.5">
+                  <span id="insp-badge" class="text-xs font-mono px-2 py-0.5 bg-blue-950 text-blue-300 border border-blue-700 rounded font-bold">105 / 1</span>
+                  <button onclick="toggleDock('right')" class="text-slate-400 hover:text-white text-xs">✕</button>
+                </div>
+              </div>
+
+              <!-- Ölçüler ve Mevzuat Sınıfı -->
+              <div class="bg-cad-card border border-cad-border rounded-lg p-2.5 space-y-1.5 font-mono text-xs mb-3">
+                <div class="flex justify-between"><span class="text-slate-400">Hisse Tipi:</span><span id="insp-type" class="text-white font-semibold">TAM HİSSE</span></div>
+                <div class="flex justify-between"><span class="text-slate-400">Mevzuat Sınıfı:</span><span id="insp-law-class" class="text-cyan-300">Özel Mülkiyet</span></div>
+                <div class="flex justify-between"><span class="text-slate-400">Ada Geometrisi:</span><span id="insp-geom-type" class="text-amber-300">Düz Dikdörtgen</span></div>
+                <div class="flex justify-between"><span class="text-slate-400">Yola Cephe:</span><span id="insp-frontage" class="text-emerald-400 font-bold">14.00 m</span></div>
+                <div class="flex justify-between"><span class="text-slate-400">Derinlik (Ort.):</span><span id="insp-depth" class="text-white">20.00 m</span></div>
+                <div class="flex justify-between border-t border-cad-border pt-1"><span class="text-slate-400">Net Tahsis (Decimal):</span><span id="insp-area" class="text-blue-400 font-bold">280.00 m²</span></div>
+              </div>
+
+              <!-- Canlı Cephe Sürgüsü (Area-Locked Bisection) -->
+              <div class="bg-cad-card border border-blue-500/30 rounded-lg p-2.5 mb-3">
+                <div class="flex items-center justify-between text-xs mb-1">
+                  <span class="font-semibold text-blue-300">↔ Cephe Kaydır</span>
+                  <span class="text-[10px] bg-blue-950 text-blue-300 px-1.5 py-0.5 rounded font-mono">🔒 Alan Sabit</span>
+                </div>
+                <input id="frontage-slider" type="range" min="8" max="24" step="0.5" value="14" aria-label="Parsel cephe genişliği sürgüsü"
+                       oninput="onSliderChange(this.value)" class="w-full accent-blue-500 cursor-pointer" />
+                <div class="flex justify-between font-mono text-[10px] text-slate-400">
+                  <span>8.0m</span>
+                  <span id="slider-val-lbl" class="text-white font-bold">14.00 m</span>
+                  <span>24.0m</span>
+                </div>
+              </div>
+
+              <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Hissedar & Fraction(BigInteger) Pay</div>
+              <div id="insp-owners" class="space-y-1.5 text-xs font-mono"></div>
+            </div>
+
+            <div class="pt-2 border-t border-cad-border text-[11px] text-slate-400 font-mono space-y-0.5">
+              <div>Alan Hesabı: <span class="text-amber-300">Yerel Orijin Gauss</span></div>
+              <div>Yuvarlama: <span class="text-emerald-400">Largest Remainder</span></div>
+            </div>
+          </aside>
+        </div>
+
+        <!-- ALT DOCK: CANLI DOP VE TAHSİS CETVELİ -->
+        <div id="dock-bottom" class="h-44 bg-cad-panel border-t border-cad-border flex flex-col shrink-0 panel-transition">
+          <div class="px-3 py-1 bg-[#13161C] border-b border-cad-border flex items-center justify-between text-xs">
+            <span class="font-bold text-blue-400">📋 Canlı Senkronize Dağıtım & Tahsis Cetveli (<code class="text-slate-300">System.Decimal</code> • Kuruş/cm² Hassasiyetli)</span>
+            <div class="flex items-center gap-3">
+              <span class="hidden sm:inline font-mono text-[11px] text-emerald-400">∑Kadastro: 1,666.67 m² | ∑DOP (%40): 666.67 m² | ∑Net Tahsis: 1,000.00 m²</span>
+              <button onclick="toggleDock('bottom')" class="text-slate-400 hover:text-white text-xs">▼ Gizle</button>
+            </div>
+          </div>
+          <div class="flex-1 overflow-auto">
+            <table class="w-full text-left border-collapse text-xs font-mono min-w-[720px]">
+              <thead>
+                <tr class="bg-cad-card text-slate-400 border-b border-cad-border">
+                  <th class="py-1 px-2.5">İmar Parseli</th>
+                  <th class="py-1 px-2.5 font-sans">Malik / Hissedarlar (Sentetik)</th>
+                  <th class="py-1 px-2.5 font-sans">Mevzuat Sınıfı</th>
+                  <th class="py-1 px-2.5 text-right">Kadastro (m²)</th>
+                  <th class="py-1 px-2.5 text-right">DOP (%40)</th>
+                  <th class="py-1 px-2.5 text-right">Net Tahsis (m²)</th>
+                  <th class="py-1 px-2.5 text-center">Fraction Pay</th>
+                  <th class="py-1 px-2.5 text-center">Cephe × Derinlik</th>
+                  <th class="py-1 px-2.5 text-center font-sans">Plan Kontrolü</th>
+                </tr>
+              </thead>
+              <tbody id="live-table-body" class="divide-y divide-cad-border"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== ADIM 5: MÜHENDİS ONAYI (REVİZYON BAĞLI) & ÇIKTI MERKEZİ ==================== -->
+      <section id="step-5" class="step-view hidden flex-1 p-4 sm:p-6 overflow-y-auto">
+        <div class="max-w-6xl mx-auto space-y-5">
+
+          <div id="output-mode-banner" class="p-3 rounded-xl border bg-amber-950/50 border-amber-700/70 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">AC-PILOT-04</span>
+              <span id="output-banner-text" class="text-amber-200 font-medium">
+                Pilot Modu Aktif: Üretilecek PDF ve Excel cetvellerine otomatik olarak <b>"PİLOT — RESMÎ İŞLEMDE KULLANILAMAZ"</b> filigranı basılır.
+              </span>
+            </div>
+            <span class="font-mono text-[11px] text-amber-300" id="output-rev-lbl">Bağlı Revizyon: #R101</span>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+            <!-- SOL (7 Sütun): §11 MÜHENDİS ONAYI AKIŞI & GERİ ALMA -->
+            <div class="lg:col-span-7 bg-cad-panel border border-cad-border rounded-xl p-4 space-y-4">
+              <div class="flex items-center justify-between border-b border-cad-border pb-2.5">
+                <div>
+                  <h2 class="text-base font-bold text-white">1. Mühendis Onayı ve İmza/Checksum Zinciri (§11 & §14)</h2>
+                  <p class="text-xs text-slate-400">Onay, mevcut hesap revizyonuna (<code id="approval-rev-code" class="text-cyan-300">#R101</code>) bağlanır; veri değişirse onay otomatik düşer (<code class="text-blue-300">AC-PILOT-06</code>).</p>
+                </div>
+                <span id="step5-approval-badge" class="px-2.5 py-1 rounded text-xs font-bold bg-amber-950 text-amber-300 border border-amber-700">Onaylanmadı</span>
+              </div>
+
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 font-mono text-xs">
+                <div class="p-2.5 bg-cad-card rounded border border-cad-border">
+                  <div class="text-slate-400 text-[10px]">PROJE / PARSEL</div>
+                  <div class="text-white font-bold mt-0.5" id="sum-parcels">105 Ada (4 Parsel)</div>
+                </div>
+                <div class="p-2.5 bg-cad-card rounded border border-cad-border">
+                  <div class="text-slate-400 text-[10px]">TOPLAM GİREN / NET</div>
+                  <div class="text-emerald-400 font-bold mt-0.5">1,666.67 → 1,000.00 m²</div>
+                </div>
+                <div class="p-2.5 bg-cad-card rounded border border-cad-border">
+                  <div class="text-slate-400 text-[10px]">KRİTİK HATA SAYISI</div>
+                  <div class="font-bold mt-0.5" id="sum-crit-errors">1 Kritik Hata</div>
+                </div>
+                <div class="p-2.5 bg-cad-card rounded border border-cad-border">
+                  <div class="text-slate-400 text-[10px]">MEVZUAT PROFİLİ</div>
+                  <div class="text-cyan-300 font-bold mt-0.5">TPYS_2022 v1.0.0</div>
+                </div>
+                <div class="p-2.5 bg-cad-card rounded border border-cad-border">
+                  <div class="text-slate-400 text-[10px]">FEN KLASÖRÜ ŞABLONU</div>
+                  <div class="text-white font-bold mt-0.5">TKGM_2023_4_v1</div>
+                </div>
+                <div class="p-2.5 bg-cad-card rounded border border-cad-border">
+                  <div class="text-slate-400 text-[10px]">PARSİD ŞEMA MODU</div>
+                  <select id="parsid-schema-select" onchange="onParsidSchemaChange()" class="bg-transparent text-amber-300 font-bold mt-0.5 outline-none w-full cursor-pointer">
+                    <option value="TKGM_PARSID_2026_v1" class="bg-cad-panel">TKGM_PARSID_2026_v1</option>
+                    <option value="EXPERIMENTAL" class="bg-cad-panel">Tanımsız (Deneysel İç Format)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div id="approval-blocker-box" class="p-3 rounded-lg bg-rose-950/70 border border-rose-700 text-rose-200 text-xs flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span class="font-bold text-rose-400 font-mono">[AC-ONAY-01 ENGELİ]</span>
+                  <span>105/4 parselin cephesi (8.00 m) asgari 13.00 m şartını sağlamıyor (<code class="font-mono">ERR-PLAN-001</code>). Kritik hata çözülmeden mühendis onayı verilemez!</span>
+                </div>
+                <button onclick="quickFixFromApproval()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded font-semibold shrink-0">
+                  ⚡ 105/3 ve 105/4'ü Birleştirerek Hatayı Çöz
+                </button>
+              </div>
+
+              <label class="flex items-start gap-2.5 p-3 bg-cad-card border border-cad-border rounded-lg cursor-pointer text-xs">
+                <input id="chk-engineer-approval" type="checkbox" onchange="updateApprovalButtons()" class="mt-0.5 accent-blue-500" />
+                <span class="text-slate-200 leading-relaxed">
+                  <b>Mühendis Onay Beyanı (§11.4):</b> "Bu çıktıyı nihai olarak onaylıyorum. Tecviz, DOP, tahsis ve geometri kontrollerini inceledim. Kritik hata bulunmadığını teyit ediyorum."
+                </span>
+              </label>
+
+              <div class="flex flex-wrap items-center gap-2.5">
+                <button id="btn-give-approval" onclick="giveEngineerApproval()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-400 text-white rounded-lg text-xs font-bold transition">
+                  ✍️ Mühendis Onayı Ver (Revizyona Bağla)
+                </button>
+                <button id="btn-revoke-approval" onclick="revokeEngineerApproval()" disabled class="px-3.5 py-2 bg-cad-card hover:bg-rose-950 border border-cad-border text-rose-300 disabled:opacity-40 rounded-lg text-xs font-semibold transition">
+                  ↩ Onayı Geri Al (24 Saat İçi • AC-ONAY-04)
+                </button>
+              </div>
+            </div>
+
+            <!-- SAĞ (5 Sütun): ÇIKTI MERKEZİ -->
+            <div class="lg:col-span-5 bg-cad-panel border border-cad-border rounded-xl p-4 flex flex-col justify-between space-y-4">
+              <div class="space-y-3">
+                <h2 class="text-base font-bold text-white border-b border-cad-border pb-2.5">2. Çıktı ve İhracat Merkezi (§13 & §14)</h2>
+
+                <div class="p-3 bg-cad-card border border-cad-border rounded-lg flex items-center justify-between gap-2">
+                  <div>
+                    <div class="font-semibold text-white text-xs">🗺️ Yeni Parselasyon Haritası (<span id="export-cad-ext">.NCZ</span>)</div>
+                    <div class="text-[11px] text-slate-400">ITRF96 • Katmanlı Parseller, Canonical Köşeler ve Malik Etiketleri</div>
+                  </div>
+                  <button onclick="exportArtifact('CAD')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold shrink-0">CAD İndir</button>
+                </div>
+
+                <div class="p-3 bg-cad-card border border-cad-border rounded-lg flex items-center justify-between gap-2">
+                  <div>
+                    <div class="font-semibold text-white text-xs">📊 Canlı Formüllü Dağıtım Cetvelleri (.XLSX)</div>
+                    <div class="text-[11px] text-slate-400">ClosedXML • <code class="font-mono">SUM/ROUND</code> formüllü DOP, Mahsup ve Tahsis Cetveli</div>
+                  </div>
+                  <button onclick="exportArtifact('XLSX')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold shrink-0">Excel İndir</button>
+                </div>
+
+                <div class="p-3 bg-cad-card border border-cad-border rounded-lg flex items-center justify-between gap-2">
+                  <div>
+                    <div class="font-semibold text-white text-xs">📑 TKGM 2023/4 Fen Klasörü PDF Seti (7 Belge)</div>
+                    <div class="text-[11px] text-slate-400" id="fen-chain-desc">Onay → Zaman Damgası → PDF SHA-256 Checksum → AuditLog</div>
+                  </div>
+                  <button onclick="exportArtifact('PDF')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-semibold shrink-0">PDF Üret</button>
+                </div>
+
+                <div class="p-3 bg-cad-card border border-cad-border rounded-lg flex items-center justify-between gap-2">
+                  <div>
+                    <div class="font-semibold text-white text-xs">🏛️ TKGM PARSİD Veri Paketi</div>
+                    <div class="text-[11px] text-slate-400" id="parsid-export-desc">Şema: TKGM_PARSID_2026_v1 • ParsidErrorMap Doğrulamalı</div>
+                  </div>
+                  <button onclick="exportArtifact('PARSID')" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded text-xs font-semibold shrink-0">PARSİD İhraç</button>
+                </div>
+              </div>
+
+              <div id="last-export-proof" class="p-2.5 bg-[#13161C] border border-cad-border rounded-lg font-mono text-[11px] text-slate-400">
+                Henüz çıktı üretilmedi. Çıktı üretmek için önce kritik hataları giderip Mühendis Onayı verin.
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- MODAL 1: CANLI DENETİM İZİ (AUDIT LOG) -->
+    <div id="audit-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+      <div class="bg-cad-panel border border-cad-border rounded-xl max-w-3xl w-full max-h-[80vh] flex flex-col shadow-2xl">
+        <div class="px-4 py-3 border-b border-cad-border flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-white">📜 Atomik Denetim İzi (AuditLog) ve Hash Zinciri</h3>
+            <p class="text-[11px] text-slate-400">Başarılı mutasyonlar, mühendis onayları ve <b class="text-rose-400">reddedilen/onaysız çıktı girişimleri</b> aynı transaction içinde kaydedilir.</p>
+          </div>
+          <button onclick="toggleAuditModal()" class="text-slate-400 hover:text-white text-sm px-2">✕</button>
+        </div>
+        <div id="audit-log-list" class="p-4 overflow-y-auto space-y-2 font-mono text-xs flex-1"></div>
+      </div>
+    </div>
+
+    <!-- MODAL 2: WCAG 2.2 AA KLAVYE KISAYOLLARI -->
+    <div id="shortcuts-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+      <div class="bg-cad-panel border border-cad-border rounded-xl max-w-md w-full p-4 space-y-3 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-cad-border pb-2">
+          <h3 class="text-sm font-bold text-white">⌨️ WCAG 2.2 AA Klavye Kısayolları (§8.3)</h3>
+          <button onclick="toggleShortcutsModal()" class="text-slate-400 hover:text-white text-sm px-2">✕</button>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+          <div class="p-2 bg-cad-card rounded flex justify-between"><span>Kaydet:</span><b class="text-blue-300">Ctrl+S</b></div>
+          <div class="p-2 bg-cad-card rounded flex justify-between"><span>Geri Al:</span><b class="text-blue-300">Ctrl+Z</b></div>
+          <div class="p-2 bg-cad-card rounded flex justify-between"><span>Yinele:</span><b class="text-blue-300">Ctrl+Y</b></div>
+          <div class="p-2 bg-cad-card rounded flex justify-between"><span>Komut Çubuğu:</span><b class="text-blue-300">Ctrl+K</b></div>
+          <div class="p-2 bg-cad-card rounded flex justify-between"><span>Görünümü Sığdır:</span><b class="text-blue-300">Ctrl+0</b></div>
+          <div class="p-2 bg-cad-card rounded flex justify-between"><span>DOP Paneli:</span><b class="text-blue-300">Ctrl+D</b></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let currentStep = 4;
+    let selectedParcelNo = 1;
+    let camScale = 1.0, camX = 0, camY = 0;
+    let isPanning = false, startPanX = 0, startPanY = 0;
+    let docks = { left: true, right: true, bottom: true };
+    let activeCadFormat = 'NCZ';
+    let isPostPilotMode = false;
+    let blockGeometryMode = 'standard';
+    let minFrontageLimit = 13.0;
+    let minDepthLimit = 16.0;
+
+    const geomMeta = {
+      standard: {
+        name: "Düz Dikdörtgen Ada",
+        angle: "90.0° • 0.0002m²",
+        quant: "NTS IsValid ✓",
+        explain: "<b class='text-blue-300'>1. Düz Dikdörtgen Ada:</b> Tek yola cepheli, 90° dik kesimli temel referans ada geometrisi."
+      },
+      double: {
+        name: "Sırt Sırta (Çift Cepheli) Ada",
+        angle: "90.0° • Çift Sıra",
+        quant: "Omurga Snapping ✓",
+        explain: "<b class='text-emerald-300'>2. Sırt Sırta (Çift Cepheli) Ada:</b> Kuzey ve Güney imar yollarına cepheli, ortadan <b>Ada Ayırma Çizgisi (Omurga)</b> ile iki sıraya bölünen en yaygın saha adası."
+      },
+      chamfer: {
+        name: "Pahlı Köşe (45° Kırıklı) Ada",
+        angle: "90.0° + 45° Pah",
+        quant: "Köşe Pahı (5×5m) ✓",
+        explain: "<b class='text-amber-300'>3. Pahlı Köşe Parselli Ada:</b> Kavşak görüş üçgeni nedeniyle köşe parselde 45° (5×5m) pah kırığı bulunan ve iki yoldan çekme mesafesi alan ada."
+      },
+      trapezoid: {
+        name: "Yamuk / Trapez (Açılı Yol) Ada",
+        angle: "82.5° (75°–105° Tarama)",
+        quant: "Eğik Kesim ✓",
+        explain: "<b class='text-cyan-300'>4. Yamuk / Trapez Ada:</b> Yolların dik kesişmediği, derinliğin sağa doğru daraldığı ve Bisection dış döngüsünün (75°–105°) cepheye en dik açıyı bulduğu ada."
+      },
+      triangle: {
+        name: "Üçgen / Kama (Kavşak) Ada",
+        angle: "78.0° • Kama Kontrolü",
+        quant: "Dar Açı Koruması ✓",
+        explain: "<b class='text-purple-300'>5. Üçgen / Kama Ada:</b> İki yolun dar açıyla birleştiği kavşak adası; sivri uçta ölü alan kalmaması için son parsel kama/müstakil köşe olarak dengelenir."
+      },
+      concave: {
+        name: "Konkav L-Tipi / Eğrisel Ada",
+        angle: "90.0° + İç Köşe Kırığı",
+        quant: "MultiPolygon Korumalı ✓",
+        explain: "<b class='text-rose-300'>6. Konkav L-Tipi / Eğrisel Ada:</b> İçbükey (L/U) veya yay cepheli ada; kesim çizgisi iç köşeden geçip parseli ikiye (MultiPolygon) bölerse sistem durup mühendis onayı ister."
+      }
+    };
+
+    let revisionCounter = 101;
+    let currentRevisionId = '#R101 (A8F2..9C)';
+    let approvedRevisionId = null;
+    let historyStack = [];
+    let redoStack = [];
+
+    let auditLogs = [
+      { time: "16:10:02", type: "SUCCESS", code: "CMD-CAD-IMPORT", msg: "Serdivan_105Ada_Halihazir.ncz (Jeodezik Y,X -> NTS) yüklendi ve Z=0 düzlemine indirgendi.", hash: "SHA256:4f8a..19b2" },
+      { time: "16:10:05", type: "SUCCESS", code: "CMD-TAPU-IMPORT", msg: "Tapu_TAKBIS_105Ada_Sentetik.pdf okundu (26 anonim malik, Fraction toplamı = 1/1).", hash: "SHA256:9c2d..77e1" },
+      { time: "16:10:08", type: "WARN", code: "ERR-PLAN-001", msg: "105/4 parsel cephesi (8.00 m < 13.00 m) asgari imar şartını sağlamıyor.", hash: "SHA256:3b11..80a4" }
+    ];
+
+    let parcels = [];
+
+    const stepsMeta = [
+      { no: 1, title: "1. Girdiler (.NCZ/.DWG/.DXF)" },
+      { no: 2, title: "2. Dedektif (ERR-*)" },
+      { no: 3, title: "3. DOP & Mahsup (%40)" },
+      { no: 4, title: "4. CAD & 6 Ada Geometrisi" },
+      { no: 5, title: "5. Mühendis Onayı & Çıktı" }
+    ];
+
+    function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+
+    function showToast(title, message, tone) {
+      const container = document.getElementById('toast-container');
+      const colors = {
+        success: "bg-emerald-950/95 border-emerald-600 text-emerald-200",
+        warn: "bg-amber-950/95 border-amber-600 text-amber-200",
+        error: "bg-rose-950/95 border-rose-600 text-rose-200",
+        info: "bg-blue-950/95 border-blue-600 text-blue-200"
+      };
+      const el = document.createElement('div');
+      el.className = `p-3 rounded-lg border shadow-xl text-xs pointer-events-auto transition-all ${colors[tone] || colors.info}`;
+      el.innerHTML = `<div class="font-bold mb-0.5">${title}</div><div class="text-[11px] opacity-90 font-mono">${message}</div>`;
+      container.appendChild(el);
+      setTimeout(() => { el.remove(); }, 4200);
+    }
+
+    function addAuditLog(type, code, msg) {
+      const now = new Date();
+      const t = now.toTimeString().split(' ')[0];
+      const fakeHash = "SHA256:" + Math.random().toString(16).substring(2, 6) + ".." + Math.random().toString(16).substring(2, 6);
+      auditLogs.unshift({ time: t, type, code, msg, hash: fakeHash });
+      document.getElementById('audit-count-lbl').innerText = auditLogs.length;
+      renderAuditModal();
+    }
+
+    function bumpRevision(reason) {
+      revisionCounter++;
+      const shortHash = Math.random().toString(16).substring(2, 6).toUpperCase() + ".." + Math.random().toString(16).substring(2, 4).toUpperCase();
+      currentRevisionId = `#R${revisionCounter} (${shortHash})`;
+      if (approvedRevisionId && approvedRevisionId !== currentRevisionId) {
+        approvedRevisionId = null;
+        document.getElementById('chk-engineer-approval').checked = false;
+        addAuditLog("WARN", "AC-PILOT-06", `Veri değiştiği için (${reason}) önceki mühendis onayı otomatik olarak düşürüldü.`);
+        showToast("⚠️ Mühendis Onayı Düştü (AC-PILOT-06)", `Veri değiştiği için (${reason}) onay geçersizleşti; çıktı öncesi yeniden onay gerekli.`, "warn");
+      }
+    }
+
+    function pushHistory() {
+      historyStack.push(JSON.parse(JSON.stringify(parcels)));
+      if (historyStack.length > 20) historyStack.shift();
+      redoStack = [];
+      updateUndoRedoButtons();
+    }
+
+    function updateUndoRedoButtons() {
+      document.getElementById('btn-undo').disabled = historyStack.length === 0;
+      document.getElementById('btn-redo').disabled = redoStack.length === 0;
+    }
+
+    function undoAction() {
+      if (historyStack.length === 0) return;
+      redoStack.push(JSON.parse(JSON.stringify(parcels)));
+      parcels = historyStack.pop();
+      bumpRevision("Geri Al (Ctrl+Z)");
+      addAuditLog("INFO", "CMD-UNDO", "Son parselasyon işlemi geri alındı.");
+      updateUndoRedoButtons();
+      renderAll();
+    }
+
+    function redoAction() {
+      if (redoStack.length === 0) return;
+      historyStack.push(JSON.parse(JSON.stringify(parcels)));
+      parcels = redoStack.pop();
+      bumpRevision("Yinele (Ctrl+Y)");
+      addAuditLog("INFO", "CMD-REDO", "Geri alınan parselasyon işlemi yinelendi.");
+      updateUndoRedoButtons();
+      renderAll();
+    }
+
+    function togglePhaseMode() {
+      isPostPilotMode = !isPostPilotMode;
+      const lbl = document.getElementById('phase-mode-lbl');
+      const btn = document.getElementById('btn-phase-mode');
+      const ocrLbl = document.getElementById('ocr-status-lbl');
+      const banner = document.getElementById('output-mode-banner');
+      const bannerTxt = document.getElementById('output-banner-text');
+      const fenDesc = document.getElementById('fen-chain-desc');
+
+      if (isPostPilotMode) {
+        lbl.innerText = "EVRE 2: PİLOT SONRASI (SQLCipher • Ed25519 • .imr18.lock Aktif)";
+        btn.className = "text-[11px] font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-700/70 px-2 py-0.5 rounded-full flex items-center gap-1.5 hover:bg-emerald-900/70 transition";
+        ocrLbl.innerText = "✓ tur.traineddata (SHA-256 Doğrulandı)";
+        ocrLbl.className = "text-emerald-400";
+        banner.className = "p-3 rounded-xl border bg-emerald-950/50 border-emerald-700/70 flex flex-wrap items-center justify-between gap-2 text-xs";
+        bannerTxt.innerHTML = "<b>Pilot Sonrası Kurumsal Mod (Faz 11–20):</b> SQLCipher AES-256 konteyner, .imr18.lock çoklu oturum kilidi ve Ed25519 + Zaman Damgası imza zinciri aktif.";
+        fenDesc.innerText = "Onay → Ed25519 İmza → Zaman Damgası → PDF SHA-256 Checksum → AuditLog";
+        showToast("🛡️ Evre 2 (Pilot Sonrası) Görünümü", "SQLCipher, Ed25519 imza zinciri, yerel OCR ve .imr18.lock göstergeleri aktif edildi.", "success");
+      } else {
+        lbl.innerText = "EVRE 1: PİLOT (Sentetik Veri • Taslak Modu)";
+        btn.className = "text-[11px] font-semibold bg-amber-950/80 text-amber-300 border border-amber-700/70 px-2 py-0.5 rounded-full flex items-center gap-1.5 hover:bg-amber-900/70 transition";
+        ocrLbl.innerText = "Pilot'ta Devre Dışı";
+        ocrLbl.className = "text-slate-400";
+        banner.className = "p-3 rounded-xl border bg-amber-950/50 border-amber-700/70 flex flex-wrap items-center justify-between gap-2 text-xs";
+        bannerTxt.innerHTML = "Pilot Modu Aktif: Üretilecek PDF ve Excel cetvellerine otomatik olarak <b>\"PİLOT — RESMÎ İŞLEMDE KULLANILAMAZ\"</b> filigranı basılır.";
+        fenDesc.innerText = "Onay → Zaman Damgası → PDF SHA-256 Checksum → AuditLog";
+        showToast("🧪 Evre 1 (Pilot) Görünümü", "Sentetik veri sınırı ve 'PİLOT — RESMÎ İŞLEMDE KULLANILAMAZ' taslak damgası aktif.", "info");
+      }
+    }
+
+    function switchCadFormat(fmt) {
+      activeCadFormat = fmt;
+      ['NCZ', 'DWG', 'DXF'].forEach(f => {
+        document.getElementById('fmt-' + f).className = (f === fmt)
+          ? "px-2.5 py-1 rounded bg-blue-600 text-white font-mono font-semibold"
+          : "px-2.5 py-1 rounded text-slate-300 hover:bg-slate-700 font-mono";
+      });
+      const badge = document.getElementById('cad-input-badge');
+      const title = document.getElementById('cad-file-title');
+      const desc = document.getElementById('cad-file-desc');
+      document.getElementById('active-cad-ext').innerText = '.' + fmt;
+      document.getElementById('export-cad-ext').innerText = '.' + fmt;
+
+      if (fmt === 'NCZ') {
+        badge.innerText = "1. NETCAD (.NCZ) HARİTA";
+        title.innerText = "Serdivan_105Ada_Halihazir.ncz";
+        desc.innerText = "NativeNczBinaryParser • Jeodezik (Y=Sağa, X=Yukarı) -> NTS (x=Y, y=X) eşlendi • 14 Kadastro Parseli • Z!=0 kotları Z=0 düzlemine indirgendi.";
+      } else if (fmt === 'DWG') {
+        badge.innerText = "1. AUTOCAD (.DWG) HARİTA";
+        title.innerText = "Serdivan_105Ada_AutoCAD2018.dwg";
+        desc.innerText = "ACadSharp DwgReader • Kartezyen (X=Sağa, Y=Yukarı) -> İç Jeodezik modele normalize edildi • LWPOLYLINE ve blok katmanları okundu.";
+      } else {
+        badge.innerText = "1. KATMANLI (.DXF) HARİTA";
+        title.innerText = "Serdivan_105Ada_Netcad.dxf";
+        desc.innerText = "ACadSharp DxfReader (Yedek: netDxf) • 14 Kadastro Parseli • 3 İmar Adası • Z=0 yatay izdüşüm indirgemesi doğrulandı.";
+      }
+      addAuditLog("SUCCESS", "CMD-CAD-FORMAT", `Aktif CAD adaptörü ${fmt} formatına geçirildi (AC-CAD-01..02).`);
+      showToast(`🗺️ ${fmt} Adaptörü Aktif`, `${title.innerText} eksen normalizasyonu doğrulandı.`, "info");
+    }
+
+    function setDopScenario(mode) {
+      const btnNorm = document.getElementById('btn-dop-normal');
+      const btnOvf = document.getElementById('btn-dop-overflow');
+      const rateBox = document.getElementById('dop-rate-box');
+      const rateLbl = document.getElementById('dop-rate-lbl');
+      const btnAad15 = document.getElementById('btn-apply-aad15');
+
+      if (mode === 'overflow') {
+        btnOvf.className = "px-3 py-1.5 rounded bg-rose-600 text-white text-xs font-semibold";
+        btnNorm.className = "px-3 py-1.5 rounded bg-cad-card border border-cad-border text-slate-300 text-xs font-semibold";
+        document.getElementById('dop-out-area').innerText = "863.33 m²";
+        rateBox.className = "flex justify-between p-2.5 bg-rose-950/70 border border-rose-600 rounded text-rose-200";
+        rateLbl.innerText = "%48.2000000 (> %45 ERR-DOP-001!)";
+        document.getElementById('ovf-1').innerText = "21.33 m² (Tescil Harici)";
+        document.getElementById('ovf-2').innerText = "18.00 m² (Belediye Mülk.)";
+        document.getElementById('ovf-3').innerText = "14.00 m² (Kamu Tahsis)";
+        document.getElementById('ovf-4').innerText = "0.00 m² (Gerek Kalmadı)";
+        btnAad15.classList.remove('hidden');
+        showToast("❌ ERR-DOP-001: %45 Sınırı Aşıldı", "DOPO %48.20 çıktı. AAD Md. 15 karşılama sırasını uygulayın.", "error");
+      } else {
+        btnNorm.className = "px-3 py-1.5 rounded bg-blue-600 text-white text-xs font-semibold";
+        btnOvf.className = "px-3 py-1.5 rounded bg-cad-card border border-rose-500/50 text-rose-300 text-xs font-semibold";
+        document.getElementById('dop-out-area').innerText = "1,000.00 m²";
+        rateBox.className = "flex justify-between p-2.5 bg-emerald-950/50 border border-emerald-700/50 rounded text-emerald-200";
+        rateLbl.innerText = "%40.0000000 (≤ %45 Uygun)";
+        document.getElementById('ovf-1').innerText = "0.00 m²";
+        document.getElementById('ovf-2').innerText = "0.00 m²";
+        document.getElementById('ovf-3').innerText = "0.00 m²";
+        document.getElementById('ovf-4').innerText = "0.00 m²";
+        btnAad15.classList.add('hidden');
+      }
+    }
+
+    function applyAad15Protocol() {
+      document.getElementById('dop-out-area').innerText = "916.67 m²";
+      const rateBox = document.getElementById('dop-rate-box');
+      const rateLbl = document.getElementById('dop-rate-lbl');
+      rateBox.className = "flex justify-between p-2.5 bg-emerald-950/50 border border-emerald-700/50 rounded text-emerald-200";
+      rateLbl.innerText = "%45.0000000 (AAD Md. 15 İle Dengelendi ✓)";
+      document.getElementById('btn-apply-aad15').classList.add('hidden');
+      addAuditLog("SUCCESS", "TC-DOP-007", "AAD Md. 15 aşım karşılama protokolü (Tescil Harici + Belediye + Kamu) uygulanarak DOPO %45.0000000 sınırına çekildi.");
+      showToast("✅ AAD Md. 15 Uygulandı (TC-DOP-007)", "53.33 m² aşım sırasıyla Tescil Harici, Belediye ve Kamu alanlarından karşılandı.", "success");
+    }
+
+    function updatePlanConstraints() {
+      minFrontageLimit = parseFloat(document.getElementById('inp-min-frontage').value) || 13.0;
+      minDepthLimit = parseFloat(document.getElementById('inp-min-depth').value) || 16.0;
+      bumpRevision("İmar Planı Asgari Ölçü Kısıtı Değişikliği");
+      renderAll();
+    }
+
+    function setBlockGeometry(mode) {
+      blockGeometryMode = mode;
+      ['standard', 'double', 'chamfer', 'trapezoid', 'triangle', 'concave'].forEach(k => {
+        const btn = document.getElementById('geom-' + k);
+        if (btn) {
+          btn.className = (k === mode)
+            ? "py-1 px-2 rounded bg-blue-600 text-white font-medium text-left"
+            : "py-1 px-2 rounded bg-cad-card text-slate-300 hover:bg-slate-700 border border-cad-border text-left";
+        }
+      });
+      const meta = geomMeta[mode] || geomMeta.standard;
+      document.getElementById('geom-rule-explain').innerHTML = meta.explain;
+      document.getElementById('bisection-angle-badge').innerText = meta.angle;
+      document.getElementById('quant-status-badge').innerText = meta.quant;
+      document.getElementById('canvas-block-title').innerText = `Ada: 105 (${meta.name})`;
+      document.getElementById('insp-geom-type').innerText = meta.name;
+
+      addAuditLog("INFO", "CMD-GEOM-MODE", `Ada geometrisi simülatörü '${meta.name}' moduna geçirildi.`);
+      showToast(`🏛️ ${meta.name}`, meta.explain.replace(/<[^>]+>/g, ''), "info");
+      renderAll();
+    }
+
+    function setViewport(mode) {
+      const vp = document.getElementById('app-viewport');
+      ['full', 'laptop', 'tablet'].forEach(m => {
+        document.getElementById('vp-' + m).className = (m === mode)
+          ? "px-2 py-0.5 rounded bg-blue-600 text-white font-medium"
+          : "px-2 py-0.5 rounded text-slate-300 hover:bg-slate-700";
+      });
+      if (mode === 'full') { vp.style.width = '100vw'; vp.style.height = '100vh'; vp.style.borderRadius = '0px'; }
+      if (mode === 'laptop') { vp.style.width = '1280px'; vp.style.height = '760px'; vp.style.borderRadius = '12px'; }
+      if (mode === 'tablet') {
+        vp.style.width = '960px'; vp.style.height = '680px'; vp.style.borderRadius = '12px';
+        if (docks.left) toggleDock('left');
+      }
+    }
+
+    function toggleDock(side) {
+      docks[side] = !docks[side];
+      const el = document.getElementById('dock-' + side);
+      const btn = document.getElementById('btn-dock-' + side);
+      if (docks[side]) {
+        el.classList.remove('hidden');
+        btn.classList.add('bg-slate-700', 'text-white');
+      } else {
+        el.classList.add('hidden');
+        btn.classList.remove('bg-slate-700');
+      }
+    }
+
+    function updateCameraTransform() {
+      document.getElementById('camera-group').setAttribute('transform', `translate(${camX}, ${camY}) scale(${camScale})`);
+      document.getElementById('zoom-pct-lbl').innerText = Math.round(camScale * 100) + '%';
+    }
+    function zoomCad(factor) {
+      camScale = Math.min(2.8, Math.max(0.45, camScale * factor));
+      updateCameraTransform();
+    }
+    function resetCamera() {
+      camScale = 1.0; camX = 0; camY = 0;
+      updateCameraTransform();
+    }
+
+    const svgWrap = document.getElementById('svg-wrapper');
+    svgWrap.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      zoomCad(e.deltaY < 0 ? 1.12 : 0.89);
+    }, { passive: false });
+
+    svgWrap.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.parcel-poly')) return;
+      isPanning = true; startPanX = e.clientX - camX; startPanY = e.clientY - camY;
+    });
+    window.addEventListener('mousemove', (e) => {
+      const coordsEl = document.getElementById('cursor-coords');
+      if (coordsEl) {
+        const jeoX = (4518920.00 - e.clientY * 0.15).toFixed(2);
+        const jeoY = (451248.00 + e.clientX * 0.15).toFixed(2);
+        coordsEl.innerText = `Jeodezik X (Kuzey): ${jeoX} | Y (Doğu): ${jeoY}`;
+      }
+      if (!isPanning) return;
+      camX = e.clientX - startPanX; camY = e.clientY - startPanY;
+      updateCameraTransform();
+    });
+    window.addEventListener('mouseup', () => { isPanning = false; });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        goStep(4);
+        document.getElementById('ai-cmd-input').focus();
+      } else if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        undoAction();
+      } else if (e.ctrlKey && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        redoAction();
+      } else if (e.ctrlKey && e.key === '0') {
+        e.preventDefault();
+        resetCamera();
+      } else if (e.key === 'F1') {
+        e.preventDefault();
+        toggleShortcutsModal();
+      }
+    });
+
+    function resetParcels() {
+      parcels = [
+        { no: 1, type: "TAM HİSSE", lawClass: "Özel Mülkiyet", frontage: 14.00, depth: 20.00, netArea: 280.00, owners: [{ name: "Malik_01 (Sentetik)", kadastro: 466.67, net: 280.00, share: "1/1" }] },
+        { no: 2, type: "TAM HİSSE", lawClass: "Önceki Terk Mahsuplu", frontage: 15.00, depth: 20.00, netArea: 300.00, owners: [{ name: "Malik_02 (Sentetik)", kadastro: 500.00, net: 300.00, share: "1/1" }] },
+        { no: 3, type: "TAM HİSSE", lawClass: "Özel Mülkiyet", frontage: 13.00, depth: 20.00, netArea: 260.00, owners: [{ name: "Mustafa KAYA (Sentetik)", kadastro: 433.33, net: 260.00, share: "1/1" }] },
+        { no: 4, type: "KÜÇÜK HİSSE", lawClass: "Kapanan Yol Mahsuplu", frontage: 8.00, depth: 20.00, netArea: 160.00, owners: [{ name: "Malik_04 (Sentetik)", kadastro: 266.67, net: 160.00, share: "1/1" }] }
+      ];
+      historyStack = [];
+      redoStack = [];
+      selectedParcelNo = 1;
+      approvedRevisionId = null;
+      updateUndoRedoButtons();
+      resetCamera();
+      renderAll();
+    }
+
+    function renderStepper() {
+      const bar = document.getElementById('stepper-bar');
+      bar.innerHTML = stepsMeta.map((s, idx) => {
+        const isActive = s.no === currentStep;
+        const isDone = s.no < currentStep;
+        const cls = isActive
+          ? "bg-blue-600 text-white border-blue-400 shadow"
+          : isDone
+            ? "bg-cad-card text-emerald-400 border-emerald-700/50 hover:bg-slate-800"
+            : "bg-cad-card text-slate-300 border-cad-border hover:bg-slate-800";
+        return `
+          <button onclick="goStep(${s.no})" class="px-2.5 py-1 rounded border text-xs font-semibold transition flex items-center gap-1 shrink-0 ${cls}">
+            <span>${isDone ? '✓' : '●'}</span> ${s.title}
+          </button>
+          ${idx < stepsMeta.length - 1 ? '<div class="w-3 sm:flex-1 h-px bg-cad-border shrink-0"></div>' : ''}
+        `;
+      }).join('');
+    }
+
+    function goStep(stepNo) {
+      currentStep = stepNo;
+      document.querySelectorAll('.step-view').forEach(el => el.classList.add('hidden'));
+      document.getElementById(`step-${stepNo}`).classList.remove('hidden');
+      renderStepper();
+      renderAll();
+    }
+
+    function selectParcel(no) { selectedParcelNo = no; renderAll(); }
+
+    function onSliderChange(val) {
+      const p = parcels.find(x => x.no === selectedParcelNo);
+      if (!p) return;
+      pushHistory();
+      p.frontage = parseFloat(val);
+      p.depth = parseFloat((p.netArea / p.frontage).toFixed(2));
+      document.getElementById('slider-val-lbl').innerText = p.frontage.toFixed(2) + " m";
+      bumpRevision(`105/${p.no} Cephe Değişikliği (${p.frontage.toFixed(2)}m)`);
+      addAuditLog("SUCCESS", "CMD-BISECTION-SLIDE", `105/${p.no} cephesi ${p.frontage.toFixed(2)}m, derinliği ${p.depth.toFixed(2)}m olarak güncellendi (Alan Sabit: ${p.netArea.toFixed(2)}m²).`);
+      renderAll();
+    }
+
+    function quickAi(action) {
+      const input = document.getElementById('ai-cmd-input');
+      if (action === 'merge34') input.value = "3 ve 4 nolu parselleri müşterek birleştir";
+      if (action === 'widen1') input.value = "1. parselin cephesini 16 metreye çıkar";
+      if (action === 'swap12') input.value = "1 ve 2. parseli yer değiştir";
+      executeAiCommand();
+    }
+
+    function executeAiCommand() {
+      const cmd = document.getElementById('ai-cmd-input').value.toLowerCase();
+      if (!cmd) return;
+      if (cmd.includes("üçgen") || cmd.includes("kama")) {
+        setBlockGeometry('triangle');
+        return;
+      } else if (cmd.includes("yamuk") || cmd.includes("trapez")) {
+        setBlockGeometry('trapezoid');
+        return;
+      } else if (cmd.includes("pah") || cmd.includes("köşe")) {
+        setBlockGeometry('chamfer');
+        return;
+      } else if (cmd.includes("sırt") || cmd.includes("çift")) {
+        setBlockGeometry('double');
+        return;
+      } else if (cmd.includes("konkav")) {
+        setBlockGeometry('concave');
+        return;
+      } else if (cmd.includes("müşterek") || (cmd.includes("3") && cmd.includes("4"))) {
+        if (parcels.length === 4) {
+          pushHistory();
+          const p3 = parcels[2], p4 = parcels[3];
+          const totalNet = p3.netArea + p4.netArea;
+          const g = gcd(Math.round(p3.netArea), Math.round(totalNet));
+          const s1 = `${Math.round(p3.netArea)/g}/${Math.round(totalNet)/g}`;
+          const s2 = `${Math.round(p4.netArea)/g}/${Math.round(totalNet)/g}`;
+          parcels = [parcels[0], parcels[1], {
+            no: 3, type: "MÜŞTEREK", lawClass: "Özel + Kapanan Yol Mahsuplu", frontage: p3.frontage + p4.frontage, depth: 20.00, netArea: totalNet,
+            owners: [
+              { name: p3.owners[0].name, kadastro: p3.owners[0].kadastro, net: p3.netArea, share: s1 },
+              { name: p4.owners[0].name, kadastro: p4.owners[0].kadastro, net: p4.netArea, share: s2 }
+            ]
+          }];
+          selectedParcelNo = 3;
+          bumpRevision("105/3 ve 105/4 Müşterek Birleştirme");
+          addAuditLog("SUCCESS", "CMD-MERGE-FRACTION", `105/3 ve 105/4 parselleri Fraction(${s1} + ${s2} = 1/1) ile müşterek birleştirildi; ERR-PLAN-001 giderildi.`);
+          showToast("✅ Müşterek Birleştirme Tamamlandı", `105/3 ve 105/4 EBOB sadeleştirmeli (${s1} + ${s2}) birleştirildi; kritik cephe hatası kalktı.`, "success");
+        }
+      } else if (cmd.includes("16") || cmd.includes("cephe")) {
+        pushHistory();
+        const p1 = parcels[0];
+        p1.frontage = 16.00;
+        p1.depth = parseFloat((p1.netArea / p1.frontage).toFixed(2));
+        selectedParcelNo = 1;
+        bumpRevision("105/1 Cephe 16.00m");
+        addAuditLog("SUCCESS", "CMD-FRONTAGE-SET", "105/1 parsel cephesi 16.00m, derinliği 17.50m olarak güncellendi.");
+      } else if (cmd.includes("değiştir")) {
+        pushHistory();
+        const t = parcels[0];
+        parcels[0] = { ...parcels[1], no: 1 };
+        parcels[1] = { ...t, no: 2 };
+        selectedParcelNo = 1;
+        bumpRevision("105/1 ve 105/2 Konum Takası");
+        addAuditLog("SUCCESS", "CMD-PARCEL-SWAP", "105/1 ve 105/2 parsellerinin ada içi sırası değiştirildi.");
+      }
+      renderAll();
+    }
+
+    function quickFixFromApproval() {
+      quickAi('merge34');
+      goStep(5);
+    }
+
+    function getInvalidCount() {
+      return parcels.filter(p => p.frontage < minFrontageLimit || p.depth < minDepthLimit).length;
+    }
+
+    function updateApprovalButtons() {
+      const invalidCount = getInvalidCount();
+      const chk = document.getElementById('chk-engineer-approval');
+      const btnGive = document.getElementById('btn-give-approval');
+      const btnRevoke = document.getElementById('btn-revoke-approval');
+      const blockerBox = document.getElementById('approval-blocker-box');
+      const badge5 = document.getElementById('step5-approval-badge');
+      const topPill = document.getElementById('approval-status-pill');
+
+      document.getElementById('revision-badge').innerText = `Rev: ${currentRevisionId}`;
+      document.getElementById('output-rev-lbl').innerText = `Bağlı Revizyon: ${currentRevisionId}`;
+      document.getElementById('approval-rev-code').innerText = currentRevisionId;
+      document.getElementById('sum-parcels').innerText = `105 Ada (${parcels.length} Parsel)`;
+      document.getElementById('sum-crit-errors').innerText = invalidCount > 0 ? `${invalidCount} Kritik Hata` : "0 Kritik Hata ✓";
+      document.getElementById('sum-crit-errors').className = invalidCount > 0 ? "font-bold mt-0.5 text-rose-400" : "font-bold mt-0.5 text-emerald-400";
+
+      if (invalidCount > 0) {
+        blockerBox.classList.remove('hidden');
+        btnGive.disabled = true;
+      } else {
+        blockerBox.classList.add('hidden');
+        btnGive.disabled = !chk.checked || (approvedRevisionId === currentRevisionId);
+      }
+
+      if (approvedRevisionId === currentRevisionId) {
+        badge5.className = "px-2.5 py-1 rounded text-xs font-bold bg-emerald-950 text-emerald-300 border border-emerald-700";
+        badge5.innerText = `✓ Onaylı (${currentRevisionId.split(' ')[0]})`;
+        topPill.className = "text-[11px] font-semibold px-2.5 py-1 rounded border bg-emerald-950/80 border-emerald-700 text-emerald-300";
+        topPill.innerText = `✍️ Mühendis Onaylı (${currentRevisionId.split(' ')[0]})`;
+        btnRevoke.disabled = false;
+      } else {
+        badge5.className = "px-2.5 py-1 rounded text-xs font-bold bg-amber-950 text-amber-300 border border-amber-700";
+        badge5.innerText = "Onaylanmadı";
+        topPill.className = "text-[11px] font-semibold px-2.5 py-1 rounded border bg-amber-950/80 border-amber-700 text-amber-300";
+        topPill.innerText = "⏳ Mühendis Onayı Bekleniyor";
+        btnRevoke.disabled = true;
+      }
+    }
+
+    function giveEngineerApproval() {
+      if (getInvalidCount() > 0) {
+        addAuditLog("ERROR", "ERR-ONAY-ENGEL", "Kritik hata varken mühendis onayı denendi ve engellendi (AC-ONAY-01).");
+        showToast("❌ Onay Engellendi (AC-ONAY-01)", "Kritik plan hatası çözülmeden onay verilemez.", "error");
+        return;
+      }
+      approvedRevisionId = currentRevisionId;
+      addAuditLog("SUCCESS", "AC-ONAY-03", `Mühendis onayı ${currentRevisionId} revizyonuna bağlanarak kaydedildi.`);
+      showToast("✍️ Mühendis Onayı Verildi", `Onay ${currentRevisionId} revizyonuna kilitlendi. Artık çıktı üretebilirsiniz.`, "success");
+      // Kadastro -> İmar Tahsis Akış Oklarını Çiz (layer-vectors)
+      const vecGroup = document.getElementById('layer-vectors');
+      const handlesGroup = document.getElementById('layer-handles');
+      if (vecGroup && handlesGroup) {
+        vecGroup.innerHTML = '';
+        handlesGroup.innerHTML = '';
+        let vx = 0;
+        const kadSources = [
+          { x: 95, y: 125, code: '902/1-A' },
+          { x: 335, y: 125, code: '902/1-B' },
+          { x: 565, y: 125, code: '902/1-C' },
+          { x: 615, y: 165, code: '902/1-D' }
+        ];
+        parcels.forEach((p, idx) => {
+          const pw = p.frontage * scale;
+          const ph = p.depth * scale;
+          const tx = vx + pw / 2;
+          const ty = ph / 2;
+          const src = kadSources[idx] || kadSources[0];
+          const isSel = p.no === selectedParcelNo;
+          if (isSel) {
+            const cx = (src.x + tx) / 2;
+            const cy = Math.min(src.y, ty) - 42;
+            vecGroup.innerHTML += `
+              <path d="M ${src.x} ${src.y} Q ${cx} ${cy} ${tx} ${ty}" fill="none" stroke="#FBBF24" stroke-width="2.4" stroke-dasharray="6,4" class="alloc-vector-line" marker-end="url(#arrow-alloc)" />
+              <rect x="${cx - 68}" y="${cy - 12}" width="136" height="18" rx="4" fill="#0F172A" stroke="#F59E0B" stroke-width="1" />
+              <text x="${cx}" y="${cy + 1}" text-anchor="middle" fill="#FDE68A" font-size="9" font-family="JetBrains Mono" font-weight="bold">${src.code} ➔ 105/${p.no} (${p.netArea.toFixed(1)}m²)</text>
+            `;
+          }
+          // Kesim çizgisi üzerinde tutamaç (handle)
+          if (idx < parcels.length - 1) {
+            const hx = vx + pw;
+            handlesGroup.innerHTML += `
+              <g class="cursor-ew-resize" onclick="selectParcel(${p.no})">
+                <circle cx="${hx}" cy="${ph / 2}" r="5.5" fill="#3B82F6" stroke="#FFF" stroke-width="1.5" />
+                <text x="${hx}" y="${ph / 2 - 9}" text-anchor="middle" fill="#93C5FD" font-size="8" font-family="JetBrains Mono">↔</text>
+              </g>
+            `;
+          }
+          vx += pw;
+        });
+      }
+
+      // Canlı HUD Rozetini Güncelle
+      const hudId = document.getElementById('hud-parcel-id');
+      const hudArea = document.getElementById('hud-area');
+      const hudDenom = document.getElementById('hud-denom');
+      if (hudId && sel) {
+        const denomDm2 = Math.round(sel.netArea * 100);
+        const shareTxt = sel.owners.length === 1 ? `${denomDm2} dm² (TAM)` : `${denomDm2} dm² (${sel.owners.map(o => o.share).join(' + ')})`;
+        hudId.innerText = `105/${sel.no} (Geçici: 902/1/C${sel.no})`;
+        hudArea.innerText = `${sel.netArea.toFixed(2)} m²`;
+        hudDenom.innerText = shareTxt;
+      }
+
+      if (typeof activeStudioSubTab !== 'undefined' && activeStudioSubTab !== 'cad') {
+        renderStudioSheetPreview();
+      }
+      updateApprovalButtons();
+    }
+
+    function revokeEngineerApproval() {
+      if (!approvedRevisionId) return;
+      const oldRev = approvedRevisionId;
+      approvedRevisionId = null;
+      document.getElementById('chk-engineer-approval').checked = false;
+      bumpRevision("Mühendis Onayı Geri Alındı (AC-ONAY-04)");
+      addAuditLog("WARN", "AC-ONAY-05", `${oldRev} revizyonuna ait mühendis onayı 24 saat içinde geri alındı; yeni revizyon oluşturuldu.`);
+      showToast("↩ Onay Geri Alındı (AC-ONAY-04..05)", "Eski kayıt silinmeden yeni revizyon oluşturuldu ve AuditLog'a işlendi.", "warn");
+      updateApprovalButtons();
+    }
+
+    function onParsidSchemaChange() {
+      const val = document.getElementById('parsid-schema-select').value;
+      const desc = document.getElementById('parsid-export-desc');
+      if (val === 'EXPERIMENTAL') {
+        desc.innerHTML = "<span class='text-amber-400'>⚠️ Şema Tanımsız: AC-PILOT-09 gereği yalnızca 'Deneysel İç Format' üretilir!</span>";
+      } else {
+        desc.innerText = "Şema: TKGM_PARSID_2026_v1 • ParsidErrorMap Doğrulamalı";
+      }
+    }
+
+    function exportArtifact(kind) {
+      const invalidCount = getInvalidCount();
+      if (invalidCount > 0 || approvedRevisionId !== currentRevisionId) {
+        addAuditLog("ERROR", "ERR-CIKTI-ONAYSIZ", `Onaysız veya kritik hatalı ${kind} çıktı girişimi reddedildi (AC-FEN-01 / AC-PILOT-05).`);
+        showToast("🚫 Çıktı Engellendi (AC-FEN-01)", "Mühendis onayı olmadan nihai/taslak çıktı üretilemez! Bu reddedilen girişim AuditLog'a kaydedildi.", "error");
+        return;
+      }
+      const schemaVal = document.getElementById('parsid-schema-select').value;
+      if (kind === 'PARSID' && schemaVal === 'EXPERIMENTAL') {
+        addAuditLog("WARN", "AC-PILOT-09", "Resmi PARSİD şeması seçilmediği için çıktı 'Deneysel İç Format' olarak işaretlendi.");
+        showToast("⚠️ Deneysel İç Format (AC-PILOT-09)", "PARSİD şeması tanımsız olduğu için sahte uyumluluk iddia edilmedi; deneysel paket üretildi.", "warn");
+      } else {
+        const watermark = isPostPilotMode ? "Ed25519 İmzalı + Zaman Damgalı" : "PİLOT — RESMÎ İŞLEMDE KULLANILAMAZ";
+        addAuditLog("SUCCESS", `EXPORT-${kind}`, `${kind} çıktısı (${watermark}) üretildi ve SHA-256 checksum doğrulandı.`);
+        showToast(`✅ ${kind} Çıktısı Üretildi`, `Revizyon: ${currentRevisionId} • Damga: ${watermark}`, "success");
+      }
+      document.getElementById('last-export-proof').innerHTML = `
+        <div class="text-emerald-400 font-bold">✓ Son Başarılı Çıktı: ${kind} (${new Date().toLocaleTimeString()})</div>
+        <div>Revizyon: ${currentRevisionId} | Checksum: SHA256:7d91..e4a2 | Durum: ${isPostPilotMode ? 'Ed25519 İmzalı' : 'PİLOT TASLAK'}</div>
+      `;
+    }
+
+    function renderAuditModal() {
+      const list = document.getElementById('audit-log-list');
+      if (!list) return;
+      list.innerHTML = auditLogs.map((l, idx) => {
+        const badgeCls = l.type === 'ERROR'
+          ? 'bg-rose-950 text-rose-400 border-rose-800'
+          : l.type === 'WARN'
+            ? 'bg-amber-950 text-amber-400 border-amber-800'
+            : 'bg-emerald-950 text-emerald-400 border-emerald-800';
+        return `
+          <div class="p-2.5 bg-cad-card border border-cad-border rounded-lg flex flex-wrap items-center justify-between gap-2">
+            <div class="space-y-0.5">
+              <div class="flex items-center gap-2">
+                <span class="text-slate-400">[${l.time}]</span>
+                <span class="px-1.5 py-0.5 text-[10px] font-bold border rounded ${badgeCls}">${l.code}</span>
+                <span class="text-white font-sans">${l.msg}</span>
+              </div>
+            </div>
+            <span class="text-[10px] text-cyan-400">${l.hash} (Zincir #${auditLogs.length - idx})</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function toggleAuditModal() {
+      const m = document.getElementById('audit-modal');
+      m.classList.toggle('hidden');
+      renderAuditModal();
+    }
+
+    function toggleShortcutsModal() {
+      document.getElementById('shortcuts-modal').classList.toggle('hidden');
+    }
+
+    // 6 Gerçek İmar Adası Geometrisini Çizen Fonksiyon
+    function renderAll() {
+      const roadsGroup = document.getElementById('layer-roads');
+      const gridGroup = document.getElementById('layer-grid');
+      const ptsGroup = document.getElementById('layer-points');
+      const errCirclesGroup = document.getElementById('layer-error-circles');
+      const alertBox = document.getElementById('cad-alert-box');
+      const tbody = document.getElementById('live-table-body');
+      roadsGroup.innerHTML = ''; gridGroup.innerHTML = ''; ptsGroup.innerHTML = ''; errCirclesGroup.innerHTML = ''; alertBox.innerHTML = ''; tbody.innerHTML = '';
+
+      const scale = 13.0;
+      let currX = 0, nodeCounter = 1, invalidCount = 0;
+      const totalFrontagePx = parcels.reduce((s, p) => s + p.frontage * scale, 0);
+
+      // Üst İmar Yolu (Tüm ada tiplerinde ortak kuzey cephe)
+      roadsGroup.innerHTML += `
+        <line x1="-25" y1="-22" x2="${totalFrontagePx + 45}" y2="-22" stroke="#64748B" stroke-width="1.5" stroke-dasharray="8,4" />
+        <text x="${totalFrontagePx / 2}" y="-33" text-anchor="middle" fill="#94A3B8" font-size="11" font-family="JetBrains Mono" font-weight="600">
+          ◀══════════════ KUZEY İMAR YOLU (15.00m) - ANA CEPHE HATTI ══════════════▶
+        </text>
+      `;
+
+      // Ada tipine özel ek yol ve omurga çizgileri
+      if (blockGeometryMode === 'double') {
+        roadsGroup.innerHTML += `
+          <line x1="-20" y1="150" x2="${totalFrontagePx + 30}" y2="150" stroke="#F59E0B" stroke-width="2" stroke-dasharray="5,3" />
+          <text x="${totalFrontagePx + 10}" y="145" fill="#FBBF24" font-size="9.5" font-family="JetBrains Mono" font-weight="bold">ADA AYIRMA OMURGASI (SIRT HATTI)</text>
+          <line x1="-25" y1="322" x2="${totalFrontagePx + 45}" y2="322" stroke="#64748B" stroke-width="1.5" stroke-dasharray="8,4" />
+          <text x="${totalFrontagePx / 2}" y="340" text-anchor="middle" fill="#94A3B8" font-size="11" font-family="JetBrains Mono" font-weight="600">
+            ◀══════════════ GÜNEY İMAR YOLU (12.00m) - İKİNCİ CEPHE HATTI ══════════════▶
+          </text>
+        `;
+      } else if (blockGeometryMode === 'chamfer') {
+        roadsGroup.innerHTML += `
+          <line x1="-22" y1="-22" x2="-22" y2="280" stroke="#64748B" stroke-width="1.5" stroke-dasharray="8,4" />
+          <text x="-34" y="130" transform="rotate(-90 -34,130)" text-anchor="middle" fill="#FBBF24" font-size="10" font-family="JetBrains Mono" font-weight="bold">YAN İMAR YOLU (10.00m) + 45° KÖŞE PAHI</text>
+        `;
+      } else if (blockGeometryMode === 'trapezoid') {
+        roadsGroup.innerHTML += `
+          <line x1="-15" y1="295" x2="${totalFrontagePx + 25}" y2="200" stroke="#38BDF8" stroke-width="1.5" stroke-dasharray="6,4" />
+          <text x="${totalFrontagePx / 2}" y="275" text-anchor="middle" fill="#38BDF8" font-size="10" font-family="JetBrains Mono" font-weight="bold">EĞİMLİ / DARALAN GÜNEY ADA SINIRI (YAMUK TRAPEZ ADA • 82.5° KESİM)</text>
+        `;
+      } else if (blockGeometryMode === 'triangle') {
+        roadsGroup.innerHTML += `
+          <line x1="-15" y1="305" x2="${totalFrontagePx + 15}" y2="30" stroke="#C084FC" stroke-width="1.8" stroke-dasharray="6,4" />
+          <text x="${totalFrontagePx / 2 + 30}" y="215" transform="rotate(-22 ${totalFrontagePx / 2 + 30},215)" text-anchor="middle" fill="#C084FC" font-size="10.5" font-family="JetBrains Mono" font-weight="bold">◀═══ ÇAPRAZ KAVŞAK YOLU (ÜÇGEN / KAMA ADA SINIRI) ═══▶</text>
+        `;
+      }
+
+      parcels.forEach((p, pIdx) => {
+        const w = p.frontage * scale;
+        const h = p.depth * scale;
+        const x0 = currX;
+        const isValid = p.frontage >= minFrontageLimit && p.depth >= minDepthLimit;
+        const isSelected = p.no === selectedParcelNo;
+        if (!isValid) invalidCount++;
+
+        let fill = "rgba(16, 185, 129, 0.24)", stroke = "#10B981";
+        if (!isValid) { fill = "rgba(239, 68, 68, 0.30)"; stroke = "#EF4444"; }
+        else if (p.type === "MÜŞTEREK") { fill = "rgba(6, 182, 212, 0.26)"; stroke = "#06B6D4"; }
+        if (isSelected) stroke = "#FACC15";
+
+        let vertices = [];
+
+        if (blockGeometryMode === 'standard') {
+          vertices = [[x0, 0], [x0 + w, 0], [x0 + w, h], [x0, h]];
+        } else if (blockGeometryMode === 'double') {
+          // Üst sıra (150px derinlik) + Alt sıra (sırt sırta komşu parseller)
+          const rowH = 150;
+          vertices = [[x0, 0], [x0 + w, 0], [x0 + w, rowH], [x0, rowH]];
+          // Güney sıradaki sırt sırta komşu parseli de çiz
+          const backPoly = `${x0},${rowH} ${x0+w},${rowH} ${x0+w},${rowH*2} ${x0},${rowH*2}`;
+          gridGroup.innerHTML += `
+            <g opacity="0.58">
+              <polygon points="${backPoly}" fill="rgba(59, 130, 246, 0.16)" stroke="#60A5FA" stroke-width="1.3" stroke-dasharray="4,2" />
+              <text x="${x0 + 8}" y="${rowH + 24}" fill="#93C5FD" font-size="10" font-weight="bold">105 / ${p.no + 4} (Güney Sıra)</text>
+              <text x="${x0 + 8}" y="${rowH + 40}" fill="#CBD5E1" font-size="9" font-family="JetBrains Mono">Sırt Sırta Cephe: ${p.frontage.toFixed(1)}m</text>
+            </g>
+          `;
+        } else if (blockGeometryMode === 'chamfer') {
+          // İlk parselde (köşe parsel) 45 derece 5x5m (42px) pah kırığı
+          if (pIdx === 0) {
+            const c = 42;
+            vertices = [[x0 + c, 0], [x0 + w, 0], [x0 + w, h], [x0, h], [x0, c]];
+            roadsGroup.innerHTML += `
+              <line x1="${x0}" y1="${c}" x2="${x0+c}" y2="0" stroke="#FBBF24" stroke-width="2.5" />
+              <text x="${x0 - 8}" y="-6" fill="#FDE047" font-size="9" font-family="JetBrains Mono" font-weight="bold">45° Pah (5×5m)</text>
+            `;
+          } else {
+            vertices = [[x0, 0], [x0 + w, 0], [x0 + w, h], [x0, h]];
+          }
+        } else if (blockGeometryMode === 'trapezoid') {
+          // Soldan sağa daralan yamuk ada + 82.5 derece eğimli bisection kesim çizgileri
+          const skew = 22;
+          const yLeft = 280 - (x0 / totalFrontagePx) * 85;
+          const yRight = 280 - ((x0 + w) / totalFrontagePx) * 85;
+          const xBotLeft = x0 + (pIdx === 0 ? 0 : skew);
+          const xBotRight = x0 + w + skew;
+          vertices = [[x0, 0], [x0 + w, 0], [xBotRight, yRight], [xBotLeft, yLeft]];
+        } else if (blockGeometryMode === 'triangle') {
+          // Üçgen / Kama ada: sağa doğru daralan üçgen kavşak adası
+          const yLeft = Math.max(45, 290 - (x0 / totalFrontagePx) * 245);
+          const yRight = Math.max(35, 290 - ((x0 + w) / totalFrontagePx) * 245);
+          vertices = [[x0, 0], [x0 + w, 0], [x0 + w, yRight], [x0, yLeft]];
+        } else if (blockGeometryMode === 'concave') {
+          // Konkav L-Ada: son parselde içbükey L girintisi
+          if (pIdx === parcels.length - 1) {
+            const notchW = w * 0.38;
+            const notchH = h * 0.60;
+            vertices = [[x0, 0], [x0 + w, 0], [x0 + w, notchH], [x0 + w - notchW, notchH], [x0 + w - notchW, h], [x0, h]];
+          } else {
+            vertices = [[x0, 0], [x0 + w, 0], [x0 + w, h], [x0, h]];
+          }
+        }
+
+        const polyPoints = vertices.map(pt => `${pt[0].toFixed(1)},${pt[1].toFixed(1)}`).join(' ');
+        const ownerLines = p.owners.map(o => `${o.name} (${o.share})`).join(' + ');
+
+        gridGroup.innerHTML += `
+          <g class="parcel-poly" onclick="selectParcel(${p.no})">
+            <polygon points="${polyPoints}" fill="${fill}" stroke="${stroke}" stroke-width="${isSelected ? 3.2 : 1.8}" />
+            <text x="${x0 + w/2}" y="-7" text-anchor="middle" fill="#FDE047" font-size="10" font-family="JetBrains Mono" font-weight="bold">◄ ${p.frontage.toFixed(1)}m ►</text>
+            <text x="${x0 + 8}" y="22" fill="#FFF" font-size="11" font-weight="bold">105 / ${p.no}</text>
+            <text x="${x0 + 8}" y="37" fill="${isValid ? '#A7F3D0' : '#FCA5A5'}" font-size="9" font-family="JetBrains Mono">[${p.type}]</text>
+            ${p.owners.map((o, idx) => `<text x="${x0 + 8}" y="${54 + idx*14}" fill="#E2E8F0" font-size="9.5">• ${o.name} (${o.share})</text>`).join('')}
+            <text x="${x0 + 8}" y="${60 + p.owners.length*14}" fill="#93C5FD" font-size="10" font-family="JetBrains Mono" font-weight="bold">Net: ${p.netArea.toFixed(2)}m²</text>
+          </g>
+        `;
+
+        vertices.forEach((pt, idx) => {
+          ptsGroup.innerHTML += `
+            <circle cx="${pt[0]}" cy="${pt[1]}" r="3.2" fill="#FBBF24" />
+            <text x="${pt[0]+4}" y="${pt[1]+11}" fill="#FDE68A" font-size="8" font-family="JetBrains Mono">N${nodeCounter + idx}</text>
+          `;
+          errCirclesGroup.innerHTML += `
+            <circle cx="${pt[0]}" cy="${pt[1]}" r="9" fill="rgba(217, 70, 239, 0.12)" stroke="#E879F9" stroke-width="1" stroke-dasharray="2,2" />
+          `;
+        });
+        nodeCounter += 2; currX += w;
+
+        alertBox.innerHTML += !isValid ? `
+          <div class="p-2 rounded bg-rose-950/60 border border-rose-700 text-rose-200 space-y-1">
+            <div class="flex justify-between items-center">
+              <span class="font-mono font-bold text-rose-400 text-[10px]">ERR-PLAN-001</span>
+              <span class="text-[10px] bg-rose-900 px-1 rounded">Kritik</span>
+            </div>
+            <div class="font-semibold">105/${p.no} Cephe: ${p.frontage.toFixed(1)}m (&lt;${minFrontageLimit}m)</div>
+            <button onclick="quickAi('merge34')" class="w-full py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-[10px] font-semibold">⚡ 105/3 ile Müşterek Birleştir</button>
+          </div>` : `
+          <div class="p-1.5 rounded bg-cad-card border border-cad-border flex justify-between items-center">
+            <span>105/${p.no} (${p.frontage.toFixed(1)}×${p.depth.toFixed(1)}m)</span><span class="text-emerald-400 font-mono">✓ Uygun</span>
+          </div>`;
+
+        const kadSum = p.owners.reduce((a, o) => a + o.kadastro, 0);
+        tbody.innerHTML += `
+          <tr onclick="selectParcel(${p.no})" class="cursor-pointer ${isSelected ? 'bg-blue-950/50' : 'hover:bg-cad-card/60'}">
+            <td class="py-1.5 px-2.5 font-bold text-white">105/${p.no}</td>
+            <td class="py-1.5 px-2.5 font-sans">${ownerLines}</td>
+            <td class="py-1.5 px-2.5 font-sans text-slate-300">${p.lawClass}</td>
+            <td class="py-1.5 px-2.5 text-right">${kadSum.toFixed(2)}</td>
+            <td class="py-1.5 px-2.5 text-right text-amber-400">${(kadSum - p.netArea).toFixed(2)}</td>
+            <td class="py-1.5 px-2.5 text-right font-bold text-emerald-400">${p.netArea.toFixed(2)}</td>
+            <td class="py-1.5 px-2.5 text-center text-cyan-300 font-bold">${p.owners.map(o => o.share).join(' + ')}</td>
+            <td class="py-1.5 px-2.5 text-center">${p.frontage.toFixed(1)}×${p.depth.toFixed(1)}m</td>
+            <td class="py-1.5 px-2.5 text-center font-sans">
+              <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold ${isValid ? 'bg-emerald-950 text-emerald-400' : 'bg-rose-950 text-rose-400'}">${isValid ? '✓ UYGUN' : 'ERR-PLAN-001'}</span>
+            </td>
+          </tr>`;
+      });
+
+      const errBadge = document.getElementById('err-count-badge');
+      if (invalidCount > 0) {
+        errBadge.className = "text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800";
+        errBadge.innerText = `${invalidCount} Kritik`;
+      } else {
+        errBadge.className = "text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800";
+        errBadge.innerText = "0 Hata ✓";
+      }
+
+      const sel = parcels.find(x => x.no === selectedParcelNo) || parcels[0];
+      document.getElementById('insp-badge').innerText = `105 / ${sel.no}`;
+      document.getElementById('insp-type').innerText = sel.type;
+      document.getElementById('insp-law-class').innerText = sel.lawClass;
+      document.getElementById('insp-frontage').innerText = `${sel.frontage.toFixed(2)} m`;
+      document.getElementById('insp-depth').innerText = `${sel.depth.toFixed(2)} m`;
+      document.getElementById('insp-area').innerText = `${sel.netArea.toFixed(2)} m²`;
+      document.getElementById('frontage-slider').value = sel.frontage;
+      document.getElementById('slider-val-lbl').innerText = `${sel.frontage.toFixed(2)} m`;
+      document.getElementById('insp-owners').innerHTML = sel.owners.map(o => `
+        <div class="p-2 bg-cad-card border border-cad-border rounded">
+          <div class="font-sans font-semibold text-white flex justify-between"><span>${o.name}</span><span class="text-cyan-400">Pay: ${o.share}</span></div>
+          <div class="text-[10px] text-slate-400 mt-0.5">Kadastro: ${o.kadastro.toFixed(2)}m² → Net: ${o.net.toFixed(2)}m²</div>
+        </div>`).join('');
+
+      const pill = document.getElementById('global-status-pill');
+      if (invalidCount > 0) {
+        pill.className = "text-[11px] font-medium px-2.5 py-1 rounded border bg-rose-950/80 border-rose-700 text-rose-300";
+        pill.innerText = `⚠️ ${invalidCount} Kritik Hata (ERR-PLAN-001)`;
+      } else {
+        pill.className = "text-[11px] font-medium px-2.5 py-1 rounded border bg-emerald-950/80 border-emerald-700 text-emerald-300";
+        pill.innerText = `✅ Tüm Parseller Uygun`;
+      }
+
+      updateApprovalButtons();
+    }
+
+    function toggleLayer(id, v) { document.getElementById(id).style.display = v ? 'block' : 'none'; }
+    function fixIssue(id, msg) {
+      const box = document.getElementById(`issue-${id}`);
+      box.className = "bg-cad-panel border-l-4 border-emerald-500 border border-cad-border rounded-r-xl p-4 flex items-center justify-between";
+      const btn = box.querySelector('button');
+      if (btn) btn.outerHTML = `<span class="text-xs font-mono text-emerald-400">✓ ${msg}</span>`;
+      addAuditLog("SUCCESS", `FIX-ISSUE-${id}`, msg);
+      showToast("✅ Uyuşmazlık Çözüldü", msg, "success");
+    }
+    function resolveAllIssues() {
+      if (document.getElementById('issue-1').querySelector('button')) fixIssue(1, 'ERR-TAPU-002 Çözüldü: Malik Eşleştirildi');
+      if (document.getElementById('issue-2').querySelector('button')) fixIssue(2, 'ERR-TECVIZ-001 Çözüldü: Largest Remainder Dağıtıldı');
+    }
+
+
+    let activeStudioSubTab = 'cad';
+    let isPaftaLight = false;
+
+    function togglePaftaTheme() {
+      isPaftaLight = !isPaftaLight;
+      document.body.classList.toggle('pafta-light', isPaftaLight);
+      const btn = document.getElementById('btn-pafta-theme');
+      if (btn) {
+        btn.innerText = isPaftaLight ? '🌙 Koyu Stüdyo' : '☀️ Açık Pafta';
+      }
+      showToast(isPaftaLight ? "☀️ Açık Pafta (Kağıt) Teması" : "🌙 Koyu CAD Stüdyosu Teması", "Avalonia 11 ThemeVariant.Light / Dark görünümü değiştirildi.", "info");
+    }
+
+    function onSwipeCompare(val) {
+      const pct = parseInt(val, 10);
+      document.getElementById('swipe-pct-lbl').innerText = `%${pct}`;
+      const clipRect = document.getElementById('imar-clip-rect');
+      if (clipRect) {
+        const w = -200 + (pct / 100.0) * 1100;
+        clipRect.setAttribute('width', Math.max(0, w + 200));
+      }
+    }
+
+    function toggleOsnap(btn, name) {
+      const active = btn.classList.contains('bg-emerald-950');
+      btn.className = active
+        ? "px-1.5 py-0.5 rounded bg-cad-card text-slate-400 border border-cad-border"
+        : "px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700";
+      showToast(`🧲 OSNAP: ${name}`, active ? `${name} yakalama kapatıldı.` : `${name} mıknatısı aktif edildi.`, "info");
+    }
+
+    function onCadContextMenu(e) {
+      e.preventDefault();
+      const menu = document.getElementById('cad-context-menu');
+      const wrap = document.getElementById('svg-wrapper');
+      if (!menu || !wrap) return;
+      const rect = wrap.getBoundingClientRect();
+      const x = Math.min(rect.width - 265, Math.max(8, e.clientX - rect.left));
+      const y = Math.min(rect.height - 190, Math.max(8, e.clientY - rect.top));
+      menu.style.left = x + 'px';
+      menu.style.top = y + 'px';
+      document.getElementById('ctx-menu-title').innerText = `PARSEL İŞLEMLERİ (105/${selectedParcelNo})`;
+      menu.classList.remove('hidden');
+    }
+
+    window.addEventListener('click', () => {
+      const menu = document.getElementById('cad-context-menu');
+      if (menu) menu.classList.add('hidden');
+    });
+
+    function ctxAction(act) {
+      const menu = document.getElementById('cad-context-menu');
+      if (menu) menu.classList.add('hidden');
+      if (act === 'chamfer') setBlockGeometry('chamfer');
+      else if (act === 'merge34') quickAi('merge34');
+      else if (act === 'widen1') quickAi('widen1');
+      else if (act === 'balanceY1') {
+        addAuditLog("SUCCESS", "CMD-Y1-BALANCE", "Tecviz içi +0.12 m² alan farkı kamuya terk edilen 901/Y1 yol parselinde dengelendi (D31 Kural 4).");
+        showToast("⚖️ Y1 Yol Dengelemesi (D31)", "Tecviz içi +0.12 m² fark yeni imar parsellerine dokunulmadan Y1 yol parselinde dengelendi.", "success");
+      } else if (act === 'openFen') {
+        setStudioSubTab('fen');
+      }
+    }
+
+    function setStudioSubTab(tab) {
+      activeStudioSubTab = tab;
+      ['cad', 'area4', 'tescil', 'fen', 'rolove'].forEach(k => {
+        const b = document.getElementById('subtab-btn-' + k);
+        if (b) {
+          b.className = (k === tab)
+            ? "px-2.5 py-1 rounded text-[11px] font-semibold bg-blue-600 text-white"
+            : "px-2.5 py-1 rounded text-[11px] font-semibold bg-cad-card text-slate-300 hover:bg-slate-700 border border-cad-border";
+        }
+      });
+      const svgWrap = document.getElementById('svg-wrapper');
+      const toolbar = document.getElementById('cad-floating-toolbar');
+      const preview = document.getElementById('studio-sheet-preview');
+      if (tab === 'cad') {
+        svgWrap.classList.remove('hidden');
+        toolbar.classList.remove('hidden');
+        preview.classList.add('hidden');
+      } else {
+        svgWrap.classList.add('hidden');
+        toolbar.classList.add('hidden');
+        preview.classList.remove('hidden');
+        renderStudioSheetPreview();
+      }
+    }
+
+    function renderStudioSheetPreview() {
+      const box = document.getElementById('studio-sheet-content');
+      if (!box) return;
+      if (activeStudioSubTab === 'area4') {
+        box.innerHTML = `
+          <div class="bg-cad-panel border border-cad-border rounded-xl p-4 space-y-3 font-mono text-xs">
+            <div class="flex justify-between items-center border-b border-cad-border pb-2">
+              <span class="font-sans font-bold text-white text-sm">📐 4'lü Alan ve Y1 Yol Dengeleme Cetveli (D31 Kural 4 &amp; 5 — Gerçek Saha Projesi 1 &amp; 2 Formatı)</span>
+              <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700">Tecviz: 21.02 m² İçinde ✓</span>
+            </div>
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-cad-card text-slate-300 border-b border-cad-border">
+                  <th class="p-2">Geçici / Kalıcı Ada-Parsel</th>
+                  <th class="p-2">Nitelik</th>
+                  <th class="p-2 text-right">Noktalı Gauss Alanı (m²)</th>
+                  <th class="p-2 text-right">Cepheli Alan (m²)</th>
+                  <th class="p-2 text-right">Dengeleme Farkı (ΔA)</th>
+                  <th class="p-2 text-right">Tescile Esas Dengelemeli Alan (m²)</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-cad-border">
+                ${parcels.map(p => `
+                  <tr>
+                    <td class="p-2 text-white font-bold">902/1/C${p.no} ➔ 105/${p.no}</td>
+                    <td class="p-2 text-emerald-400">İMAR PARSELİ (${p.frontage.toFixed(1)}m Cephe)</td>
+                    <td class="p-2 text-right">${p.netArea.toFixed(2)}</td>
+                    <td class="p-2 text-right">${p.netArea.toFixed(2)}</td>
+                    <td class="p-2 text-right text-slate-400">+0.00</td>
+                    <td class="p-2 text-right font-bold text-white">${p.netArea.toFixed(2)}</td>
+                  </tr>
+                `).join('')}
+                <tr class="bg-amber-950/30">
+                  <td class="p-2 text-amber-300 font-bold">902/1/Y1 (KAMU YOLU)</td>
+                  <td class="p-2 text-amber-300">YOLA TERK / DOP DENGELEME</td>
+                  <td class="p-2 text-right">666.55</td>
+                  <td class="p-2 text-right">666.55</td>
+                  <td class="p-2 text-right text-amber-400 font-bold">+0.12 (Y1 Dengelendi)</td>
+                  <td class="p-2 text-right font-bold text-amber-300">666.67</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>`;
+      } else if (activeStudioSubTab === 'tescil') {
+        box.innerHTML = `
+          <div class="bg-cad-panel border border-cad-border rounded-xl p-4 space-y-3 font-mono text-xs">
+            <div class="flex justify-between items-center border-b border-cad-border pb-2">
+              <span class="font-sans font-bold text-white text-sm">📋 Tescile Esas Dağıtım Cetveli (D31 Kural 2 — dm² Tam Sayı Payda = Alan × 100)</span>
+              <span class="px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-700">DOPO = 0.4000000</span>
+            </div>
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-cad-card text-slate-300 border-b border-cad-border">
+                  <th class="p-2">Yeni İmar Ada/Parsel</th>
+                  <th class="p-2">Parsel Alanı (m²)</th>
+                  <th class="p-2">Malik (Sentetik)</th>
+                  <th class="p-2 text-right">Giren Kadastro Payı (m²)</th>
+                  <th class="p-2 text-right">Tahsis Edilen (m²)</th>
+                  <th class="p-2 text-center">Tescil Hissesi (Pay / dm² Payda)</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-cad-border">
+                ${parcels.map(p => {
+                  const totalDm2 = Math.round(p.netArea * 100);
+                  return p.owners.map(o => {
+                    const ownerDm2 = Math.round(o.net * 100);
+                    const tescilStr = p.owners.length === 1 ? 'TAM' : `${ownerDm2} / ${totalDm2}`;
+                    return `
+                      <tr>
+                        <td class="p-2 font-bold text-white">105 / ${p.no}</td>
+                        <td class="p-2 text-emerald-400">${p.netArea.toFixed(2)}</td>
+                        <td class="p-2 font-sans text-slate-200">${o.name}</td>
+                        <td class="p-2 text-right">${o.kadastro.toFixed(2)}</td>
+                        <td class="p-2 text-right font-bold text-white">${o.net.toFixed(2)}</td>
+                        <td class="p-2 text-center font-bold text-cyan-300">${tescilStr}</td>
+                      </tr>`;
+                  }).join('');
+                }).join('')}
+              </tbody>
+            </table>
+          </div>`;
+      } else if (activeStudioSubTab === 'fen') {
+        box.innerHTML = `
+          <div class="bg-cad-panel border border-cad-border rounded-xl p-4 space-y-3 font-mono text-xs">
+            <div class="flex justify-between items-center border-b border-cad-border pb-2">
+              <span class="font-sans font-bold text-white text-sm">📗 TKGM Fen Klasörü ve Tescil Sayfası (D31 Kural 6 — He. | M2 | Dm2 3 Sütunlu Format)</span>
+              <span class="px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-700">PİLOT — RESMÎ İŞLEMDE KULLANILAMAZ</span>
+            </div>
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-cad-card text-slate-300 border-b border-cad-border">
+                  <th class="p-2">Ada / Parsel</th>
+                  <th class="p-2">Cinsi</th>
+                  <th class="p-2 text-center">He. (Hektar)</th>
+                  <th class="p-2 text-center">M2 (Tam m²)</th>
+                  <th class="p-2 text-center">Dm2 (Desimetrekare)</th>
+                  <th class="p-2">Pafta / Beyanlar</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-cad-border">
+                ${parcels.map(p => {
+                  const totalWhole = Math.floor(p.netArea);
+                  const he = Math.floor(totalWhole / 10000);
+                  const m2 = totalWhole % 10000;
+                  const dm2 = Math.round((p.netArea - totalWhole) * 100);
+                  return `
+                    <tr>
+                      <td class="p-2 font-bold text-white">105 / ${p.no}</td>
+                      <td class="p-2 text-emerald-400">ARSA</td>
+                      <td class="p-2 text-center">${String(he).padStart(2, '0')}</td>
+                      <td class="p-2 text-center font-bold text-white">${String(m2).padStart(4, '0')}</td>
+                      <td class="p-2 text-center text-cyan-300">${String(dm2).padStart(2, '0')}</td>
+                      <td class="p-2 text-slate-300">G24-B-12-D-3-A • 3194/18. Md. İmar Uygulaması</td>
+                    </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>`;
+      } else if (activeStudioSubTab === 'rolove') {
+        box.innerHTML = `
+          <div class="bg-cad-panel border border-cad-border rounded-xl p-4 space-y-3 font-mono text-xs">
+            <div class="flex justify-between items-center border-b border-cad-border pb-2">
+              <span class="font-sans font-bold text-white text-sm">📏 FR.521 (EK-17) Rölöve Ölçü Krokisi ve ITRF96 Koordinat Özeti (D31 Kural 9)</span>
+              <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700">ITRF96 TM30 • 2D Helmert Uyuşumlu</span>
+            </div>
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-cad-card text-slate-300 border-b border-cad-border">
+                  <th class="p-2">Nokta No</th>
+                  <th class="p-2 text-right">Y (Sağa / Doğu - m)</th>
+                  <th class="p-2 text-right">X (Yukarı / Kuzey - m)</th>
+                  <th class="p-2 text-right">Kenar Uzunluğu (Cephe m)</th>
+                  <th class="p-2 text-center">m_p Konum Hatası</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-cad-border">
+                ${parcels.map((p, i) => `
+                  <tr>
+                    <td class="p-2 font-bold text-amber-300">N${i*2 + 1} ➔ N${i*2 + 2}</td>
+                    <td class="p-2 text-right">${(461240.125 + i * p.frontage).toFixed(3)}</td>
+                    <td class="p-2 text-right">${(4104820.450 + i * 0.15).toFixed(3)}</td>
+                    <td class="p-2 text-right font-bold text-emerald-400">${p.frontage.toFixed(2)} m</td>
+                    <td class="p-2 text-center text-cyan-300">±0.018 m (≤ 0.07m ✓)</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>`;
+      }
+    }
+
+    resetParcels();
+    goStep(4);
+  </script>
+</body>
+</html>

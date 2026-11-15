@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Imar18.Bootstrapper</RootNamespace>
+    <AssemblyName>Imar18.Bootstrapper</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Imar18.Domain\Imar18.Domain.csproj" />
+    <ProjectReference Include="..\Imar18.GeometryEngine\Imar18.GeometryEngine.csproj" />
+    <ProjectReference Include="..\Imar18.Application\Imar18.Application.csproj" />
+    <ProjectReference Include="..\Imar18.Infrastructure\Imar18.Infrastructure.csproj" />
+    <ProjectReference Include="..\Imar18.Presentation.Avalonia\Imar18.Presentation.Avalonia.csproj" />
+  </ItemGroup>
+</Project>

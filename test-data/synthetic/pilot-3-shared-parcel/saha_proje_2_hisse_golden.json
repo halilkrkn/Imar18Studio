@@ -1,0 +1,56 @@
+{
+  "projectCode": "PROJE-B (902 Ada 1 Parsel - 5 Ada & 40+ Hissedar Anonim)",
+  "crs": "ITRF96 TM 36° (GRS80, Epok 2005.00 — örnek, projeden girilir)",
+  "hisseCozumlemesi": "AAD Yönetmeliği Md. 17/1-(d) Muvafakatlı ve Fiili Zemin Kullanım Esaslı Hisse Çözümlemesi",
+  "tescilPaydaKurali": "Müşterek imar parsellerinde Payda = ParselAlanı_m2 * 100 (dm²/cm² tam sayı payda, örn. 3539.74 m² -> 353974 payda); müstakil parsellerde 'TAM'",
+  "metrics": {
+    "toplamKadastroAlani_R1": 26629.48,
+    "hesaplananAlan": 26629.28,
+    "tecvizFarki": 0.2,
+    "farkDengelemeHedefi": "902/1/Y1 (Yol Terk Alanı: 5366.84 + 0.20 = 5367.04 m²)",
+    "toplamImarTahsis_R2": 21262.44,
+    "kamuyaAyrilanYol": 5367.04,
+    "dopo": 0.2015451,
+    "oko": 0.0,
+    "tecvizSiniri_NetcadRaporu": 75.07,
+    "tecvizFormulKaynagi": "MÜHENDİS GİRDİSİ (TKGM)"
+  },
+  "blocks": [
+    {
+      "imarAda": 101,
+      "totalArea": 3539.74,
+      "geometryType": "Eğrisel/Kama Tek Parsel (A1)",
+      "sampleShares_101_1": [
+        "66387/353974 (663.87 m²)",
+        "66396/353974 (663.96 m²)",
+        "66397/353974 x3 (663.97 m²)",
+        "7334/353974 x2 (73.34 m²)",
+        "7333/353974 (73.33 m²) -> Toplam = 353975/353974 -> Largest Remainder 1 dm² düzeltmesi"
+      ]
+    },
+    {
+      "imarAda": 102,
+      "totalArea": 3751.8,
+      "geometryType": "Konkav L-Kırıklı + 45° Pahlı Ada (B1..B8)"
+    },
+    {
+      "imarAda": 103,
+      "totalArea": 4872.49,
+      "geometryType": "4 Köşesi 45° Pahlı + Ortadan Sırt Sırta Omurgalı Çift Cepheli Ada (C1..C10)"
+    },
+    {
+      "imarAda": 104,
+      "totalArea": 4713.93,
+      "geometryType": "4 Köşesi 45° Pahlı + Ortadan Sırt Sırta Omurgalı Çift Cepheli Ada (D1..D9)"
+    },
+    {
+      "imarAda": 105,
+      "totalArea": 4384.48,
+      "geometryType": "Başları Pahlı/Yamuk Tek Sıra Dizi Ada (E1..E9)"
+    }
+  ],
+  "paftaOlcegiNotu": "Pafta ölçeği (1/M) ve CRS dilimi sabit değildir; proje/parsel girdisidir (D3).",
+  "beklenenResmiCiktiPayToplami": 353975,
+  "beklenenDogruLargestRemainderPayToplami": 353974,
+  "notlar": "DOP sayfasındaki R2 (21262.44 m²) değeri dengeleme cetvelindeki imar parsel toplamına (21262.44 m²) tam eşittir. 101/1 parselinde örnek paylar 353975 topluyor, payda 353974; referans SORU-011."
+}

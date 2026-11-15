@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Imar18.Domain</RootNamespace>
+    <AssemblyName>Imar18.Domain</AssemblyName>
+  </PropertyGroup>
+</Project>

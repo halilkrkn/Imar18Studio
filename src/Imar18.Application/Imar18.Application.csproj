@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Imar18.Application</RootNamespace>
+    <AssemblyName>Imar18.Application</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Imar18.Domain\Imar18.Domain.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,30 @@
+# .NET & Avalonia Build Outputs
+bin/
+obj/
+out/
+publish/
+TestResults/
+*.trx
+*.coverage
+*.user
+*.suo
+.vs/
+.idea/
+
+# Kişisel Claude Code & Antigravity Yerel Ayarları
+.claude/settings.local.json
+.agents/settings.local.json
+
+# Gerçek Saha / Müşteri Verileri ve Anahtarlar (AC-PILOT-08: Asla Public Depoya Girmez!)
+test-data/real/
+test-data/raw/
+*.imr18
+*.imr18.lock
+*.imr18.bak
+*.pfx
+*.snk
+*.key
+*.pem
+
+# Yerel gerçek veri notları
+*.private.md

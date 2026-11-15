@@ -1,0 +1,48 @@
+{
+  "projectCode": "PROJE-C (903 Ada 1 Parsel - Mevzi İmar Planı & Park Tahsisli Anonim)",
+  "crs": "ITRF96 TM 36° (GRS80, Epok 2005.00 — örnek, projeden girilir)",
+  "metrics": {
+    "toplamKadastroAlani_R1": 14485.35,
+    "hesaplananAlan": 14483.38,
+    "tecvizFarki": 1.97,
+    "farkDengelemeHedefi": "903/1/Y1 (Yol Terk Alanı: 2024.28 + 1.97 = 2026.25 m²)",
+    "parkAlani": 400.0,
+    "tecvizSiniri_NetcadRaporu": 53.82,
+    "tecvizFormulKaynagi": "MÜHENDİS GİRDİSİ (TKGM)"
+  },
+  "blocks": [
+    {
+      "imarAda": 101,
+      "geometryType": "Park Entegreli Uzun Yamuk Ada (101/1..6 + 903/1/PARK 400.00 m²)"
+    },
+    {
+      "imarAda": 102,
+      "geometryType": "Sırt Sırta + Eğrisel Kuzey Cepheli Ada (102/1..9)"
+    },
+    {
+      "imarAda": 103,
+      "geometryType": "Konkav L-Bükümlü Sırt Sırta Ada (103/1..8)"
+    }
+  ],
+  "paftaOlcegiNotu": "Pafta ölçeği (1/M) ve CRS dilimi sabit değildir; proje/parsel girdisidir (D3).",
+  "resmiDopSayfasi": {
+    "R2_ToplamImarAdaAlani": 12059.06,
+    "DOPO": 0.1674996,
+    "kamuyaAyrilanAlan": 2426.29,
+    "R1": 14485.35
+  },
+  "dengelemeCetveli": {
+    "imarParselToplami": 12059.1,
+    "Y1": 2026.25,
+    "PARK": 400.0
+  },
+  "notlar": "R2 (12059.06) ile dengeleme parsel toplamı (12059.10) arasında 0.04 m2 fark var; SORU-014 Kapandı: Netcad DOP sayfası referanstır. Decimal doğrulaması: (14485.35 - 12059.06) / 14485.35 = 0.1674996 (7 hane).",
+  "referansKarari": {
+    "karar": "Netcad DOP sayfası referanstır (proje sahibi kararı, 2026-11-15, SORU-014 Kapandı)",
+    "referansR2": 12059.06,
+    "referansDOPO": 0.1674996,
+    "referansKamuyaAyrilanAlan": 2426.29,
+    "dengelemeParselToplamiFarki_m2": 0.04,
+    "davranis": "UYARI olarak raporlanır; parsel alanlarına dağıtılmaz"
+  }
+}

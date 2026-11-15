@@ -1,0 +1,109 @@
+{
+  "projectCode": "PROJE-A (901 Ada 1 ve 2 Parseller - Anonim)",
+  "crs": "ITRF96 TM 36° (GRS80, Epok 2005.00 — örnek, projeden girilir)",
+  "dopoFormula": "(R1 - D1 - R2 + D2 + R3) / (R1 - D1)",
+  "metrics": {
+    "toplamKadastroAlani_R1": 8699.44,
+    "hesaplananAlan": 8699.32,
+    "tecvizFarki": 0.12,
+    "farkDengelemeHedefi": "901/Y1 (Yol Terk Alanı: 1078.78 + 0.12 = 1078.90 m²)",
+    "toplamImarTahsis_R2": 7620.54,
+    "kamuyaAyrilanYol": 1078.9,
+    "dopo": 0.1240195,
+    "oko": 0.0,
+    "tecvizSiniri_NetcadRaporu": 21.02,
+    "tecvizFormulKaynagi": "MÜHENDİS GİRDİSİ (TKGM)"
+  },
+  "blocks": [
+    {
+      "imarAda": 101,
+      "geometryType": "Yamuk / Trapez",
+      "parcels": [
+        {
+          "geciciKod": "901/A1",
+          "tescilNo": "101/1",
+          "area": 1064.02
+        },
+        {
+          "geciciKod": "901/A2",
+          "tescilNo": "101/2",
+          "area": 300.0
+        }
+      ]
+    },
+    {
+      "imarAda": 102,
+      "geometryType": "Sırt Sırta + Yamuk Köşe",
+      "parcels": [
+        {
+          "geciciKod": "901/B1",
+          "tescilNo": "102/1",
+          "area": 430.87
+        },
+        {
+          "geciciKod": "901/B2",
+          "tescilNo": "102/2",
+          "area": 466.64
+        },
+        {
+          "geciciKod": "901/B3",
+          "tescilNo": "102/3",
+          "area": 337.0
+        },
+        {
+          "geciciKod": "901/B4",
+          "tescilNo": "102/4",
+          "area": 337.01
+        },
+        {
+          "geciciKod": "901/B5",
+          "tescilNo": "102/5",
+          "area": 314.77
+        },
+        {
+          "geciciKod": "901/B6",
+          "tescilNo": "102/6",
+          "area": 312.19
+        }
+      ]
+    },
+    {
+      "imarAda": 103,
+      "geometryType": "Üçgen/Kama + Konkav Eğrisel Yol",
+      "parcels": [
+        {
+          "geciciKod": "901/C1",
+          "tescilNo": "103/1",
+          "area": 837.86
+        },
+        {
+          "geciciKod": "901/C2",
+          "tescilNo": "103/2",
+          "area": 546.05
+        },
+        {
+          "geciciKod": "901/C3",
+          "tescilNo": "103/3",
+          "area": 785.7
+        },
+        {
+          "geciciKod": "901/C4",
+          "tescilNo": "103/4",
+          "area": 938.39
+        },
+        {
+          "geciciKod": "901/C5",
+          "tescilNo": "103/5",
+          "area": 441.87
+        },
+        {
+          "geciciKod": "901/C6",
+          "tescilNo": "103/6",
+          "area": 508.17
+        }
+      ]
+    }
+  ],
+  "paftaOlcegiNotu": "Pafta ölçeği (1/M) ve CRS dilimi sabit değildir; proje/parsel girdisidir (D3).",
+  "notlar": "DOP sayfasındaki R2 (7620.54 m²) değeri dengeleme cetvelindeki imar parsel toplamına (7620.54 m²) tam eşittir."
+}

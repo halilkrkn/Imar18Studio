@@ -1,0 +1,28 @@
+#!/usr/bin/env sh
+# Imar18Studio AC-PILOT-08 Pre-Commit Gerçek Veri Koruması (D12)
+if command -v pwsh >/dev/null 2>&1; then
+  pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-no-real-data.ps1
+else
+  tracked=$(git diff --cached --name-only)
+  for f in $tracked; do
+    case "$f" in
+      test-data/real/*|test-data/raw/*)
+        echo "AC-PILOT-08 HATA: $f gercek veri dizinindedir, commit edilemez!" >&2
+        exit 1
+        ;;
+      test-data/synthetic/*.pdf)
+        echo "AC-PILOT-08 HATA: test-data/synthetic altinda PDF ($f) commit edilemez!" >&2
+        exit 1
+        ;;
+      *.ncz|*.NCZ|*.cks|*.CKS|*.dwg|*.DWG)
+        case "$f" in
+          test-data/synthetic/*) ;;
+          *)
+            echo "AC-PILOT-08 HATA: Sentetik dizin disinda CAD/CKS ($f) commit edilemez!" >&2
+            exit 1
+            ;;
+        esac
+        ;;
+    esac
+  done
+fi

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@4.6.0"
+      ],
+      "description": "ACadSharp, NetTopologySuite, ProjNet, PdfPig, Avalonia 11, QuestPDF ve ClosedXML güncel sürüm dokümantasyonu (npm sabit sürüm: 4.6.0)"
+    }
+  }
+}
