@@ -10,6 +10,6 @@ description: Antigravity bağımsız test onayı sonrasında feat/pX-* dalını 
    - `git checkout dev`
    - `git merge --no-ff feat/<faz-kodu> -m "merge: feat/<faz-kodu> -> dev"`
 4. Eğer `Faz P7` (Pilot sonu) veya `Faz 20` (Kurumsal Tam Sürüm sonu) tamamlandıysa, proje sahibi onayıyla `dev` dalını `main` dalına birleştir (`git checkout main && git merge --no-ff dev`).
-5. Görev veya faz kapanış yanıtının en sonuna mutlaka şu uyarıyı ekle:
+5. Faz kapanış yanıtının en sonuna mutlaka şu uyarıyı ekle:
    `🛑 FAZ TAMAMLANDI: Token tasarrufu ve temiz bağlam için şimdi mevcut sohbeti kapatıp yeni bir sohbet oturumu açın.`
 

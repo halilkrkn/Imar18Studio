@@ -78,6 +78,6 @@ Proje, `Imar18Studio_Spesifikasyon_v2_19.md` §22 uyarınca **Evre 1: PİLOT (Fa
    - Önce hatanın tam metnini, paket adını ve istenen sürümü proje sahibine raporla; NuGet'te mevcut sürümleri listele (`dotnet package search <paket> --exact-match` veya `nuget.org`) ve önerini tek satırda yaz.
    - Proje sahibinin onayı olmadan `Directory.Build.props` ve `.csproj` dosyalarındaki `PackageReference` sürümlerini değiştirme.
 2. **Faz / Görev Tamamlanma Uyarısı (Token ve Bağlam Koruma):**
-   - **KURAL:** Herhangi bir geliştirme fazı veya görevi tamamlandığında, gereksiz bağlam birikimini ve token tüketimini önlemek için yanıtının en sonuna mutlaka şu uyarıyı ekle:
+   - **KURAL:** Bir geliştirme fazının tamamı (tüm alt adımlarıyla) tamamlandığında, gereksiz bağlam birikimini ve token tüketimini önlemek için yanıtının en sonuna mutlaka şu uyarıyı ekle:
    - **🛑 FAZ TAMAMLANDI: Token tasarrufu ve temiz bağlam için şimdi mevcut sohbeti kapatıp yeni bir sohbet oturumu açın.**
 

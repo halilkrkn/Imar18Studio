@@ -39,7 +39,7 @@ Rolün: ÜRETİCİ AJAN (implementer + architect).
    - D31 saha kurallarına (DOPO = (R1-D1-R2+D2+R3)/(R1-D1), dm² tescil paydası = Alan*100, Y1 yol dengelemesi) birebir uy.
 4. dotnet build Imar18Studio.sln ve dotnet test Imar18Studio.sln komutlarını çalıştırarak derleme ve temel testlerin geçtiğini doğrula.
 5. Paket sürümü hatası (NU1101/NU1102/NU1103 vb.) olursa sürümü KENDİN DEĞİŞTİRME; hatanın tam metnini, paket adını, istenen sürümü ve `dotnet package search <paket> --exact-match` çıktısını raporlayıp önerini tek satırda yaz (onayım olmadan Directory.Build.props ve csproj'daki PackageReference sürümlerini değiştirme).
-6. İşlem bittiğinde docs/STATUS.md içine "Claude Code Üretimi Tamamlandı -> Antigravity Bağımsız Test ve Denetimi Bekleniyor" notunu düş, değiştirilen dosyaların listesini raporla ve yanıtının en sonuna mutlaka "🛑 FAZ TAMAMLANDI: Token tasarrufu ve temiz bağlam için şimdi mevcut sohbeti kapatıp yeni bir sohbet oturumu açın." uyarısını ekle.
+6. İşlem bittiğinde docs/STATUS.md içine "Claude Code Üretimi Tamamlandı -> Antigravity Bağımsız Test ve Denetimi Bekleniyor" notunu düş, değiştirilen dosyaların listesini raporla ve YALNIZCA fazın tamamı (tüm alt adımları, ör. P1.1+P1.2+P1.3) bittiğinde, P1.1/P1.2 gibi ara adımlarda değil, yanıtının en sonuna mutlaka "🛑 FAZ TAMAMLANDI: Token tasarrufu ve temiz bağlam için şimdi mevcut sohbeti kapatıp yeni bir sohbet oturumu açın." uyarısını ekle.
 
 
 ```
@@ -65,7 +65,7 @@ Claude Code az önce docs/STATUS.md içinde [/] olarak işaretli fazın src/ ür
    - git add . && git commit -m "test(<faz-kodu>): Antigravity bagimsiz test ve inceleme onayi" komutunu çalıştır,
    - git checkout dev && git merge --no-ff feat/<faz-kodu> komutuyla bu fazın dalını dev dalına birleştir (KESİN KURAL: main dalına merge ETME ve git push YAPMA; main'e merge yalnızca proje sahibi tarafından, P7.2 kapanış onayından sonra yapılır),
    - Paket sürümü hatası (NU1101/NU1102/NU1103 vb.) olursa onayım olmadan Directory.Build.props ve csproj'daki PackageReference sürümlerini değiştirme,
-   - Yanıtının en sonuna mutlaka "🛑 FAZ TAMAMLANDI: Token tasarrufu ve temiz bağlam için şimdi mevcut sohbeti kapatıp yeni bir sohbet oturumu açın." uyarısını ekle.
+   - Yalnızca fazın tamamı (tüm alt adımları) doğrulandığında, ara adımlarda değil, yanıtının en sonuna mutlaka "🛑 FAZ TAMAMLANDI: Token tasarrufu ve temiz bağlam için şimdi mevcut sohbeti kapatıp yeni bir sohbet oturumu açın." uyarısını ekle.
 
 
 ```

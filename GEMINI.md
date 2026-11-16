@@ -45,6 +45,6 @@ Google Antigravity 2.0, açık `SKILL.md` standardını ve `.agents/` çalışma
 
 ## 5. Faz ve Görev Sonu Bağlam/Token Koruma Kuralı (ZORUNLU ÇIKTI KURALI)
 
-> **KURAL:** Herhangi bir geliştirme fazı veya görevi tamamlandığında, gereksiz bağlam birikimini ve token tüketimini önlemek için yanıtının en sonuna mutlaka şu uyarıyı ekle:
+> **KURAL:** Bir geliştirme fazının tamamı (tüm alt adımlarıyla) tamamlandığında, gereksiz bağlam birikimini ve token tüketimini önlemek için yanıtının en sonuna mutlaka şu uyarıyı ekle:
 > **🛑 FAZ TAMAMLANDI: Token tasarrufu ve temiz bağlam için şimdi mevcut sohbeti kapatıp yeni bir sohbet oturumu açın.**
 
