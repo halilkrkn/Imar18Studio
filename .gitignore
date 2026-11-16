@@ -11,9 +11,11 @@ TestResults/
 .vs/
 .idea/
 
+
 # Kişisel Claude Code & Antigravity Yerel Ayarları
 .claude/settings.local.json
 .agents/settings.local.json
+.claude/worktrees/
 
 # Gerçek Saha / Müşteri Verileri ve Anahtarlar (AC-PILOT-08: Asla Public Depoya Girmez!)
 test-data/real/
