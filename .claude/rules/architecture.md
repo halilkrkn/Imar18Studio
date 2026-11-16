@@ -24,6 +24,6 @@ trigger: always_on
 - **Paket Sürümü Kilidi (`NU1101`/`NU1102`/`NU1103`):**
   - Paket sürümü hatası (`NU1101`/`NU1102`/`NU1103` vb.) olursa sürümü KENDİN DEĞİŞTİRME. Önce hatanın tam metnini, paket adını ve istenen sürümü raporla; NuGet'te mevcut sürümleri listele (`dotnet package search <paket> --exact-match` veya `nuget.org`) ve önerini tek satırda yaz. Proje sahibinin onayı olmadan `Directory.Build.props` ve `.csproj`'daki `PackageReference` sürümlerini değiştirme.
 - **Faz / Görev Sonu Zorunlu Oturum Uyarısı:**
-  - KURAL: Herhangi bir geliştirme fazı veya görevi tamamlandığında, gereksiz bağlam birikimini ve token tüketimini önlemek için yanıtının en sonuna mutlaka şu uyarıyı ekle:
+  - KURAL: Bir geliştirme fazının tamamı (tüm alt adımlarıyla) tamamlandığında, gereksiz bağlam birikimini ve token tüketimini önlemek için yanıtının en sonuna mutlaka şu uyarıyı ekle:
     `🛑 FAZ TAMAMLANDI: Token tasarrufu ve temiz bağlam için şimdi mevcut sohbeti kapatıp yeni bir sohbet oturumu açın.`
 
