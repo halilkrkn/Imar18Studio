@@ -326,7 +326,8 @@ public sealed record AppError(
     string TechnicalMessage,
     string RecommendedAction,
     bool Retryable,
-    bool RequiresEngineerReview);
+    bool RequiresEngineerReview,
+    bool AuditLogRequired);
 ```
 
 ### 5.5. Test Adları
