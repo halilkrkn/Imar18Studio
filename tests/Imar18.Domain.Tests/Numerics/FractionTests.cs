@@ -312,8 +312,19 @@ public sealed class FractionTests
     [Theory]
     [InlineData(1, 8, 2, "0.13")]
     [InlineData(-1, 8, 2, "-0.13")]
+    [InlineData(1, 2, 0, "1")]
+    [InlineData(3, 2, 0, "2")]
     [InlineData(5, 2, 0, "3")]
+    [InlineData(-1, 2, 0, "-1")]
+    [InlineData(-3, 2, 0, "-2")]
     [InlineData(-5, 2, 0, "-3")]
+    [InlineData(-1, 200, 2, "-0.01")]   // -0.005 -> sifirdan uzaga
+    [InlineData(-3, 200, 2, "-0.02")]   // -0.015
+    [InlineData(-1, 400, 2, "0.00")]    // -0.0025 -> asagi (mutlak deger)
+    [InlineData(1, 2000000, 6, "0.000001")]   // 0.0000005
+    [InlineData(-1, 2000000, 6, "-0.000001")]
+    [InlineData(-3, 2000000, 6, "-0.000002")] // -0.0000015
+    [InlineData(-1, 4000000, 6, "0.000000")]  // -0.00000025
     [InlineData(1, 3, 0, "0")]
     [InlineData(2, 3, 0, "1")]
     [InlineData(-2, 3, 0, "-1")]
@@ -529,5 +540,42 @@ public sealed class TescilHissesiTests
 
         act1.Should().Throw<ArgumentException>();
         act2.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void TescilHissesi_Gecersiz_Tam_Pay_Payda_Kombinasyonlari_Olustur_Ile_Uretilememeli()
+    {
+        // BULGU-2: Tam/Pay/Payda gecersiz kombinasyonlari (payda 0, negatif pay, pay > payda,
+        // Tam=true iken pay/payda != 1) hicbir giris yolundan elde edilemez; Olustur hepsini reddeder.
+        var gecersizler = new List<Action>
+        {
+            () => TescilHissesi.Olustur(new Fraction(1, 2), 0m, paydasSayisi: 2),            // payda 0
+            () => TescilHissesi.Olustur(new Fraction(-1, 2), 100m, paydasSayisi: 2),          // negatif pay
+            () => TescilHissesi.Olustur(new Fraction(3, 2), 100m, paydasSayisi: 2),           // pay > payda
+            () => TescilHissesi.Olustur(new Fraction(1, 2), 100m, paydasSayisi: 1),           // Tam ama hisse != 1
+            () => TescilHissesi.Olustur(new Fraction(1, 3), 100m, paydasSayisi: 2),           // tam sayi dm2 degil
+            () => TescilHissesi.Olustur(new Fraction(1, 2), 100m, paydasSayisi: 0),           // paydas yok
+        };
+
+        foreach (var act in gecersizler)
+        {
+            act.Should().Throw<ArgumentException>(); // ArgumentOutOfRangeException da ArgumentException'dir
+        }
+    }
+
+    [Fact]
+    public void TescilHissesi_Null_Veya_Default_Ornek_Olmamali_Yapici_Private_Olmali()
+    {
+        var tip = typeof(TescilHissesi);
+
+        tip.IsClass.Should().BeTrue("default(struct) geçersiz 0/0 örnek üretmesin; referans tipi default'u null'dur");
+        tip.IsSealed.Should().BeTrue();
+        tip.GetConstructors().Should().BeEmpty("public yapici yok");
+        tip.GetConstructors(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            .Where(c => c.GetParameters().Length == 3).Should().OnlyContain(c => c.IsPrivate);
+        tip.GetProperties().Should().OnlyContain(p => p.SetMethod == null, "'with' ile alan degistirilemez (init/set yok)");
+
+        TescilHissesi.Olustur(Fraction.One, 100m, 1).Should().NotBeNull();
+        TescilHissesi.Olustur(new Fraction(1, 2), 100m, 2).Should().NotBeNull();
     }
 }

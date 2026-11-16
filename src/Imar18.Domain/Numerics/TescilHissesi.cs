@@ -6,9 +6,26 @@ namespace Imar18.Domain.Numerics;
 /// Tescil gosterimi (D31 Kural 2, spec 25.2): musatkil parsel (paydas sayisi 1) "TAM";
 /// hisseli parselde payda = ParselAlani_m2 x 100 (dm2 tam sayi) ve pay tam sayi dm2 olarak yazilir.
 /// Tescil payi sadelestirilmez (ortak payda korunur).
+/// Referans tipi + private yapici + salt-okunur ozellikler: gecersiz/default ornek kurulamaz; tek giris <see cref="Olustur"/>.
 /// </summary>
-public readonly record struct TescilHissesi(bool Tam, BigInteger Pay, BigInteger Payda)
+public sealed record TescilHissesi
 {
+    private TescilHissesi(bool tam, BigInteger pay, BigInteger payda)
+    {
+        Tam = tam;
+        Pay = pay;
+        Payda = payda;
+    }
+
+    /// <summary>Musatkil parsel (tek paydas) ise true.</summary>
+    public bool Tam { get; }
+
+    /// <summary>Tam sayi dm2 pay (Tam ise 1).</summary>
+    public BigInteger Pay { get; }
+
+    /// <summary>Tam sayi dm2 payda (Tam ise 1).</summary>
+    public BigInteger Payda { get; }
+
     /// <summary>Parsel alanindan tescil paydasini (dm2 tam sayi) uretir.</summary>
     /// <exception cref="ArgumentOutOfRangeException">Alan sifir veya negatifse.</exception>
     /// <exception cref="ArgumentException">Alan 2 ondalik basamaktan fazla hassasiyet iceriyorsa.</exception>

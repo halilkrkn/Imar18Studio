@@ -27,6 +27,7 @@ public enum ErrorCategory
 
 /// <summary>
 /// Standart hata kaydı (spec 5.4). Kullanıcı mesajı teknik mesajdan ayrıdır (AC-ERR-03);
+/// <c>AuditLogRequired</c> spec §5.3 JSON ile uyumludur; katalog varsayılanı Critical => true (STATUS SORU-021).
 /// TechnicalMessage içindeki {yerTutucu} alanları çağıran tarafından <c>with</c> ile doldurulur.
 /// </summary>
 public sealed record AppError(
@@ -37,4 +38,5 @@ public sealed record AppError(
     string TechnicalMessage,
     string RecommendedAction,
     bool Retryable,
-    bool RequiresEngineerReview);
+    bool RequiresEngineerReview,
+    bool AuditLogRequired);

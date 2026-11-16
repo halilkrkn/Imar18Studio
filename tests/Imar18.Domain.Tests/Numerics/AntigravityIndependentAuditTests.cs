@@ -76,32 +76,6 @@ public sealed class AntigravityIndependentAuditTests
     }
 
     // =========================================================================
-    // 3.e: TescilHissesi public yapıcı zafiyet kanıt testi
-    // =========================================================================
-
-    [Fact]
-    public void TescilHissesi_Public_Yapici_Gecersiz_Durumlari_Engelleyemez_Guvenlik_Kaniti()
-    {
-        // TescilHissesi positional readonly record struct olarak tanimlandigindan
-        // derleyici tarafindan uretilen public yapici doğrudan gecersiz parametrelerle cagrilabilir.
-        // Bu test, TescilHissesi.Olustur(...) disinda public yapicinin bypass edilebildigini kanitlar.
-
-        // Durum 1: Tam=false iken payda sifir (matematiksel ve tapusal acıdan tanımsız)
-        var tanimsizPayda = new TescilHissesi(Tam: false, Pay: 100, Payda: 0);
-        tanimsizPayda.Payda.Should().Be(BigInteger.Zero, "public yapıcı sıfır paydayı engellemez");
-
-        // Durum 2: Negatif pay (gecersiz hisse)
-        var negatifPay = new TescilHissesi(Tam: false, Pay: -50, Payda: 1000);
-        negatifPay.Pay.Should().Be(-50, "public yapıcı negatif payı engellemez");
-
-        // Durum 3: Tam=true iken Pay ve Payda sifir (default struct durumu)
-        var varsayilanStruct = default(TescilHissesi);
-        varsayilanStruct.Tam.Should().BeFalse();
-        varsayilanStruct.Pay.Should().Be(BigInteger.Zero);
-        varsayilanStruct.Payda.Should().Be(BigInteger.Zero);
-    }
-
-    // =========================================================================
     // 3.h: Bağımsız referansla (elle hesaplanmış) 5 yeni sınır testi
     // =========================================================================
 

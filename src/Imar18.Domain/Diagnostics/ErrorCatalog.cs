@@ -9,6 +9,7 @@ public static class ErrorCodes
     public const string GirdCadSurumUyumsuz = "ERR-GIRD-002";
     public const string GirdPdfBozuk = "ERR-GIRD-003";
     public const string GirdNczOkunamadi = "ERR-GIRD-NCZ-001";
+    public const string GirdZKoduIndirgendi = "ERR-GIRD-004";
 
     public const string CrsEksik = "ERR-CRS-001";
     public const string CrsEpokUyumsuz = "ERR-CRS-002";
@@ -50,7 +51,7 @@ public static class ErrorCodes
 public static class ErrorCatalog
 {
     /// <summary>Katalog sürümü (AC-ERR-01).</summary>
-    public const string Version = "1.0.0";
+    public const string Version = "1.1.0";
 
     private static readonly AppError[] Entries =
     [
@@ -81,6 +82,12 @@ public static class ErrorCatalog
             "Netcad NCZ dosyası okunamadı veya sürümü uyumsuz.",
             "NCZ block parse failure or unsupported Netcad version in {path}.",
             "Dosyayı Netcad'den DXF/DWG olarak dışa aktarıp yedek girdi olarak yükleyin.",
+            retryable: false, review: false),
+
+        New(ErrorCodes.GirdZKoduIndirgendi, ErrorSeverity.Warning, ErrorCategory.Input,
+            "Üç boyutlu (Z ≠ 0) köşeler yatay düzleme indirgendi.",
+            "Non-zero Z values in {path} were projected to the Z=0 horizontal plane.",
+            "Alan hesabının yatay izdüşüm üzerinden yapıldığını kontrol edin.",
             retryable: false, review: false),
 
         // ---- ERR-CRS: Koordinat sistemi ----
@@ -244,5 +251,6 @@ public static class ErrorCatalog
         string recommendedAction,
         bool retryable,
         bool review) =>
-        new(code, severity, category, userMessage, technicalMessage, recommendedAction, retryable, review);
+        new(code, severity, category, userMessage, technicalMessage, recommendedAction, retryable, review,
+            AuditLogRequired: severity == ErrorSeverity.Critical); // varsayim: STATUS SORU-021
 }

@@ -69,6 +69,26 @@ public sealed class ErrorCatalogTests
     }
 
     [Fact]
+    public void HataKatalogu_KritikHatalar_Audit_Kaydi_Gerektirmeli()
+    {
+        // Varsayim (SORU-021): Severity == Critical => AuditLogRequired = true, digerleri false.
+        ErrorCatalog.All.Where(e => e.Severity == ErrorSeverity.Critical).Should().OnlyContain(e => e.AuditLogRequired);
+        ErrorCatalog.All.Where(e => e.Severity != ErrorSeverity.Critical).Should().OnlyContain(e => !e.AuditLogRequired);
+        ErrorCatalog.Get("ERR-TOPO-001").AuditLogRequired.Should().BeTrue("spec 5.3 JSON ornegi: auditLogRequired true");
+    }
+
+    [Fact]
+    public void HataKatalogu_Z_Sifir_Disi_Kot_Yatay_Izdusume_Indirgendi_Uyarisi_Tanimli_Olmali()
+    {
+        var hata = ErrorCatalog.Get(ErrorCodes.GirdZKoduIndirgendi);
+
+        hata.Code.Should().Be("ERR-GIRD-004");
+        hata.Severity.Should().Be(ErrorSeverity.Warning);
+        hata.Category.Should().Be(ErrorCategory.Input);
+        hata.RequiresEngineerReview.Should().BeFalse();
+    }
+
+    [Fact]
     public void HataKatalogu_KullaniciMesaji_TeknikMesajdan_Ayri_Olmali()
     {
         foreach (var hata in ErrorCatalog.All)
