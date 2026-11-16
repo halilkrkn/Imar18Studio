@@ -177,7 +177,7 @@ public sealed class ErrorCatalogTests
         ErrorCatalog.TryGet(kod, out var hata).Should().BeTrue($"{kod} katalogda tanimli olmali");
         hata.Severity.Should().Be(seviye);
         hata.Category.Should().Be(kategori);
-        ErrorCatalog.Version.Should().Be("1.2.0");
+        ErrorCatalog.Version.Should().Be("1.3.0");
     }
 
     [Fact]

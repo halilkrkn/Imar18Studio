@@ -25,13 +25,21 @@ public static class ErrorCodes
     public const string TapuHisseEksik = "ERR-TAPU-002";
     public const string TapuHisseToplamiBirDegil = "ERR-TAPU-003";
     public const string TapuDagitimGirdisiGecersiz = "ERR-TAPU-004";
+    public const string TapuImarParselDagitimToplamiUyumsuz = "ERR-TAPU-005";
+    public const string TapuMalikTahsisiNetHaktanFarkli = "ERR-TAPU-006";
+    public const string TapuMuvafakatsizMustakilTahsis = "ERR-TAPU-007";
+    public const string TapuParselKimlikEslemesiGecersiz = "ERR-TAPU-008";
 
     public const string TecvizSiniriAsildi = "ERR-TECVIZ-001";
     public const string TecvizParselToplamSonucuFarkli = "ERR-TECVIZ-002";
     public const string TecvizGirdisiEksik = "ERR-TECVIZ-003";
+    public const string TecvizGirdisiGecersiz = "ERR-TECVIZ-004";
 
     public const string DopYuzde45Asildi = "ERR-DOP-001";
     public const string DopMahsupEksik = "ERR-DOP-002";
+    public const string DopGirdisiGecersiz = "ERR-DOP-003";
+    public const string DopR2DengelemeFarki = "ERR-DOP-004";
+    public const string DopAsimKarsilanamadi = "ERR-DOP-005";
 
     public const string PlanCepheDerinlik = "ERR-PLAN-001";
     public const string PlanAsgariAlan = "ERR-PLAN-002";
@@ -58,7 +66,7 @@ public static class ErrorCodes
 public static class ErrorCatalog
 {
     /// <summary>Katalog sürümü (AC-ERR-01).</summary>
-    public const string Version = "1.2.0";
+    public const string Version = "1.3.0";
 
     private static readonly AppError[] Entries =
     [
@@ -165,11 +173,31 @@ public static class ErrorCatalog
             "Invalid allocation input: {reason}.",
             "Malik kimliklerinin benzersiz ve boş olmadığını, hisselerin negatif olmadığını kontrol edin.",
             retryable: false, review: false),
+        New(ErrorCodes.TapuImarParselDagitimToplamiUyumsuz, ErrorSeverity.Critical, ErrorCategory.Tapu,
+            "İmar parseline eşleştirilen malik alanlarının toplamı parsel alanına eşit değil.",
+            "Assigned areas for parcel {parcelId} differ from parcel area by {deltaDm2} dm2 (allowed {allowedDm2}).",
+            "Malik -> imar parseli eşleştirme tablosundaki alanları kontrol edin.",
+            retryable: false, review: true),
+        New(ErrorCodes.TapuMalikTahsisiNetHaktanFarkli, ErrorSeverity.Warning, ErrorCategory.Tapu,
+            "Bir malikin toplam tahsisi, DOP sonrası net hakkından farklı.",
+            "Owner #{ownerIndex} allocation differs from net entitlement by {deltaDm2} dm2.",
+            "Fazla/eksik tahsisi mühendis olarak inceleyin ve eşleştirmeyi gözden geçirin.",
+            retryable: false, review: true),
+        New(ErrorCodes.TapuMuvafakatsizMustakilTahsis, ErrorSeverity.Critical, ErrorCategory.Tapu,
+            "Muvafakati olmayan müşterek paydaş müstakil imar parseline tahsis edilmiş.",
+            "Owner #{ownerIndex} from a shared cadastral parcel was assigned alone to parcel {parcelId} without consent.",
+            "Paydaşın muvafakatini kaydedin veya paydaşı hisseli bir imar parseline tahsis edin.",
+            retryable: false, review: true),
+        New(ErrorCodes.TapuParselKimlikEslemesiGecersiz, ErrorSeverity.Error, ErrorCategory.Tapu,
+            "Geçici ve kalıcı parsel kimlik eşlemesi geçersiz.",
+            "Invalid temporary/registry parcel id mapping: {reason}.",
+            "Her geçici kodun tek bir tescil numarasına ve her tescil numarasının tek bir geçici koda eşlendiğini kontrol edin.",
+            retryable: false, review: false),
 
         // ---- ERR-TECVIZ: Tecviz (seviyeler için STATUS SORU-019) ----
         New(ErrorCodes.TecvizSiniriAsildi, ErrorSeverity.Critical, ErrorCategory.Tecviz,
             "Tapu alanı ile hesaplanan alan farkı yanılma sınırını aşıyor.",
-            "|Gauss - Tapu| = {delta} exceeds engineer-entered limit {limit}.",
+            "|Gauss - Tapu| = {delta} exceeds engineer-entered limit {limit} for {parcelId}.",
             "Koordinatları ve tapu alanını kontrol edin; tecviz girdisini mühendis olarak doğrulayın.",
             retryable: false, review: true),
         New(ErrorCodes.TecvizParselToplamSonucuFarkli, ErrorSeverity.Warning, ErrorCategory.Tecviz,
@@ -182,6 +210,11 @@ public static class ErrorCatalog
             "TecvizGirdisi missing for parcel {parcelId}.",
             "Tecviz sınırını mühendis girdisi olarak giriniz.",
             retryable: false, review: true),
+        New(ErrorCodes.TecvizGirdisiGecersiz, ErrorSeverity.Error, ErrorCategory.Tecviz,
+            "Tecviz girdisi geçersiz.",
+            "Invalid tecviz input: {reason}.",
+            "Tecviz sınırının, ölçek paydasının ve alanların pozitif, kaynak notunun dolu olduğunu kontrol edin.",
+            retryable: false, review: false),
 
         // ---- ERR-DOP: DOP / mahsup ----
         New(ErrorCodes.DopYuzde45Asildi, ErrorSeverity.Critical, ErrorCategory.Dop,
@@ -193,6 +226,21 @@ public static class ErrorCatalog
             "DOP mahsup bilgisi eksik.",
             "Offset (mahsup) data missing for parcel {parcelId}.",
             "Mahsup girdilerini tamamlayın.",
+            retryable: false, review: true),
+        New(ErrorCodes.DopGirdisiGecersiz, ErrorSeverity.Error, ErrorCategory.Dop,
+            "DOP hesap girdisi geçersiz.",
+            "Invalid DOP input: {reason}.",
+            "R1, D1, R2, D2, R3 alanlarının negatif olmadığını ve R1 − D1 değerinin pozitif olduğunu kontrol edin.",
+            retryable: false, review: false),
+        New(ErrorCodes.DopR2DengelemeFarki, ErrorSeverity.Warning, ErrorCategory.Dop,
+            "DOP sayfasındaki imar alanı ile dengeleme cetveli parsel toplamı farklı.",
+            "R2 (DOP sheet) differs from balancing sheet parcel total by {delta} m2; difference is not distributed.",
+            "Farkı mühendis olarak inceleyin; DOP sayfası referans alınmıştır.",
+            retryable: false, review: true),
+        New(ErrorCodes.DopAsimKarsilanamadi, ErrorSeverity.Critical, ErrorCategory.Dop,
+            "%45 sınırını aşan DOP miktarı tanımlı kaynaklarla karşılanamıyor.",
+            "DOP excess {excess} m2 exceeds available sources by {shortfall} m2.",
+            "Karşılama kaynaklarını (tescil harici, belediye, muvafakatli kamu, kamulaştırma) gözden geçirin.",
             retryable: false, review: true),
 
         // ---- ERR-PLAN: Plan kuralı ----
