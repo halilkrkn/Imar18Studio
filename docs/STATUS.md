@@ -23,7 +23,7 @@
 | ----- | ----- | ----- | ----- | ----- | ----- |
 | Dokümantasyon & CI Ajanı | `fix/p0-rapor-duzeltmeleri` | `docs/*`, `.claude/*`, `.agents/*`, `.github/workflows/ci.yml`, `tests/Imar18.Architecture.Tests/*`, `test-data/synthetic/*` | **Kilit Açık (Tamamlandı)** | 2026-11-14 | P0 inceleme raporu ve harita mühendisi kararları (`D1–D16`) dosyalara işlendi; 15 Kasım 2026'da yeniden denetlenip F1–F8 düzeltildi. Git commit ve `dotnet build/test` doğrulaması proje sahibi tarafından yapılacaktır (sohbet ortamında git/dotnet yoktur; commit sayısı doğrulanmamıştır). |
 | Claude Code (Üretici) | `feat/p1-sayisal-cekirdek` | `src/Imar18.Domain/Numerics/*`, `src/Imar18.Domain/Diagnostics/*`, `tests/Imar18.Domain.Tests/*`, `docs/STATUS.md`, `docs/PILOT_ROADMAP_v2_19.md` (yalnızca `IMR-*` → `ERR-*` ifadeleri) | **Kilit Açık (Üretim Tamamlandı)** | 2026-11-16 | P1.1–P1.3 Claude Code üretimi tamamlandı; **Antigravity bağımsız test ve denetimi bekleniyor.** `main`'e merge/`git push` yapılmadı. |
-| Claude Code (Üretici) | `feat/p2-geometri-motoru` | `src/Imar18.GeometryEngine/*`, `src/Imar18.Domain/Geometry/*`, `src/Imar18.Domain/Diagnostics/ErrorCatalog.cs` (yalnızca yeni P2 kodları), `tests/Imar18.GeometryEngine.Tests/*`, `tests/Imar18.Domain.Tests/Geometry/*`, `tests/Imar18.Domain.Tests/Diagnostics/*`, `docs/STATUS.md` | **Kilit Açık (Üretim Tamamlandı)** | 2026-11-17 | P2.1–P2.3 Claude Code üretimi tamamlandı; **Antigravity bağımsız test ve denetimi bekleniyor.** `main`'e merge/`git push` yapılmadı. |
+| Claude Code (Üretici) & Antigravity (Denetçi) | `feat/p2-geometri-motoru` | `src/Imar18.GeometryEngine/*`, `src/Imar18.Domain/Geometry/*`, `src/Imar18.Domain/Diagnostics/ErrorCatalog.cs` (yalnızca yeni P2 kodları), `tests/Imar18.GeometryEngine.Tests/*`, `tests/Imar18.Domain.Tests/Geometry/*`, `tests/Imar18.Domain.Tests/Diagnostics/*`, `docs/STATUS.md` | **Kilit Açık (Onaylandı ve dev'e Birleştirildi)** | 2026-11-17 | P2.1–P2.3 Claude Code üretimi ve Antigravity bağımsız denetimi tamamlandı (301 test %100 yeşil). `dev` dalına `--no-ff` ile birleştirildi; `main`'e merge/`git push` yapılmadı. |
 
 ## 3. Evre 1: PİLOT İlerleme Takibi (Faz P0 – Faz P7) ve Bağlayıcı Önkoşullar (`D13`)
 
@@ -59,9 +59,9 @@
 > - **Kod/Test eşlemesi:** `ErrorCatalog` yalnızca çekirdek hataları içerir (Pilot sonrası kodlar Faz 11–20'de eklenir); kodlarda mevzuat sayısal değeri uydurulmadı (yalnızca spec'te geçen `%45` DOPO üst sınırı `ERR-DOP-001`'de anılır).
 
 ### Faz P2 — Geometri Motoru (`Imar18.GeometryEngine`)
-* [/] **P2.1:** *(Claude Code Üretimi Tamamlandı -> Antigravity Bağımsız Test ve Denetimi Bekleniyor — Dal: `feat/p2-geometri-motoru`)* `CoordinateAxisSwapAdapter` ($x_{\text{NTS}} = Y_{\text{jeo}},\, y_{\text{NTS}} = X_{\text{jeo}}$) ve $Z=0$ yatay izdüşüm indirgeme kapısı.
-* [/] **P2.2:** *(Claude Code Üretimi Tamamlandı -> Antigravity Bağımsız Test ve Denetimi Bekleniyor — Dal: `feat/p2-geometri-motoru`)* İlk köşeye $(X_1, Y_1)$ ötelemeli yerel orijin Gauss (Shoelace) alan hesabı.
-* [/] **P2.3:** *(Claude Code Üretimi Tamamlandı -> Antigravity Bağımsız Test ve Denetimi Bekleniyor — Dal: `feat/p2-geometri-motoru`)* Proje CRS/dilim ve ölçek girdisi (`D3` — hardcode yok), iki döngülü `BisectionEngine`, canonical vertex kuantizasyonu ve konkav ada `MultiPolygon` güvenli duruşu (`TC-GEOM-001`).
+* [x] **P2.1:** `CoordinateAxisSwapAdapter` ($x_{\text{NTS}} = Y_{\text{jeo}},\, y_{\text{NTS}} = X_{\text{jeo}}$) ve $Z=0$ yatay izdüşüm indirgeme kapısı. Antigravity bağımsız test ve denetim onayı verildi (17 Kasım 2026).
+* [x] **P2.2:** İlk köşeye $(X_1, Y_1)$ ötelemeli yerel orijin Gauss (Shoelace) alan hesabı. Antigravity bağımsız test ve denetim onayı verildi (17 Kasım 2026).
+* [x] **P2.3:** Proje CRS/dilim ve ölçek girdisi (`D3` — hardcode yok), iki döngülü `BisectionEngine`, canonical vertex kuantizasyonu ve konkav ada `MultiPolygon` güvenli duruşu (`TC-GEOM-001`). Antigravity bağımsız test ve denetim onayı verildi (17 Kasım 2026).
 
 > **P2 Notları (17 Kasım 2026):**
 > - **Kod/Test eşlemesi:**
@@ -89,6 +89,15 @@
 >   - **L5:** Kalan ve ada sapması ayrı alanlarda raporlanıyor.
 >   - **L7:** Hata mesajlarında koordinat sızıntısı testleri eklendi.
 >   - Eksik ada tipleri için testler eklendi: üçgen/kama, 45° pahlı köşe, saat yönündeki halkada eğik açı.
+> - **[ANTIGRAVITY TEST VE DENETİM ONAYI — P2 Geometri Motoru Bağımsız Denetimi (17 Kasım 2026)]:**
+>   - **Denetim Kapsamı:** `code-review`, `imar18-tdd-dotnet`, `imar18-cad-topology` ve `nettopologysuite` kuralları doğrultusunda `src/` koduna kesinlikle dokunulmadan `tests/Imar18.GeometryEngine.Tests/AntigravityIndependentGeometryAuditTests.cs` (21 yeni bağımsız xUnit testi) yazıldı ve koşturuldu.
+>   - **6 Gerçek İmar Adası Geometrisi:** Düz dikdörtgen (1800 m²), sırt sırta çift cepheli omurgalı 103/104 ada (3600 m²), 45° köşe pahlı ada (1450 m², C1/C2 köşe pahını kesen 1312 m²'lik kesim), yamuk/trapez ada (800 m²), dik üçgen/kama ada (900 m², hipotenüsü kesen 500 m²'lik kesim) ve konkav L-ada (1150 m², hem geniş kolda hem iç köşeyi geçen dar kolda tek parçalı kesimler) bağımsız matematiksel referanslarla doğrulandı.
+>   - **Alan Korunumu ve Kuantizasyon:** Tüm kesimlerde parça ve kalan alanları toplamının ada alanına tam eşitliği (sıfır sapma), tüm kesim köşelerinin mutlak ITRF96 koordinatlarında 1 mm (0.001 m) ızgarasında (`CoordinateQuantizer.IsOnGrid`) olduğu ve `NtsValidity.IsValid` topolojik geçerliliği teyit edildi.
+>   - **75°–105° Diklik Aralığı:** Min sınır 75.000°, max sınır 105.000°, tercih edilen 90.000° diklik ve aralık dışı (74.999°, 105.001°) değerlerin `ERR-PLAN-003` ile reddedildiği sınır testleriyle doğrulandı.
+>   - **Y/X Eksen Takası:** $x_{\text{NTS}} = Y_{\text{jeo}} - Y_0$, $y_{\text{NTS}} = X_{\text{jeo}} - X_0$ eksen takası, mutlak AwayFromZero kuantizasyonu ve harita CW/CCW yönlerinin NTS düzleminde tam eşleştiği doğrulandı.
+>   - **Konkav Ada MultiPolygon Bölünme Tespiti:** U-adada kollar arasından geçen kesimde `transitions > 2` durumu tespit edilerek `ERR-TOPO-004` (`TopoKonkavKesimCokParcali`) ile durulduğu, `RequiresEngineerReview == true` olduğu ve `SORU-023` uyarınca ilk tespitte taramanın kesildiği (`Attempts.Count == 1`) doğrulandı.
+>   - **Temiz Mimari ve Tip İzolasyonu:** `tests/Imar18.Architecture.Tests` ile NetTopologySuite tiplerinin `Imar18.GeometryEngine` dışına sızmadığı ve `Domain`/`Application` katmanlarında `double`/`float` bulunmadığı teyit edildi.
+>   - **Test Sonucu:** Çözüm genelinde 301 test (Domain: 218, GeometryEngine: 73, Architecture: 7, Application: 1, Infrastructure: 1, Pilot: 1) Release modunda %100 yeşil geçti. Sıfır hata ile P2.1–P2.3 alt adımları [x] olarak onaylandı.
 > - **Açık kalan reviewer notları:**
 >   - **M4:** Domain `GaussAreaCalculator` kendi üzerinde kesişen halkayı tespit etmez (NTS `IsValid` GeometryEngine'dedir). P3 tecviz/DOP girişinde halka GeometryEngine doğrulamasından geçmelidir.
 >   - **M5/L4:** CAD/NCZ adaptörü köşeleri 1 mm'ye (≤ 6 ondalık) yuvarlamakla yükümlüdür; mutlak TM aralık kontrolü CRS'e bağlıdır. İkisi `SORU-025`/`SORU-028`'e bağlıdır.
