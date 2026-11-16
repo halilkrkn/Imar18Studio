@@ -6,7 +6,7 @@ description: 3194 sayılı İmar Kanunu Md. 18, AAD Yönetmeliği, TPYS, DOPO (R
 
 1. **Resmî DOPO Formülü (`D31 Kural 1`):**
    - `DOPO = (R1 - D1 - R2 + D2 + R3) / (R1 - D1)` formülünü `Decimal` (7 ondalık basamak) ile hesapla.
-   - `DOPO > 0.45m` ise `IMR-E-3001` fırlat ve `OKO / KOP` (`R3`) kesinti/kamulaştırma akışını zorunlu kıl.
+   - `DOPO > 0.45m` ise `ERR-DOP-001` fırlat ve `OKO / KOP` (`R3`) kesinti/kamulaştırma akışını zorunlu kıl.
 2. **Tescil Paydası (`D31 Kural 2`):**
    - Müstakil parselde (`Paydaş == 1`) hisseyi `"TAM"` yaz.
    - Hisseli parselde tescil paydasını `ParselAlanı_m2 * 100` (`dm²` tam sayı, örn. `3539.74 m² -> 353974`) yap ve `Largest Remainder` ile dengele.
