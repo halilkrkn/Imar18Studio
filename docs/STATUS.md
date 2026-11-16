@@ -4,7 +4,7 @@
 >
 > **Referans Spesifikasyon:** `Imar18Studio_Spesifikasyon_v2_19.md` (Birleştirilmiş Nihai Sürüm: D17–D31 ve P0 İnceleme Düzeltmeleri D1–D16)
 >
-> **Son Güncelleme:** 15 Kasım 2026
+> **Son Güncelleme:** 16 Kasım 2026
 
 ## 1. Aktif Faz Kilidi (Proje Sahibi Onaylı)
 
@@ -22,6 +22,7 @@
 | Ajan | Branch (Dal) | Kilitlenen Faz / Katman / Dosyalar | Durum | Başlangıç / Bitiş Zamanı | Not |
 | ----- | ----- | ----- | ----- | ----- | ----- |
 | Dokümantasyon & CI Ajanı | `fix/p0-rapor-duzeltmeleri` | `docs/*`, `.claude/*`, `.agents/*`, `.github/workflows/ci.yml`, `tests/Imar18.Architecture.Tests/*`, `test-data/synthetic/*` | **Kilit Açık (Tamamlandı)** | 2026-11-14 | P0 inceleme raporu ve harita mühendisi kararları (`D1–D16`) dosyalara işlendi; 15 Kasım 2026'da yeniden denetlenip F1–F8 düzeltildi. Git commit ve `dotnet build/test` doğrulaması proje sahibi tarafından yapılacaktır (sohbet ortamında git/dotnet yoktur; commit sayısı doğrulanmamıştır). |
+| Claude Code (Üretici) | `feat/p1-sayisal-cekirdek` | `src/Imar18.Domain/Numerics/*`, `src/Imar18.Domain/Diagnostics/*`, `tests/Imar18.Domain.Tests/*`, `docs/STATUS.md`, `docs/PILOT_ROADMAP_v2_19.md` (yalnızca `IMR-*` → `ERR-*` ifadeleri) | **Kilit Açık (Üretim Tamamlandı)** | 2026-11-16 | P1.1–P1.3 Claude Code üretimi tamamlandı; **Antigravity bağımsız test ve denetimi bekleniyor.** `main`'e merge/`git push` yapılmadı. |
 
 ## 3. Evre 1: PİLOT İlerleme Takibi (Faz P0 – Faz P7) ve Bağlayıcı Önkoşullar (`D13`)
 
@@ -40,9 +41,21 @@
 * [x] **P0.4:** `.claude/` ve `.agents/` (30 `SKILL.md`: 11 çekirdek + 19 yardımcı, 5 subagent, 4 kural, `settings.json`), `Imar18Studio.sln`, `Imar18.Architecture.Tests` ve `.github/workflows/ci.yml` üretildi; `D1–D16` inceleme düzeltmeleri dosyalara işlendi (commit/test doğrulaması bekliyor).
 
 ### Faz P1 — Sayısal Çekirdek (`Imar18.Domain`)
-* [ ] **P1.1:** `Decimal` yuvarlama sözleşmesi ve `Fraction(BigInteger Pay, BigInteger Payda)` rasyonel kesir motoru (`imar18-domain-rules`).
-* [ ] **P1.2:** Deterministik `Largest Remainder` yuvarlama farkı dağıtımı (`Proje-B` referansı `SORU-011`'e bağlıdır).
-* [ ] **P1.3:** Çekirdek `AppError` ve `ErrorCatalog` (`AC-ERR-01..03`).
+* [x] **P1.1:** `Decimal` yuvarlama sözleşmesi ve `Fraction(BigInteger Pay, BigInteger Payda)` rasyonel kesir motoru (`imar18-domain-rules`). Antigravity bağımsız test ve denetim onayı verildi (16 Kasım 2026). (`Fraction.cs`, `TescilHissesi.cs`; `FromDecimal` kayıpsız.)
+* [x] **P1.2:** Deterministik `Largest Remainder` yuvarlama farkı dağıtımı (`Proje-B` referansı `SORU-011`'e bağlıdır). Antigravity bağımsız test ve denetim onayı verildi (16 Kasım 2026). (`LargestRemainderAllocator.cs`; LR çıktısı Σ = payda bağımsız testlerle doğrulandı.)
+* [x] **P1.3:** Çekirdek `AppError` ve `ErrorCatalog` (`AC-ERR-01..03`). Antigravity bağımsız test ve denetim onayı verildi (16 Kasım 2026). (`AppError.cs`, `ErrorCatalog.cs`, `Result.cs`; katalog sürümü 1.1.0, `AuditLogRequired` eşitlendi.)
+
+> **P1 Notları:**
+> - **Roadmap düzeltmesi (16 Kasım 2026):** `docs/PILOT_ROADMAP_v2_19.md` P1.3 başlığındaki `IMR-E/W/I-xxxx` ve P3.2'deki `IMR-E-3001` ifadeleri spec §5 (D17) ile çeliştiği için `ERR-<ÖNEK>-NNN` / `ERR-DOP-001` ile değiştirildi; başka roadmap içeriğine dokunulmadı. `.claude/skills` ve `.agents/skills` altındaki `acadsharp-cad`, `ncz-netcad`, `turkish-legal-domain` `SKILL.md` dosyalarında hâlâ `IMR-W-2004`, `IMR-E-2009`, `IMR-E-3001` ifadeleri vardır; **düzeltildi (16 Kasım 2026, ayrı commit):** `IMR-E-3001` → `ERR-DOP-001`, `IMR-E-2009` → `ERR-GIRD-NCZ-001`, `IMR-W-2004` → yeni `ERR-GIRD-004` (Warning, Z≠0 yatay izdüşüm uyarısı; katalog 1.1.0); `.claude/skills` ve `.agents/skills` birebir aynıdır.
+> - **Smoke testleri (`D8`):** `[Trait("Category","Smoke")]` testleri silinmedi. Domain için gerçek testler (`FractionTests`, `TescilHissesiTests`, `LargestRemainderAllocatorTests`, `ErrorCatalogTests`, `ResultTests`) eklendi; `Imar18.Domain.Tests` smoke testi artık gerçek testlerle birlikte durur ve P1 sonunda **gerçek testlerle değiştirilmiş** sayılır. Application/GeometryEngine/Infrastructure/Pilot smoke testleri ilgili fazlarda değiştirilecektir.
+> - **Bağımsız inceleme (`reviewer`, 16 Kasım 2026):** Kritik bulgu yok. Düzeltilenler: malik kimliğinin hata `TechnicalMessage`'ına sızması (KVKK), `weights` koleksiyonunun tek anlık kopyası, `ErrorCatalog.All` salt okunur, `AllocateAlanM2` null kontrol sırası, tek paydaşta alan doğrulaması. Karar gerektirenler `SORU-021`'de; `TescilHissesi` public yapıcısı (positional `record struct`) ile geçersiz örnek kurulabilmesi ve `Fraction.ToDecimal` varsayılan `scale=6` (alan için `ToAlanM2`/scale 2 kullanılmalı) Antigravity denetimine bırakıldı.
+> - **[ANTIGRAVITY TEST BULGUSU — P1 Sayısal Çekirdek Bağımsız Denetimi (16 Kasım 2026)]:**
+>   - **Bulgu 1 (Orta — Spec Tutarsızlığı):** `AppError` modelinde `AuditLogRequired` alanı eksik. Spec §5.3 JSON örneğinde `"auditLogRequired": true` varken §5.4 C# modelinde tanımlanmamıştır. Kod §5.4'ü esas almıştır.
+>   - **Bulgu 2 (Düşük/Orta — Tip Güvenliği):** `TescilHissesi` positional `record struct` olduğundan derleyicinin ürettiği public birincil yapıcıyla `Olustur(...)` kontrolleri bypass edilip sıfır payda veya negatif pay ile geçersiz örnek kurulabilmektedir (Kanıt: `AntigravityIndependentAuditTests.TescilHissesi_Public_Yapici_Gecersiz_Durumlari_Engelleyemez_Guvenlik_Kaniti`).
+>   - **Bulgu 3 (Düşük — CI Ortamı):** `LargestRemainderAllocatorTests` altın JSON dosyasını `AppContext.BaseDirectory`'den `Imar18Studio.sln` arayarak bulur. Tam checkout yapılan GitHub CI'da geçerlidir ancak `.sln` kopyalanmayan izole ortamlarda kırılma riski taşır.
+>   - **Eklenen Bağımsız Testler:** `AntigravityIndependentAuditTests.cs` (7 yeni test: Fraction default struct, TescilHissesi güvenlik kanıtı ve 5 bağımsız sınır testi; toplam test sayısı 162'ye ulaştı, %100 yeşil).
+>   - **Kapanış ve Onay (16 Kasım 2026):** **BULGU-1 kapandı** — `AppError`'a `AuditLogRequired` eklendi, spec §5.4 yalnızca bu satırla §5.3'e eşitlendi; katalog varsayılanı (varsayım) `Severity == Critical => true`, diğerleri `false`. **BULGU-2 kapandı** — `TescilHissesi` `sealed record` (sınıf), yapıcı private, özellikler salt-okunur, tek giriş `Olustur(...)`; zafiyet kanıt testi silinip yerine ret/null-default testleri yazıldı. **BULGU-3 açık (teknik borç):** P6'da ortak `TestDataLocator` ile çözülecek. `Fraction.ToDecimal` negatif yarım değer (AwayFromZero) testleri genişletildi, kod değişmedi. **Antigravity bağımsız denetimi (176 test %100 yeşil, 0 bulgu) sonucunda P1.1–P1.3 [x] olarak onaylandı.**
+> - **Kod/Test eşlemesi:** `ErrorCatalog` yalnızca çekirdek hataları içerir (Pilot sonrası kodlar Faz 11–20'de eklenir); kodlarda mevzuat sayısal değeri uydurulmadı (yalnızca spec'te geçen `%45` DOPO üst sınırı `ERR-DOP-001`'de anılır).
 
 ### Faz P2 — Geometri Motoru (`Imar18.GeometryEngine`)
 * [ ] **P2.1:** `CoordinateAxisSwapAdapter` ($x_{\text{NTS}} = Y_{\text{jeo}},\, y_{\text{NTS}} = X_{\text{jeo}}$) ve $Z=0$ yatay izdüşüm indirgeme kapısı.
@@ -128,3 +141,8 @@
 | `SORU-015` | 2026-11-14 | P0 İnceleme | `Proje-B` için anonim `malik -> imar parseli` eşleşme tablosu (mühendisin yaklaşık yer krokisi kararı) `Faz P3.3` (`FR-F1.12`) test fixture'ı olarak nasıl temin edilecek? | **Mühendis teyidi ve anonim eşleşme tablosu gerekli** (`D13`, `D16`). | **Açık** |
 | `SORU-016` | 2026-11-14 | P0 İnceleme | Mühendis tecvizi hangi yönetmelik yöntemiyle (arşiv onaylı / geçici koordinatlı) ve parsel mi yoksa düzenleme toplamı mı bazında alıyor? | **Mühendis teyidi gerekli** (`D1.7`, `P3.1` bu soruya bağlıdır). | **Açık** |
 | `SORU-017` | 2026-11-15 | Claude | Arazi ve Arsa Düzenlemeleri Hakkında Yönetmelik 11 Eylül 2025 tarihli ve 33014 sayılı Resmî Gazete'deki değişiklikle yeniden düzenlendi. Spec'teki `AAD Md. 14/15/16` madde atıfları güncel numaralarla uyumlu mu? | **Mühendis teyidi gerekli** (atıflar doğrulanmadı; hesap kuralları etkilenmez, yalnızca madde numaraları). | **Açık** |
+| `SORU-018` | 2026-11-16 | Claude | Spec §5.4/§5.5 "bilinmeyen hata genel kodla dönmeli" der ancak §5.2 önek tablosunda genel bir önek yoktur. Varsayım: `ERR-GENEL-001` (`ErrorCategory.General`) eklendi. Spec §5.2 tablosuna `ERR-GENEL-` önekinin eklenmesi uygun mu? | **Proje sahibi teyidi gerekli.** Geçici varsayım kodda uygulandı. | **Açık** |
+| `SORU-019` | 2026-11-16 | Claude | `ERR-TECVIZ-*` hata seviyeleri spec §4.3.1'de "ErrorCatalog'daki tanıma göre" denilerek tanımsız bırakılmıştır. Varsayım: `ERR-TECVIZ-001` (sınır aşıldı) `Critical` + mühendis incelemesi, `ERR-TECVIZ-002` (parsel/toplam farklı, `SORU-013`) `Warning` + mühendis incelemesi, `ERR-TECVIZ-003` (girdi eksik) `Error`. `Critical` onayı engeller (`AC-PILOT-05`). Seviyeler doğru mu? | **Mühendis / proje sahibi teyidi gerekli** (`SORU-013`, `SORU-016` ile bağlantılı). | **Açık** |
+| `SORU-020` | 2026-11-16 | Claude | `LargestRemainderAllocator` eşit kalan sırasında "en büyük başlangıç payı" ifadesi ağırlığın kendisi (`Fraction`) olarak yorumlandı; ayrı bir "başlangıç payı" alanı (örn. kadastro hissesi) tanımlanacaksa P3.3'te (`FR-F1.12`) hangi değerin kullanılacağı netleşmelidir. | **Mühendis teyidi gerekli** (P3.3 fixture'ı, `SORU-015`). | **Açık** |
+| `SORU-021` | 2026-11-16 | Claude (reviewer bulgusu) | (a) **KAPANDI (varsayımla):** `AuditLogRequired` `AppError`'a eklendi, spec §5.4 §5.3 ile eşitlendi; varsayılan kural Severity==Critical ⇒ true, diğerleri false. (b) Roadmap P1.3 "mevzuat referansı" bekler; kodlarda mevzuat değeri uydurulmadığı için alan eklenmedi. (c) Görevde adı geçen `ERR-GIRD-NCZ-001` üç segmentlidir (spec'te `ERR-<ÖNEK>-NNN`); alternatif `ERR-GIRD-004`. `AppError`'a `AuditLogRequired`/mevzuat referansı eklensin mi, NCZ kodu iki segmente çevrilsin mi? | **Proje sahibi teyidi gerekli.** Şimdilik kodda uygulanmadı / üç segmentli bırakıldı. | **Açık** |
+
