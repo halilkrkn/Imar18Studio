@@ -4,7 +4,7 @@
 >
 > **Referans Spesifikasyon:** `Imar18Studio_Spesifikasyon_v2_19.md` (Birleştirilmiş Nihai Sürüm: D17–D31 ve P0 İnceleme Düzeltmeleri D1–D16)
 >
-> **Son Güncelleme:** 16 Kasım 2026
+> **Son Güncelleme:** 17 Kasım 2026
 
 ## 1. Aktif Faz Kilidi (Proje Sahibi Onaylı)
 
@@ -23,6 +23,7 @@
 | ----- | ----- | ----- | ----- | ----- | ----- |
 | Dokümantasyon & CI Ajanı | `fix/p0-rapor-duzeltmeleri` | `docs/*`, `.claude/*`, `.agents/*`, `.github/workflows/ci.yml`, `tests/Imar18.Architecture.Tests/*`, `test-data/synthetic/*` | **Kilit Açık (Tamamlandı)** | 2026-11-14 | P0 inceleme raporu ve harita mühendisi kararları (`D1–D16`) dosyalara işlendi; 15 Kasım 2026'da yeniden denetlenip F1–F8 düzeltildi. Git commit ve `dotnet build/test` doğrulaması proje sahibi tarafından yapılacaktır (sohbet ortamında git/dotnet yoktur; commit sayısı doğrulanmamıştır). |
 | Claude Code (Üretici) | `feat/p1-sayisal-cekirdek` | `src/Imar18.Domain/Numerics/*`, `src/Imar18.Domain/Diagnostics/*`, `tests/Imar18.Domain.Tests/*`, `docs/STATUS.md`, `docs/PILOT_ROADMAP_v2_19.md` (yalnızca `IMR-*` → `ERR-*` ifadeleri) | **Kilit Açık (Üretim Tamamlandı)** | 2026-11-16 | P1.1–P1.3 Claude Code üretimi tamamlandı; **Antigravity bağımsız test ve denetimi bekleniyor.** `main`'e merge/`git push` yapılmadı. |
+| Claude Code (Üretici) | `feat/p2-geometri-motoru` | `src/Imar18.GeometryEngine/*`, `src/Imar18.Domain/Geometry/*`, `src/Imar18.Domain/Diagnostics/ErrorCatalog.cs` (yalnızca yeni P2 kodları), `tests/Imar18.GeometryEngine.Tests/*`, `tests/Imar18.Domain.Tests/Geometry/*`, `tests/Imar18.Domain.Tests/Diagnostics/*`, `docs/STATUS.md` | **Kilitli (Üretimde)** | 2026-11-17 | P2.1–P2.3 Claude Code üretimi sürüyor. |
 
 ## 3. Evre 1: PİLOT İlerleme Takibi (Faz P0 – Faz P7) ve Bağlayıcı Önkoşullar (`D13`)
 
@@ -58,9 +59,9 @@
 > - **Kod/Test eşlemesi:** `ErrorCatalog` yalnızca çekirdek hataları içerir (Pilot sonrası kodlar Faz 11–20'de eklenir); kodlarda mevzuat sayısal değeri uydurulmadı (yalnızca spec'te geçen `%45` DOPO üst sınırı `ERR-DOP-001`'de anılır).
 
 ### Faz P2 — Geometri Motoru (`Imar18.GeometryEngine`)
-* [ ] **P2.1:** `CoordinateAxisSwapAdapter` ($x_{\text{NTS}} = Y_{\text{jeo}},\, y_{\text{NTS}} = X_{\text{jeo}}$) ve $Z=0$ yatay izdüşüm indirgeme kapısı.
-* [ ] **P2.2:** İlk köşeye $(X_1, Y_1)$ ötelemeli yerel orijin Gauss (Shoelace) alan hesabı.
-* [ ] **P2.3:** Proje CRS/dilim ve ölçek girdisi (`D3` — hardcode yok), iki döngülü `BisectionEngine`, canonical vertex kuantizasyonu ve konkav ada `MultiPolygon` güvenli duruşu (`TC-GEOM-001`).
+* [/] **P2.1:** *(Üretimde — Claude Code — Dal: `feat/p2-geometri-motoru`)* `CoordinateAxisSwapAdapter` ($x_{\text{NTS}} = Y_{\text{jeo}},\, y_{\text{NTS}} = X_{\text{jeo}}$) ve $Z=0$ yatay izdüşüm indirgeme kapısı.
+* [/] **P2.2:** *(Üretimde — Claude Code — Dal: `feat/p2-geometri-motoru`)* İlk köşeye $(X_1, Y_1)$ ötelemeli yerel orijin Gauss (Shoelace) alan hesabı.
+* [/] **P2.3:** *(Üretimde — Claude Code — Dal: `feat/p2-geometri-motoru`)* Proje CRS/dilim ve ölçek girdisi (`D3` — hardcode yok), iki döngülü `BisectionEngine`, canonical vertex kuantizasyonu ve konkav ada `MultiPolygon` güvenli duruşu (`TC-GEOM-001`).
 
 ### Faz P3 — Mühendis Girdili Tecviz, DOP ve Hak Eşleştirme Kuralları (`Imar18.Domain` & `Imar18.Application`)
 * [ ] **P3.1 (`SORU-013` ve `SORU-016`'ya bağlı):** `TecvizGirdisi` (mühendis girdisi, RG 27.09.2022/31966) ve `TecvizChecker` (`|Gauss - Tapu| <= TecvizSınırıM2`) + yardımcı Md. 8(2)/8(5) hesaplayıcıları (`TC-TECVIZ-001..002`).
