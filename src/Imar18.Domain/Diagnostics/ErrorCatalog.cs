@@ -10,12 +10,16 @@ public static class ErrorCodes
     public const string GirdPdfBozuk = "ERR-GIRD-003";
     public const string GirdNczOkunamadi = "ERR-GIRD-NCZ-001";
     public const string GirdZKoduIndirgendi = "ERR-GIRD-004";
+    public const string GirdKoordinatKesinlikZarfiDisinda = "ERR-GIRD-005";
 
     public const string CrsEksik = "ERR-CRS-001";
     public const string CrsEpokUyumsuz = "ERR-CRS-002";
+    public const string CrsGirdisiGecersiz = "ERR-CRS-003";
 
     public const string TopoKendiUzerindeKesisim = "ERR-TOPO-001";
     public const string TopoAcikPoligon = "ERR-TOPO-002";
+    public const string TopoDejenerePoligon = "ERR-TOPO-003";
+    public const string TopoKonkavKesimCokParcali = "ERR-TOPO-004";
 
     public const string TapuMalikEslesmedi = "ERR-TAPU-001";
     public const string TapuHisseEksik = "ERR-TAPU-002";
@@ -31,6 +35,9 @@ public static class ErrorCodes
 
     public const string PlanCepheDerinlik = "ERR-PLAN-001";
     public const string PlanAsgariAlan = "ERR-PLAN-002";
+    public const string PlanBolmeGirdisiGecersiz = "ERR-PLAN-003";
+    public const string PlanHedefAlanaYakinsanamadi = "ERR-PLAN-004";
+    public const string PlanHedefAciAraligindaErisilemez = "ERR-PLAN-005";
 
     public const string KuantAlanSapmasi = "ERR-KUANT-001";
     public const string KuantKoseCakismasi = "ERR-KUANT-002";
@@ -51,7 +58,7 @@ public static class ErrorCodes
 public static class ErrorCatalog
 {
     /// <summary>Katalog sürümü (AC-ERR-01).</summary>
-    public const string Version = "1.1.0";
+    public const string Version = "1.2.0";
 
     private static readonly AppError[] Entries =
     [
@@ -90,6 +97,12 @@ public static class ErrorCatalog
             "Alan hesabının yatay izdüşüm üzerinden yapıldığını kontrol edin.",
             retryable: false, review: false),
 
+        New(ErrorCodes.GirdKoordinatKesinlikZarfiDisinda, ErrorSeverity.Error, ErrorCategory.Input,
+            "Koordinatlar desteklenen hassasiyet veya boyut sınırlarının dışında.",
+            "Coordinate precision envelope violated: {reason}.",
+            "Koordinatları en fazla 6 ondalık basamakla ve aynı proje bölgesinde girin.",
+            retryable: false, review: false),
+
         // ---- ERR-CRS: Koordinat sistemi ----
         New(ErrorCodes.CrsEksik, ErrorSeverity.Critical, ErrorCategory.Crs,
             "Koordinat sistemi (CRS/dilim) tanımlı değil.",
@@ -102,6 +115,12 @@ public static class ErrorCatalog
             "Kaynak ve hedef epokları kontrol edin.",
             retryable: false, review: true),
 
+        New(ErrorCodes.CrsGirdisiGecersiz, ErrorSeverity.Error, ErrorCategory.Crs,
+            "Koordinat sistemi veya pafta ölçeği girdisi geçersiz.",
+            "Invalid CRS/scale input: {reason}.",
+            "Proje ayarlarından CRS, dilim ve pafta ölçeğini kontrol edin.",
+            retryable: false, review: false),
+
         // ---- ERR-TOPO: Topoloji (spec 5.3 örneği birebir) ----
         New(ErrorCodes.TopoKendiUzerindeKesisim, ErrorSeverity.Critical, ErrorCategory.Topology,
             "Parsel sınırı kendi üzerinde kesişiyor.",
@@ -112,6 +131,17 @@ public static class ErrorCatalog
             "Parsel sınırı kapalı değil.",
             "Polygon {parcelId} ring is not closed.",
             "Parsel sınırının ilk ve son köşesini birleştirin.",
+            retryable: false, review: true),
+
+        New(ErrorCodes.TopoDejenerePoligon, ErrorSeverity.Critical, ErrorCategory.Topology,
+            "Parsel sınırı geçerli bir alan oluşturmuyor.",
+            "Degenerate polygon: {reason}.",
+            "Köşe noktalarını kontrol edin; tekrarlanan veya aynı doğru üzerindeki köşeleri düzeltin.",
+            retryable: false, review: true),
+        New(ErrorCodes.TopoKonkavKesimCokParcali, ErrorSeverity.Critical, ErrorCategory.Topology,
+            "Kesim, adayı birden fazla parçaya ayırıyor; otomatik bölme durduruldu.",
+            "Cut produced a multi-part piece at angle {angle}; subdivision stopped for engineer review.",
+            "Kesim yönünü veya cephe kenarını değiştirin ya da bölmeyi mühendis olarak elle yapın.",
             retryable: false, review: true),
 
         // ---- ERR-TAPU: Tapu / kroki / hisse ----
@@ -175,6 +205,22 @@ public static class ErrorCatalog
             "Parsel asgari alan koşulunu sağlamıyor.",
             "Minimum area rule violated for parcel {parcelId}.",
             "Parsel alanını veya plan koşullarını gözden geçirin.",
+            retryable: false, review: true),
+
+        New(ErrorCodes.PlanBolmeGirdisiGecersiz, ErrorSeverity.Error, ErrorCategory.Plan,
+            "Parsel bölme girdisi geçersiz.",
+            "Invalid subdivision input: {reason}.",
+            "Hedef alanı, cephe kenarını, açı aralığını ve toleransları kontrol edin.",
+            retryable: false, review: false),
+        New(ErrorCodes.PlanHedefAlanaYakinsanamadi, ErrorSeverity.Error, ErrorCategory.Plan,
+            "Hedef parsel alanına izin verilen deneme sayısı içinde ulaşılamadı.",
+            "Bisection did not converge within {iterations} iterations.",
+            "Yakınsama toleransını veya deneme sınırını gözden geçirin ya da mühendis müdahalesi isteyin.",
+            retryable: true, review: true),
+        New(ErrorCodes.PlanHedefAciAraligindaErisilemez, ErrorSeverity.Error, ErrorCategory.Plan,
+            "Hedef parsel alanı, izin verilen açı aralığında bu cepheden oluşturulamıyor.",
+            "Target area unreachable from frontage edge within angle range.",
+            "Hedef alanı, cephe kenarını veya açı aralığını değiştirin.",
             retryable: false, review: true),
 
         // ---- ERR-KUANT: Kuantizasyon ----

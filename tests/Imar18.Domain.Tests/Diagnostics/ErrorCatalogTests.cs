@@ -164,6 +164,22 @@ public sealed class ErrorCatalogTests
         hata.Severity.Should().Be(seviye);
     }
 
+    [Theory]
+    [InlineData("ERR-TOPO-003", ErrorSeverity.Critical, ErrorCategory.Topology)]
+    [InlineData("ERR-TOPO-004", ErrorSeverity.Critical, ErrorCategory.Topology)]
+    [InlineData("ERR-PLAN-003", ErrorSeverity.Error, ErrorCategory.Plan)]
+    [InlineData("ERR-PLAN-004", ErrorSeverity.Error, ErrorCategory.Plan)]
+    [InlineData("ERR-PLAN-005", ErrorSeverity.Error, ErrorCategory.Plan)]
+    [InlineData("ERR-GIRD-005", ErrorSeverity.Error, ErrorCategory.Input)]
+    [InlineData("ERR-CRS-003", ErrorSeverity.Error, ErrorCategory.Crs)]
+    public void HataKatalogu_P2_Geometri_Kodlari_Tanimli_Olmali(string kod, ErrorSeverity seviye, ErrorCategory kategori)
+    {
+        ErrorCatalog.TryGet(kod, out var hata).Should().BeTrue($"{kod} katalogda tanimli olmali");
+        hata.Severity.Should().Be(seviye);
+        hata.Category.Should().Be(kategori);
+        ErrorCatalog.Version.Should().Be("1.2.0");
+    }
+
     [Fact]
     public void HataKatalogu_ERR_DOP_001_Yuzde_45_Asimini_Anlatmali()
     {

@@ -23,7 +23,7 @@
 | ----- | ----- | ----- | ----- | ----- | ----- |
 | Dokümantasyon & CI Ajanı | `fix/p0-rapor-duzeltmeleri` | `docs/*`, `.claude/*`, `.agents/*`, `.github/workflows/ci.yml`, `tests/Imar18.Architecture.Tests/*`, `test-data/synthetic/*` | **Kilit Açık (Tamamlandı)** | 2026-11-14 | P0 inceleme raporu ve harita mühendisi kararları (`D1–D16`) dosyalara işlendi; 15 Kasım 2026'da yeniden denetlenip F1–F8 düzeltildi. Git commit ve `dotnet build/test` doğrulaması proje sahibi tarafından yapılacaktır (sohbet ortamında git/dotnet yoktur; commit sayısı doğrulanmamıştır). |
 | Claude Code (Üretici) | `feat/p1-sayisal-cekirdek` | `src/Imar18.Domain/Numerics/*`, `src/Imar18.Domain/Diagnostics/*`, `tests/Imar18.Domain.Tests/*`, `docs/STATUS.md`, `docs/PILOT_ROADMAP_v2_19.md` (yalnızca `IMR-*` → `ERR-*` ifadeleri) | **Kilit Açık (Üretim Tamamlandı)** | 2026-11-16 | P1.1–P1.3 Claude Code üretimi tamamlandı; **Antigravity bağımsız test ve denetimi bekleniyor.** `main`'e merge/`git push` yapılmadı. |
-| Claude Code (Üretici) | `feat/p2-geometri-motoru` | `src/Imar18.GeometryEngine/*`, `src/Imar18.Domain/Geometry/*`, `src/Imar18.Domain/Diagnostics/ErrorCatalog.cs` (yalnızca yeni P2 kodları), `tests/Imar18.GeometryEngine.Tests/*`, `tests/Imar18.Domain.Tests/Geometry/*`, `tests/Imar18.Domain.Tests/Diagnostics/*`, `docs/STATUS.md` | **Kilitli (Üretimde)** | 2026-11-17 | P2.1–P2.3 Claude Code üretimi sürüyor. |
+| Claude Code (Üretici) | `feat/p2-geometri-motoru` | `src/Imar18.GeometryEngine/*`, `src/Imar18.Domain/Geometry/*`, `src/Imar18.Domain/Diagnostics/ErrorCatalog.cs` (yalnızca yeni P2 kodları), `tests/Imar18.GeometryEngine.Tests/*`, `tests/Imar18.Domain.Tests/Geometry/*`, `tests/Imar18.Domain.Tests/Diagnostics/*`, `docs/STATUS.md` | **Kilit Açık (Üretim Tamamlandı)** | 2026-11-17 | P2.1–P2.3 Claude Code üretimi tamamlandı; **Antigravity bağımsız test ve denetimi bekleniyor.** `main`'e merge/`git push` yapılmadı. |
 
 ## 3. Evre 1: PİLOT İlerleme Takibi (Faz P0 – Faz P7) ve Bağlayıcı Önkoşullar (`D13`)
 
@@ -59,9 +59,41 @@
 > - **Kod/Test eşlemesi:** `ErrorCatalog` yalnızca çekirdek hataları içerir (Pilot sonrası kodlar Faz 11–20'de eklenir); kodlarda mevzuat sayısal değeri uydurulmadı (yalnızca spec'te geçen `%45` DOPO üst sınırı `ERR-DOP-001`'de anılır).
 
 ### Faz P2 — Geometri Motoru (`Imar18.GeometryEngine`)
-* [/] **P2.1:** *(Üretimde — Claude Code — Dal: `feat/p2-geometri-motoru`)* `CoordinateAxisSwapAdapter` ($x_{\text{NTS}} = Y_{\text{jeo}},\, y_{\text{NTS}} = X_{\text{jeo}}$) ve $Z=0$ yatay izdüşüm indirgeme kapısı.
-* [/] **P2.2:** *(Üretimde — Claude Code — Dal: `feat/p2-geometri-motoru`)* İlk köşeye $(X_1, Y_1)$ ötelemeli yerel orijin Gauss (Shoelace) alan hesabı.
-* [/] **P2.3:** *(Üretimde — Claude Code — Dal: `feat/p2-geometri-motoru`)* Proje CRS/dilim ve ölçek girdisi (`D3` — hardcode yok), iki döngülü `BisectionEngine`, canonical vertex kuantizasyonu ve konkav ada `MultiPolygon` güvenli duruşu (`TC-GEOM-001`).
+* [/] **P2.1:** *(Claude Code Üretimi Tamamlandı -> Antigravity Bağımsız Test ve Denetimi Bekleniyor — Dal: `feat/p2-geometri-motoru`)* `CoordinateAxisSwapAdapter` ($x_{\text{NTS}} = Y_{\text{jeo}},\, y_{\text{NTS}} = X_{\text{jeo}}$) ve $Z=0$ yatay izdüşüm indirgeme kapısı.
+* [/] **P2.2:** *(Claude Code Üretimi Tamamlandı -> Antigravity Bağımsız Test ve Denetimi Bekleniyor — Dal: `feat/p2-geometri-motoru`)* İlk köşeye $(X_1, Y_1)$ ötelemeli yerel orijin Gauss (Shoelace) alan hesabı.
+* [/] **P2.3:** *(Claude Code Üretimi Tamamlandı -> Antigravity Bağımsız Test ve Denetimi Bekleniyor — Dal: `feat/p2-geometri-motoru`)* Proje CRS/dilim ve ölçek girdisi (`D3` — hardcode yok), iki döngülü `BisectionEngine`, canonical vertex kuantizasyonu ve konkav ada `MultiPolygon` güvenli duruşu (`TC-GEOM-001`).
+
+> **P2 Notları (17 Kasım 2026):**
+> - **Kod/Test eşlemesi:**
+>   - P2.1 → `Imar18.Domain.Geometry.GeodeticPoint/GeodeticPoint3D`, `HorizontalProjection` (Z=0, tek `ERR-GIRD-004`), `CoordinateQuantizer` (1 mm, mutlak koordinatta AwayFromZero) ve `Imar18.GeometryEngine.CoordinateAxisSwapAdapter` (internal; `x_NTS = Y_jeo`, `y_NTS = X_jeo`, yerel orijinli).
+>   - P2.2 → `PolygonRing` (private yapıcı; ≥3 köşe, ardışık tekrar yok, sıfırdan farklı alan; kesinlik zarfı: yerel < 10⁶ m, ≤ 6 ondalık, ≤ 5 000 köşe → `ERR-GIRD-005`) ve `GaussAreaCalculator` (ilk köşeye ötelemeli, S1 = S2 çift kontrol, `decimal` tam kesin, 2 ondalık AwayFromZero).
+>   - P2.3 → `ProjectCoordinateReference` (yalnız doğrulama, `ERR-CRS-001/003`) ve `Imar18.GeometryEngine.Subdivision.BisectionEngine` (tek kesim).
+>     - Açı taraması 75–105°; iç döngü cephe boyunca bisection.
+>     - Kesim köşeleri 1 mm'ye kuantize edilir; parça ve kalan aynı köşeyi paylaşır.
+>     - Kuantizasyon sonrası NTS `IsValid` ve `Decimal` Gauss alanı (parça, kalan ve parça+kalan−ada) toleransla yeniden doğrulanır.
+>     - Konkav adada `MultiPolygon` oluşursa `ERR-TOPO-004` ile güvenli duruş yapılır.
+> - **Yeni hata kodları (katalog 1.2.0):** `ERR-TOPO-003/004`, `ERR-PLAN-003/004/005`, `ERR-GIRD-005`, `ERR-CRS-003` (`SORU-029`).
+> - **Mevzuat değeri uydurulmadı:**
+>   - 75–105° aralığı spec §4.2'den alındı.
+>   - Tolerans, açı adımı ve iterasyon sayısı girdidir.
+>   - En küçük adım (0.001°) ve en fazla 200 iterasyon yalnızca uygulama güvenlik sınırıdır (sonsuz döngü/DoS koruması).
+> - **Mimari:** `architect` alt ajanı tasarım ve risk analizini yaptı. NTS tipleri yalnızca `internal` sınıflarda kalır (`InternalsVisibleTo Imar18.GeometryEngine.Tests`). Domain'de `double` yoktur.
+> - **Bağımsız inceleme (`reviewer`, 17 Kasım 2026):** Sonuç "Request changes". Kritik bulgu yok, bulgular TDD ile düzeltildi:
+>   - **H1:** Parça+kalan−ada sapması da toleransla denetleniyor. Yeni köşenin eklendiği ada kenarı/köşesi `CutStartEdgeIndex`/`CutEndEdgeIndex`/`CutEndOnExistingVertex` ile raporlanıyor.
+>   - **H2:** Kesim doğrusu ada kenarıyla çakışınca oluşan geri dönen çıkıntı temizlendi; L adada tam dik kesim artık kabul ediliyor.
+>   - **M1:** Teğet köşe artık MultiPolygon sayılmıyor.
+>   - **M2:** Açı adımı ve iterasyon için üst sınır eklendi; double aralığı tükenince döngüden çıkılıyor.
+>   - **M3:** Dejenere parça artık `ERR-TOPO-003` ile raporlanıyor (`DegeneratePiece`).
+>   - **L1:** Cephe kenarında kesin kesişim zorunlu.
+>   - **L2:** Yerel çerçeve dışı NTS koordinatı reddediliyor.
+>   - **L5:** Kalan ve ada sapması ayrı alanlarda raporlanıyor.
+>   - **L7:** Hata mesajlarında koordinat sızıntısı testleri eklendi.
+>   - Eksik ada tipleri için testler eklendi: üçgen/kama, 45° pahlı köşe, saat yönündeki halkada eğik açı.
+> - **Açık kalan reviewer notları:**
+>   - **M4:** Domain `GaussAreaCalculator` kendi üzerinde kesişen halkayı tespit etmez (NTS `IsValid` GeometryEngine'dedir). P3 tecviz/DOP girişinde halka GeometryEngine doğrulamasından geçmelidir.
+>   - **M5/L4:** CAD/NCZ adaptörü köşeleri 1 mm'ye (≤ 6 ondalık) yuvarlamakla yükümlüdür; mutlak TM aralık kontrolü CRS'e bağlıdır. İkisi `SORU-025`/`SORU-028`'e bağlıdır.
+>   - **L6:** `IProgress<T>` Application katmanında sarmalanacak.
+> - **Kapsam dışı (ertelendi, `SORU-027/029/030`):** ProjNet dönüşümü ve 2D Helmert raporu, Y1 alan dengelemesi, ardışık çok parselli bölme, sırt sırta omurgalı ada, cephe/derinlik ölçütleri ve komşu halka (T-kavşak) güncellemesi.
 
 ### Faz P3 — Mühendis Girdili Tecviz, DOP ve Hak Eşleştirme Kuralları (`Imar18.Domain` & `Imar18.Application`)
 * [ ] **P3.1 (`SORU-013` ve `SORU-016`'ya bağlı):** `TecvizGirdisi` (mühendis girdisi, RG 27.09.2022/31966) ve `TecvizChecker` (`|Gauss - Tapu| <= TecvizSınırıM2`) + yardımcı Md. 8(2)/8(5) hesaplayıcıları (`TC-TECVIZ-001..002`).
@@ -146,4 +178,13 @@
 | `SORU-019` | 2026-11-16 | Claude | `ERR-TECVIZ-*` hata seviyeleri spec §4.3.1'de "ErrorCatalog'daki tanıma göre" denilerek tanımsız bırakılmıştır. Varsayım: `ERR-TECVIZ-001` (sınır aşıldı) `Critical` + mühendis incelemesi, `ERR-TECVIZ-002` (parsel/toplam farklı, `SORU-013`) `Warning` + mühendis incelemesi, `ERR-TECVIZ-003` (girdi eksik) `Error`. `Critical` onayı engeller (`AC-PILOT-05`). Seviyeler doğru mu? | **Mühendis / proje sahibi teyidi gerekli** (`SORU-013`, `SORU-016` ile bağlantılı). | **Açık** |
 | `SORU-020` | 2026-11-16 | Claude | `LargestRemainderAllocator` eşit kalan sırasında "en büyük başlangıç payı" ifadesi ağırlığın kendisi (`Fraction`) olarak yorumlandı; ayrı bir "başlangıç payı" alanı (örn. kadastro hissesi) tanımlanacaksa P3.3'te (`FR-F1.12`) hangi değerin kullanılacağı netleşmelidir. | **Mühendis teyidi gerekli** (P3.3 fixture'ı, `SORU-015`). | **Açık** |
 | `SORU-021` | 2026-11-16 | Claude (reviewer bulgusu) | (a) **KAPANDI (varsayımla):** `AuditLogRequired` `AppError`'a eklendi, spec §5.4 §5.3 ile eşitlendi; varsayılan kural Severity==Critical ⇒ true, diğerleri false. (b) Roadmap P1.3 "mevzuat referansı" bekler; kodlarda mevzuat değeri uydurulmadığı için alan eklenmedi. (c) Görevde adı geçen `ERR-GIRD-NCZ-001` üç segmentlidir (spec'te `ERR-<ÖNEK>-NNN`); alternatif `ERR-GIRD-004`. `AppError`'a `AuditLogRequired`/mevzuat referansı eklensin mi, NCZ kodu iki segmente çevrilsin mi? | **Proje sahibi teyidi gerekli.** Şimdilik kodda uygulanmadı / üç segmentli bırakıldı. | **Açık** |
+| `SORU-022` | 2026-11-17 | Claude (P2 architect) | `BisectionEngine` tercih açısı neye göre belirlenir (90°, komşu yan sınıra paralel, mühendis seçimi)? Eşit sapmada hangi yön önce denenir? 75–105° aralığı plan notuyla daraltılabilir mi? | **Varsayım:** tercih/min/max/adım çağıran tarafından girilir (varsayılan yok); tarama sırası tercih, tercih−k·adım, tercih+k·adım (eşit sapmada küçük açı önce). | **Açık** |
+| `SORU-023` | 2026-11-17 | Claude (P2 architect) | Konkav adada bir açıda `MultiPolygon` oluşursa tarama hemen mi durmalı, yoksa başka açıda tek parçalı çözüm varsa kabul edilebilir mi? | **Varsayım (spec §4.2 lafzi):** ilk tespitte durulur, `ERR-TOPO-004` (Critical, mühendis incelemesi). | **Açık** |
+| `SORU-024` | 2026-11-17 | Claude (P2 architect) | `postQuantizationAreaToleranceM2` değeri nereden gelir (mühendis / mevzuat profili) ve kapsamı ne (yalnız parça mı, parça + kalan mı)? | **Varsayım:** değer girdi (varsayılan yok); parça ve kalan ayrı ayrı `≤ tol` ile denetlenir. | **Açık** |
+| `SORU-025` | 2026-11-17 | Claude (P2 architect) | Kadastro/NCZ'den gelen mevcut köşeler de 1 mm'ye yuvarlanacak mı (resmî cetvel uyumu, P4.0 spike)? | **Varsayım:** `BisectionEngine` ızgara dışı ada köşesini reddeder (`ERR-PLAN-003`); yuvarlamayı çağıran (CAD adaptörü) yapar. | **Açık** |
+| `SORU-026` | 2026-11-17 | Claude (P2 architect) | Koordinat yarım değeri (0.0005 m) sıfırdan uzağa (AwayFromZero) mı yuvarlanır? | **Varsayım:** AwayFromZero, mutlak koordinatta (`CoordinateQuantizer`). | **Açık** |
+| `SORU-027` | 2026-11-17 | Claude (P2 architect) | Parsel derinliği nasıl tanımlanır? Pilot 1 "13 × 16 m" neyi ifade eder? Çok kenarlı cephe, sırt sırta omurga ve ardışık çok parselli bölme hangi fazda? | **P2'de tek kesim + tek cephe kenarı kodlandı;** cephe/derinlik ölçütleri ve çok parselli bölme proje sahibi kararına bırakıldı. | **Açık** |
+| `SORU-028` | 2026-11-17 | Claude (P2 architect) | Desteklenen CRS kimlikleri neler (EPSG kodu mu)? Epok zorunlu mu? Pafta ölçeği için izinli değerler var mı? | **Varsayım:** `ProjectCoordinateReference` yalnızca boş CRS (`ERR-CRS-001`) ve pozitif olmayan ölçek paydasını (`ERR-CRS-003`) reddeder; liste kodlanmadı. | **Açık** |
+| `SORU-029` | 2026-11-17 | Claude (P2 architect) | Roadmap §4 P2 ile STATUS P2 uyuşmuyor: (a) roadmap `Point2D(decimal Y, decimal X)` der, kodda `GeodeticPoint(X, Y)` adlandırılmış argümanla kullanıldı; (b) roadmap P2.2 `AreaBalancingEngine` (Y1 dengeleme) ve P2.3 `ProjNet`/`HelmertTransformReport`, P2.4 6 ada tipini içerir, STATUS P2.1–P2.3 içermez; (c) yeni 7 hata kodu (`ERR-TOPO-003/004`, `ERR-PLAN-003/004/005`, `ERR-GIRD-005`, `ERR-CRS-003`) ve seviyeleri onaylanıyor mu? | **Uygulanan:** STATUS P2.1–P2.3 esas alındı; Y1 dengeleme P3'e, ProjNet/Helmert P4/P5'e ertelendi (kodlanmadı); 6 ada tipinden tek kesimle ifade edilebilenler (dikdörtgen, yamuk, L, U konkav) test edildi. | **Açık** |
+| `SORU-030` | 2026-11-17 | Claude (P2 reviewer H1) | Eğik ada kenarına düşen kesim köşesi 1 mm'ye yuvarlanınca kenarın tam üzerinde olmayabilir (≤ ~0.7 mm). Komşu parsel/yol halkası bu köşeyi bilmezse T-kavşak veya şerit oluşur. Komşu halkalara aynı kanonik köşe hangi fazda ve hangi kuralla eklenecek? Ada sınırından izin verilen sapma ne kadar? | **Uygulanan:** `BisectionCut` köşenin eklendiği ada kenarını raporlar. Parça+kalan−ada alan sapması tolerans içinde olmalıdır; komşu halka güncellemesi kodlanmadı. | **Açık** |
 
