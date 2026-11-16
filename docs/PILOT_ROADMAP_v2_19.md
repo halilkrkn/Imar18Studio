@@ -63,7 +63,7 @@ Hem **Claude Code** (`.claude/`) hem de **Google Antigravity** (`.agents/`) bu y
   - Eşit kalan (`tie-break`) durumunda: (1) En büyük başlangıç payına sahip malik, (2) Malik/Parsel ID sözlük sırası (`StringComparer.Ordinal`).
 - **Testler:** `Proje-B` (`902/1`, $26629.48\text{ m}^2$, 40+ paydaş) üzerinde dağıtılan payların toplamının tam olarak $26629.48\text{ m}^2$ ve imar parsellerinde $\sum \text{Pay} = \text{ParselAlanı} \times 100$ (`beklenenDogruLargestRemainderPayToplami = 353974` vs `beklenenResmiCiktiPayToplami = 353975` — **referans `SORU-011`'e bağlı**) olduğunu doğrulayan birim testler.
 
-### P1.3 — `ErrorCatalog` (`IMR-E-xxxx`, `IMR-W-xxxx`, `IMR-I-xxxx`) ve `Result<T>`
+### P1.3 — `ErrorCatalog` (`ERR-<ÖNEK>-NNN`, spec §5 / D17) ve `Result<T>`
 - **Görev:** `src/Imar18.Domain/Diagnostics/ErrorCatalog.cs` ve `Result<T>` yapılarını oluştur.
 - **Kurallar (`§13`):** Tüm hata kodları Türkçe mesaj, mevzuat referansı (örn. `AAD Yönetmeliği Md. 11`, `3194 Md. 18`) ve çözüm önerisi içerir.
 
@@ -114,7 +114,7 @@ Hem **Claude Code** (`.claude/`) hem de **Google Antigravity** (`.agents/`) bu y
 - **$R_2$ ("İmar Alanları"):** Yalnızca imar parsellerinin (tahsis) alan toplamıdır; PARK, yol, dini tesis, belediye hizmet alanı $R_2$'ye GİRMEZ. Kamuya ayrılan alan $= R_1 - R_2$ olarak TÜRETİLİR (kullanıcı girdisi değil). Pilot varsayılanı $D_1 = D_2 = R_3 = 0$; sıfırdan farklı senaryolar `SORU-008` ile açık kalır.
 - **$D_2$ ("Eski DOPO > Proje DOPO Tahsisler"):** Eski DOPO > Proje DOPO olan parsellere yapılan tahsis alanı.
 - **$R_3$ ("DOP Alınmayan Alanlar"):** Düzenlemeye giren ancak DOP alınmayan alanlar.
-- **Kurallar:** $\text{DOPO}$ 7 ondalık basamak (`0.1240195`, `0.2015451`) olarak hesaplanır; $\text{DOPO} > 0.45$ ise `IMR-E-3001` (`Madde 18/3 %45 DOP Tavan Aşımı`) fırlatılır ve `OKO / KOP` akışı tetiklenir.
+- **Kurallar:** $\text{DOPO}$ 7 ondalık basamak (`0.1240195`, `0.2015451`) olarak hesaplanır; $\text{DOPO} > 0.45$ ise `ERR-DOP-001` (`Madde 18/3 %45 DOP Tavan Aşımı`) fırlatılır ve `OKO / KOP` akışı tetiklenir.
 - **Resmî Referans (Proje Sahibi Kararı, `SORU-014` Kapandı):** `Proje-C` için Netcad DOP sayfası referanstır ($R_2 = 12059.06$, DOPO $= 0.1674996$, kamuya ayrılan alan $2426.29$). Dengeleme cetvelindeki parsel toplamı ($12059.10$) ile $0.04\text{ m}^2$ fark **uyarı** olarak raporlanır, parsellere dağıtılmaz (spec §25.1).
 - **Doğrulama:** `TC-DOP-001..007` + `saha_proje_1..3` altın veri testleri.
 
