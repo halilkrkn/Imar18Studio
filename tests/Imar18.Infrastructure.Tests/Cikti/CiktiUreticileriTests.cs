@@ -27,8 +27,8 @@ public sealed class CiktiUreticileriTests
     private static async Task<CiktiPaketi> PaketAsync()
     {
         var (yol, _, zaman) = await OrnekProje.TamProjeAsync();
-        (await new ApprovalService(yol, zaman).OnaylaAsync(OrnekProje.Muhendis, ApprovalService.OnayMetni)).IsSuccess.Should().BeTrue();
-        return CiktiPaketiOlusturucu.Olustur(yol.Belge, ProjeDegerlendirici.Degerlendir(yol.Belge)).Value;
+        (await new ApprovalService(yol, zaman, OrnekProje.Topoloji).OnaylaAsync(OrnekProje.Muhendis, ApprovalService.OnayMetni)).IsSuccess.Should().BeTrue();
+        return CiktiPaketiOlusturucu.Olustur(yol.Belge, ProjeDegerlendirici.Degerlendir(yol.Belge, OrnekProje.Topoloji)).Value;
     }
 
     private static XLWorkbook Kitap(byte[] xlsx)
@@ -142,6 +142,20 @@ public sealed class CiktiUreticileriTests
     }
 
     [Fact]
+    public async Task FenKlasoru_Pdf_Ligatur_Kullanmamali_RevisionId_Ve_Metin_Birebir_Kopyalanabilmeli()
+    {
+        // P6 regresyonu: "ff"/"fb"/"ti" harf birleşimleri (ligatür) PDF metninde tek glif olunca RevisionId kopyalanamaz.
+        var p = await PaketAsync() with { ProjeAdi = "Sentetik ffi ffl fb ti fi Projesi", RevizyonId = "00ff11fb22ffa3fb44ff55fb66ff77fb88ff99fbaaffbbfbccffddfbeeff00fb" };
+
+        using var pdf = PdfDocument.Open(new QuestPdfFenKlasoruUretici().Uret(p).Value);
+
+        var tum = Bosluksuz(string.Concat(pdf.GetPages().Select(s => s.Text)));
+        tum.Should().Contain("SentetikffifflfbtifiProjesi");
+        tum.Should().Contain(p.RevizyonId);
+        tum.Should().NotContainAny("\uFB00", "\uFB01", "\uFB02", "\uFB03", "\uFB04");
+    }
+
+    [Fact]
     public async Task FenKlasoru_Pdf_FR348_Kapak_HeM2Dm2_Tescil_Ve_FR521_Kroki_Bolumlerini_Icermeli()
     {
         var p = await PaketAsync();
@@ -194,7 +208,7 @@ public sealed class CiktiUreticileriTests
     [Fact]
     public void Cks_Sentetik_Pilot_1_Ornegi_Okunup_Yazilinca_Ayni_Degerleri_Vermeli()
     {
-        var ornek = Path.Combine(Cad.Ncz.GercekVeri.DepoKoku, "test-data", "synthetic", "pilot-1-concave-parcel", "DOP_Ornek.CKS");
+        var ornek = Imar18.TestDestek.TestDataLocator.Sentetik("pilot-1-concave-parcel", "DOP_Ornek.CKS");
         var bagimsiz = new CksFileReader().Read(File.OpenRead(ornek)).Value;
         var motor = CksOzetiEslemesi.Olustur(DopOzeti.From(DopCalculator.Hesapla(DopGirdisi.Olustur(8699.44m, 7620.54m).Value).Value)).Value;
 

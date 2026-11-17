@@ -160,7 +160,7 @@ public sealed class NczGercekVeriFizibiliteTests
     }
 
     private static JsonDocument AltinJson(string goreli) =>
-        JsonDocument.Parse(File.ReadAllText(Path.Combine(GercekVeri.DepoKoku, "test-data", "synthetic", goreli)));
+        JsonDocument.Parse(File.ReadAllText(Imar18.TestDestek.TestDataLocator.Sentetik(goreli.Split('/'))));
 
     private static decimal Metrik(JsonDocument altin, string ad) =>
         altin.RootElement.GetProperty("metrics").GetProperty(ad).GetDecimal();
@@ -178,17 +178,14 @@ public sealed class RealDataFactAttribute : FactAttribute
     }
 }
 
-/// <summary>Depo koku ve yerel gercek veri klasoru bulucusu (Imar18Studio.sln aranir; STATUS BULGU-3 teknik borcu).</summary>
+/// <summary>Yerel gercek veri klasoru bulucusu; ortak <see cref="Imar18.TestDestek.TestDataLocator"/>'a devreder (BULGU-3 kapandi).</summary>
 internal static class GercekVeri
 {
-    private static readonly string? KokYolu = KokuBul();
+    public static string Kok => Imar18.TestDestek.TestDataLocator.GercekVeriKoku
+        ?? throw new InvalidOperationException("test-data/real yerel gercek veri klasoru yok.");
 
-    public static string DepoKoku => KokYolu ?? throw new InvalidOperationException("Depo koku (Imar18Studio.sln) bulunamadi.");
-
-    public static string Kok => Path.Combine(DepoKoku, "test-data", "real");
-
-    /// <summary>Depo koku bulunamazsa da false doner (test kesfi sirasinda istisna atilmaz).</summary>
-    public static bool VarMi => KokYolu is not null && Directory.Exists(Path.Combine(KokYolu, "test-data", "real"));
+    /// <summary>Klasor yoksa false (test kesfi sirasinda istisna atilmaz).</summary>
+    public static bool VarMi => Imar18.TestDestek.TestDataLocator.GercekVeriVarMi;
 
     /// <summary>Proje klasoru onekle bulunur (ornek: "proje-1-"); gercek klasor adi koda yazilmaz.</summary>
     public static string ProjeKlasoru(string onek) =>
@@ -196,15 +193,4 @@ internal static class GercekVeri
 
     public static string ParselasyonDosyasi(string onek) =>
         Directory.EnumerateFiles(ProjeKlasoru(onek), "PARSELASYON*.NCZ").Should().ContainSingle().Subject;
-
-    private static string? KokuBul()
-    {
-        var dizin = AppContext.BaseDirectory;
-        while (dizin is not null && !File.Exists(Path.Combine(dizin, "Imar18Studio.sln")))
-        {
-            dizin = Path.GetDirectoryName(dizin);
-        }
-
-        return dizin;
-    }
 }

@@ -7,6 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Imar18.Domain\Imar18.Domain.csproj" />
     <ProjectReference Include="..\..\src\Imar18.Application\Imar18.Application.csproj" />
+    <ProjectReference Include="..\..\src\Imar18.GeometryEngine\Imar18.GeometryEngine.csproj" />
     <ProjectReference Include="..\..\src\Imar18.Presentation.Avalonia\Imar18.Presentation.Avalonia.csproj" />
   </ItemGroup>
   <ItemGroup>

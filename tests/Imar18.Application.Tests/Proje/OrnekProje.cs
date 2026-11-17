@@ -5,6 +5,7 @@ using Imar18.Domain.Mevzuat.Dop;
 using Imar18.Domain.Mevzuat.Tahsis;
 using Imar18.Domain.Mevzuat.Tecviz;
 using Imar18.Domain.Numerics;
+using Imar18.GeometryEngine.Topoloji;
 
 namespace Imar18.Application.Tests.Proje;
 
@@ -17,6 +18,9 @@ namespace Imar18.Application.Tests.Proje;
 public static class OrnekProje
 {
     public const string Muhendis = "muhendis-01";
+
+    /// <summary>Gerçek NTS topoloji denetçisi (K1 = A1 ∪ Y1 tam kaplama: bulgu yok).</summary>
+    public static readonly IParselTopolojiDenetcisi Topoloji = new NtsParselTopolojiDenetcisi();
     public const decimal X0 = 4_400_000m;
     public const decimal Y0 = 500_000m;
 

@@ -313,7 +313,8 @@ public sealed class AntigravityIndependentGeometryAuditTests
     /// - MultiPolygon bölünmesi tespit edilir (transitions > 2).
     /// - ERR-TOPO-004 (TopoKonkavKesimCokParcali) hatası döner.
     /// - RequiresEngineerReview = true olmalıdır.
-    /// - SORU-023 gereği ilk tespitte tarama durmalı, alternatif açı aranmamalıdır (Attempts.Count == 1).
+    /// - SORU-023 kararı (17 Kasım 2026, P6'da uygulandı): 75–105° aralığının tamamı taranır; hiçbir açıda tek parçalı
+    ///   çözüm yoksa ERR-TOPO-004 döner (ilk deneme MultiPolygon'dur).
     /// </summary>
     [Fact]
     public void Konkav_U_Adada_Bosluktan_Gecen_Kesim_MultiPolygon_Tespiti_Ile_Guvenli_Durmali()
@@ -327,8 +328,9 @@ public sealed class AntigravityIndependentGeometryAuditTests
         sonuc.Result.IsFailure.Should().BeTrue();
         sonuc.Result.Error.Code.Should().Be(ErrorCodes.TopoKonkavKesimCokParcali);
         sonuc.Result.Error.RequiresEngineerReview.Should().BeTrue("Konkav çok parçalı bölünme harita mühendisi incelemesi gerektirir");
-        sonuc.Attempts.Should().HaveCount(1, "MultiPolygon tespitinde diğer açılar denenmeden derhal durulmalıdır (SORU-023)");
+        sonuc.Attempts.Should().HaveCount(7, "SORU-023: tek parçalı çözüm için 75–105° aralığının tamamı taranır");
         sonuc.Attempts[0].Outcome.Should().Be(AttemptOutcome.MultiPolygon);
+        sonuc.Attempts.Should().NotContain(a => a.Outcome == AttemptOutcome.Accepted);
     }
 
     // =========================================================================

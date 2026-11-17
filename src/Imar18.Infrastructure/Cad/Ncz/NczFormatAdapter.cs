@@ -47,46 +47,46 @@ public sealed class NczFormatAdapter : ICadFormatAdapter
 internal static class NczParser
 {
     // ---- Dosya basligi ----
-    private const byte Signature = 0x01;
-    private const int HeaderIntCount = 12;
-    private const int HeaderSize = 1 + (4 * HeaderIntCount);
-    private const int HeaderConst0 = 120; // P4.0: 6 gercek dosyada sabit
-    private const int HeaderConst2 = 125; // P4.0: 6 gercek dosyada sabit
-    private const int HeaderFileLength = 1;
-    private const int HeaderLayerTable = 3;
-    private const int HeaderLayerTableEnd = 7; // son katman kaydinin bitisi - 4
-    private const int HeaderEntityStream = 11;
+    internal const byte Signature = 0x01;
+    internal const int HeaderIntCount = 12;
+    internal const int HeaderSize = 1 + (4 * HeaderIntCount);
+    internal const int HeaderConst0 = 120; // P4.0: 6 gercek dosyada sabit
+    internal const int HeaderConst2 = 125; // P4.0: 6 gercek dosyada sabit
+    internal const int HeaderFileLength = 1;
+    internal const int HeaderLayerTable = 3;
+    internal const int HeaderLayerTableEnd = 7; // son katman kaydinin bitisi - 4
+    internal const int HeaderEntityStream = 11;
 
     // ---- Katman tablosu ----
-    private const int LayerTableHeaderSize = 22;
-    private const int LayerCountOffset = 16;
-    private const int LayerRecordSize = 29;
-    private const int LayerNameCapacity = 20;
-    private const int LayerTableEndBias = 4;
+    internal const int LayerTableHeaderSize = 22;
+    internal const int LayerCountOffset = 16;
+    internal const int LayerRecordSize = 29;
+    internal const int LayerNameCapacity = 20;
+    internal const int LayerTableEndBias = 4;
 
     // ---- Varlik kayit akisi: [bayrak:1][boyut:int32][yuk] ----
-    private const int RecordHeaderSize = 5;
-    private const byte EntityRecord = 0x15;
-    private const byte ExtendedEntityRecord = 0x16;
+    internal const int RecordHeaderSize = 5;
+    internal const byte EntityRecord = 0x15;
+    internal const byte ExtendedEntityRecord = 0x16;
     private const byte ViewRecordA = 0x1B; // gorunum/kapsam kaydi (P4.0 gozlem)
     private const byte ViewRecordB = 0x1D; // gorunum/kapsam kaydi (P4.0 gozlem)
-    private const byte PolylineType = 7;
+    internal const byte PolylineType = 7;
     private const int CancellationCheckInterval = 256;
 
     // ---- Poligon yuku (yuk baslangicina gore ofsetler) ----
-    private const int PolylineLayerOffset = 30;
-    private const int PolylineStringsOffset = 81;
-    private const int ExtendedClassFieldSize = 28;
-    private const int LabelFieldSize = 15;
-    private const int PolylineFlagsSize = 4;
-    private const int DeclaredAreaSize = 8;
-    private const int VertexSize = 24;
-    private const int DeclaredAreaFlag = 0x02;
+    internal const int PolylineLayerOffset = 30;
+    internal const int PolylineStringsOffset = 81;
+    internal const int ExtendedClassFieldSize = 28;
+    internal const int LabelFieldSize = 15;
+    internal const int PolylineFlagsSize = 4;
+    internal const int DeclaredAreaSize = 8;
+    internal const int VertexSize = 24;
+    internal const int DeclaredAreaFlag = 0x02;
 
     /// <summary>Koordinat ve alan olcegi (PolygonRing.MaxScale ile ayni; 1 mm kuantizasyon yapilmaz).</summary>
-    private const int CoordinateScale = PolygonRing.MaxScale;
+    internal const int CoordinateScale = PolygonRing.MaxScale;
 
-    private static readonly Encoding Turkish = CodePagesEncodingProvider.Instance.GetEncoding(1254)
+    internal static readonly Encoding Turkish = CodePagesEncodingProvider.Instance.GetEncoding(1254)
         ?? throw new InvalidOperationException("Windows-1254 encoding is unavailable.");
 
     public static Result<CadLayerDocument> Fail(string reason)
@@ -334,7 +334,7 @@ internal static class NczParser
     }
 
     /// <summary>[uzunluk:1][metin] alanini okur; uzunluk kapasiteyi asarsa null. Uzunluktan sonraki eski baytlar yok sayilir.</summary>
-    private static string? ReadPascal(ReadOnlySpan<byte> field)
+    internal static string? ReadPascal(ReadOnlySpan<byte> field)
     {
         var length = field[0];
         return length > field.Length - 1 ? null : Turkish.GetString(field.Slice(1, length));

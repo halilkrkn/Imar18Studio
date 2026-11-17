@@ -22,6 +22,12 @@ internal sealed class NczSentetikDosya
 
     public int Baslik2 { get; set; } = 125;
 
+    /// <summary>Baslik ile katman tablosu arasindaki bolge (null: 200 bayt sifir). Kullanici adi/PNG benzetimi icin.</summary>
+    public byte[]? OnBolge { get; set; }
+
+    /// <summary>Katman tablosu ile varlik akisi arasindaki bolge (null: 64 bayt sifir). NetmapManager XML benzetimi icin.</summary>
+    public byte[]? KatmanSonrasiBolge { get; set; }
+
     /// <summary>Null ise gercek dosya uzunlugu yazilir.</summary>
     public int? BildirilenUzunluk { get; set; }
 
@@ -44,6 +50,16 @@ internal sealed class NczSentetikDosya
         Double(yuk, 85, p2.X);
         Double(yuk, 93, p2.Y);
         _kayitlar.Add(Kayit(0x15, yuk));
+        return this;
+    }
+
+    /// <summary>Yazi (tip 5) kaydi benzetimi: metin yukte duz durur (anonimlestiricide atlanmalidir).</summary>
+    public NczSentetikDosya Yazi(int katman, string metin)
+    {
+        var yuk = new List<byte> { 5, 5, (byte)katman };
+        yuk.AddRange(new byte[40]);
+        yuk.AddRange(PascalAlan(metin, 64, null));
+        _kayitlar.Add(Kayit(0x15, [.. yuk]));
         return this;
     }
 
@@ -107,7 +123,7 @@ internal sealed class NczSentetikDosya
         var dosya = new List<byte>();
         dosya.Add(Imza);
         dosya.AddRange(new byte[48]); // 12 x int32 baslik, sonra doldurulur
-        dosya.AddRange(new byte[200]); // onizleme/cizgi tipi bolgesi yerine sentetik dolgu
+        dosya.AddRange(OnBolge ?? new byte[200]); // onizleme/cizgi tipi bolgesi yerine sentetik dolgu
 
         var katmanOfseti = dosya.Count;
         var katmanBasligi = new byte[22];
@@ -123,7 +139,7 @@ internal sealed class NczSentetikDosya
         }
 
         var katmanSonu = dosya.Count - 4;
-        dosya.AddRange(new byte[64]); // diger bolumler yerine sentetik dolgu
+        dosya.AddRange(KatmanSonrasiBolge ?? new byte[64]); // diger bolumler yerine sentetik dolgu
 
         var varlikOfseti = dosya.Count;
         dosya.Add(0x17);

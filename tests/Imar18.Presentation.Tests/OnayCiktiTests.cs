@@ -53,8 +53,8 @@ public sealed class OnayCiktiTests
 
     private static ProjeCalismaAlani Alan(ProjeKomutYolu yol, SabitZaman zaman, BellekYazici yazici) => new(
         yol,
-        new ApprovalService(yol, zaman),
-        new CiktiServisi(yol, [new SahteUretici(CiktiTuru.FenKlasoru), new SahteUretici(CiktiTuru.Cetveller), new SahteUretici(CiktiTuru.CksDopOzeti)], yazici),
+        new ApprovalService(yol, zaman, OrnekProje.Topoloji),
+        new CiktiServisi(yol, [new SahteUretici(CiktiTuru.FenKlasoru), new SahteUretici(CiktiTuru.Cetveller), new SahteUretici(CiktiTuru.CksDopOzeti)], yazici, OrnekProje.Topoloji),
         OrnekProje.Muhendis);
 
     [Fact]

@@ -16,6 +16,7 @@ public sealed record ParcelRow(string LayerName, string Role, string Label, deci
 /// yurur; DXF/DWG icin etiket–poligon eslestirmesi (P4.2) sihirbazdaki rol eslemesiyle yapilir.
 /// P5: proje calisma alani verildiyse ice aktarilan parsel geometrisi ve dogrulanan CRS <see cref="ProjeKomutYolu"/>
 /// (CommandBus) ile projeye yazilir; 5. adim <see cref="OnayCiktiViewModel"/>'dir ve Fen Klasoru baglam menusu onaya baglanir.
+/// P6: 2–4. adimlar (tecviz, DOP &amp; Y1, hak eslestirme) <see cref="HesapAdimlariViewModel"/> ile canli motora baglidir.
 /// </summary>
 public sealed partial class MainWindowViewModel : ObservableObject
 {
@@ -53,6 +54,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (proje is not null)
         {
             OnayCikti = new OnayCiktiViewModel(proje);
+            Hesap = new HesapAdimlariViewModel(proje, () => Wizard.Tecviz);
+            Hesap.Uygulandi += (_, _) => LastProjeTask = OnayCikti.YenileAsync();
+            LastProjeTask = Hesap.YenileAsync();
             var fen = new RelayCommand(() => OnayCikti.FenKlasoruIsteCommand.Execute(null), () => OnayCikti.GecerliOnayVar);
             Canvas.BaglaFenKlasoru(fen);
             OnayCikti.OnayDurumuDegisti += (_, _) => fen.NotifyCanExecuteChanged();
@@ -80,6 +84,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Sihirbaz 5. adim: onay ve cikti (proje calisma alani yoksa null — P4 davranisi).</summary>
     public OnayCiktiViewModel? OnayCikti { get; }
+
+    /// <summary>Sihirbaz 2–4. adimlar: tecviz, DOP &amp; Y1, hak eslestirme (proje calisma alani yoksa null).</summary>
+    public HesapAdimlariViewModel? Hesap { get; }
 
     /// <summary>Son rol degisikligiyle baslatilan yeniden eslestirme (testler ve gorunum bekleyebilir).</summary>
     public Task LastReapplyTask { get; private set; } = Task.CompletedTask;
@@ -211,7 +218,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
             StatusText = "Projeye yazılamadı: " + sonuc.Error.UserMessage;
         }
 
-        OnayCikti?.Yenile();
+        if (OnayCikti is not null)
+        {
+            await OnayCikti.YenileAsync().ConfigureAwait(true);
+        }
+
+        if (Hesap is not null)
+        {
+            await Hesap.YenileAsync().ConfigureAwait(true);
+        }
     }
 
     private static (CanvasScene Scene, List<string> Warnings, CadFormat Format, int LayerCount, CadLayerDocument Matched) Compute(CadLayerDocument document, CadLayerRoleMap roles)

@@ -24,10 +24,12 @@ public sealed partial class LayerRoleRow : ObservableObject
 }
 
 /// <summary>
-/// 5 adimli sihirbaz (roadmap P4.2 / UI referansi): 1. Girdi &amp; Sınır → 2. DOP &amp; Özet → 3. Ada Bölümleme →
-/// 4. Tahsis &amp; Hisse → 5. Cetvel &amp; Çıktı. Ilk adim proje CRS/dilim/olcek (<see cref="ProjeCrs"/>),
+/// 5 adimli sihirbaz (P6, proje sahibi tanimi): 1. Girdi &amp; Sınır → 2. Tecviz → 3. DOP &amp; Y1 Dengeleme →
+/// 4. Hak Eşleştirme &amp; Hisse → 5. Onay &amp; Çıktı. Ilk adim proje CRS/dilim/olcek (<see cref="ProjeCrs"/>),
 /// <see cref="TecvizGirdisi"/> (muhendis girdisi) ve katman–rol eslemesini toplar; dogrulama Domain'e birakilir ve
-/// kullaniciya yalnizca Turkce <c>UserMessage</c> gosterilir. 5. adim (Cetvel &amp; Çıktı) P5'te <see cref="OnayCiktiViewModel"/> ile baglandi; 2–4. adim is kurallari P6'dadir.
+/// kullaniciya yalnizca Turkce <c>UserMessage</c> gosterilir. 2–4. adimlar <see cref="HesapAdimlariViewModel"/>, 5. adim
+/// <see cref="OnayCiktiViewModel"/> ile canli motora ve CommandBus'a baglidir. Ada bolumleme (bisection) tuvaldeki canli kesim
+/// tutamacindadir.
 /// </summary>
 public sealed partial class WizardViewModel : ObservableObject
 {
@@ -67,7 +69,7 @@ public sealed partial class WizardViewModel : ObservableObject
     private string _tecvizKaynakNotu = string.Empty;
 
     public IReadOnlyList<string> Steps { get; } =
-        ["1. Girdi & Sınır", "2. DOP & Özet", "3. Ada Bölümleme", "4. Tahsis & Hisse", "5. Cetvel & Çıktı"];
+        ["1. Girdi & Sınır", "2. Tecviz", "3. DOP & Y1 Dengeleme", "4. Hak Eşleştirme & Hisse", "5. Onay & Çıktı"];
 
     public IReadOnlyList<GeodetikDatum> Datumlar { get; } = Enum.GetValues<GeodetikDatum>();
 
@@ -91,6 +93,16 @@ public sealed partial class WizardViewModel : ObservableObject
     public CadLayerRoleMap RoleMap => LayerRoles.Aggregate(CadLayerRoleMap.Standard, (m, r) => m.WithAssignment(r.LayerName, r.Role));
 
     public string CurrentStepTitle => Steps[CurrentIndex];
+
+    public bool IsStep1 => CurrentIndex == 0;
+
+    public bool IsStep2 => CurrentIndex == 1;
+
+    public bool IsStep3 => CurrentIndex == 2;
+
+    public bool IsStep4 => CurrentIndex == 3;
+
+    public bool IsStep5 => CurrentIndex == 4;
 
     /// <summary>Muhendis bir katmanin rolunu degistirdiginde (etiket eslestirmesi ve sahne yeniden kurulmalidir).</summary>
     public event EventHandler? LayerRolesChanged;
@@ -236,14 +248,15 @@ public sealed partial class WizardViewModel : ObservableObject
 
     private bool CanGoBack() => CurrentIndex > 0;
 
-    partial void OnCurrentIndexChanged(int value) => OnPropertyChanged(nameof(CurrentStepTitle));
+    partial void OnCurrentIndexChanged(int value)
+    {
+        OnPropertyChanged(nameof(CurrentStepTitle));
+        foreach (var ad in new[] { nameof(IsStep1), nameof(IsStep2), nameof(IsStep3), nameof(IsStep4), nameof(IsStep5) })
+        {
+            OnPropertyChanged(ad);
+        }
+    }
 
     /// <summary>Hem '.' hem ',' ondalik ayiraci kabul edilir (binlik ayirac kabul edilmez).</summary>
-    private static bool TryParseDecimal(string? text, out decimal value)
-    {
-        value = 0m;
-        var t = (text ?? string.Empty).Trim().Replace(',', '.');
-        return t.Length > 0 && t.Count(c => c == '.') <= 1
-            && decimal.TryParse(t, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out value);
-    }
+    private static bool TryParseDecimal(string? text, out decimal value) => SayiGirdisi.TryParse(text, out value);
 }

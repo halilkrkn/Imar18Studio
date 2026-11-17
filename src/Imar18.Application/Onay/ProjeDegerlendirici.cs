@@ -30,6 +30,18 @@ public sealed record ProjeDegerlendirmesi(
     public int KritikSayisi => Bulgular.Count(b => b.Severity == ErrorSeverity.Critical);
 
     public bool KritikVar => KritikSayisi > 0;
+
+    /// <summary>DOP R1 önerisi: Σ tecviz tapu alanı (tecviz değerlendirilemediyse null).</summary>
+    public decimal? R1TapuToplamiM2 => Tecviz?.ParselSonuclari.Sum(s => s.TapuAlaniM2);
+
+    /// <summary>DOP R2 önerisi: dengelenmiş imar toplamı; dengeleme yoksa imar parsellerinin Gauss toplamı (yoksa null).</summary>
+    public decimal? OnerilenR2M2 => Dengeleme?.ImarParselToplamiM2
+        ?? (Parseller.Any(p => p.Geometri.Rol == ParselRolu.Imar) ? Parseller.Where(p => p.Geometri.Rol == ParselRolu.Imar).Sum(p => p.AlanM2) : null);
+
+    /// <summary>Hak eşleştirme girdisinin imar parselleri: dengelenmiş alanlar (dengeleme yoksa Gauss alanları).</summary>
+    public IReadOnlyList<ImarParseli> HakIcinImarParselleri => Dengeleme is { } d
+        ? d.ImarParselleri.Select(p => new ImarParseli(p.Id, p.DengelenmisAlanM2)).ToList()
+        : Parseller.Where(p => p.Geometri.Rol == ParselRolu.Imar).Select(p => new ImarParseli(p.Geometri.ParselId, p.AlanM2)).ToList();
 }
 
 /// <summary>
@@ -37,12 +49,19 @@ public sealed record ProjeDegerlendirmesi(
 /// Y1 dengelemesi (tek yol terk parseli varsa ve tecviz geçtiyse), DOP (DopCalculator; dengeleme imar toplamı R2 farkı için) ve
 /// hak eşleştirme (HakEslestirmeServisi). Hesap üretemeyen (Error) sonuçlar eksik girdi sayılır; başarılı hesapların bulguları
 /// (Warning/Critical) listelenir. Ek tutarlılık: hak eşleştirmedeki DOPO, DOP sonucunun 7 haneli DOPO'suna eşit olmalıdır.
+/// P6: geçerli halkalar parseller arası topoloji analizinden (<see cref="IParselTopolojiDenetcisi"/>, NTS overlay GeometryEngine'de)
+/// geçer; çakışma (<c>ERR-TOPO-005</c>), boşluk (<c>ERR-TOPO-006</c>) ve kadastro dışına taşma (<c>ERR-TOPO-007</c>) Critical'dır
+/// (onay engeli, AC-PILOT-05); analiz tamamlanamazsa "topoloji analizi" eksik sayılır (<c>ERR-TOPO-008</c>).
 /// </summary>
 public static class ProjeDegerlendirici
 {
-    public static ProjeDegerlendirmesi Degerlendir(ProjeBelgesi belge)
+    /// <summary>Hata mesajında listelenecek en fazla parsel kimliği (uzun boşluk/taşma listeleri kısaltılır).</summary>
+    private const int MesajdakiEnFazlaKimlik = 10;
+
+    public static ProjeDegerlendirmesi Degerlendir(ProjeBelgesi belge, IParselTopolojiDenetcisi topoloji)
     {
         ArgumentNullException.ThrowIfNull(belge);
+        ArgumentNullException.ThrowIfNull(topoloji);
         var bulgular = new List<AppError>();
         var eksik = new List<string>();
 
@@ -56,6 +75,7 @@ public static class ProjeDegerlendirici
         }
 
         var parseller = new List<DegerlendirilenParsel>();
+        var topolojiGirdisi = new List<ParselGeometrisi>();
         foreach (var p in belge.Parseller)
         {
             var halka = PolygonRing.FromOpen(p.Koseler);
@@ -70,9 +90,26 @@ public static class ProjeDegerlendirici
                 var e = ErrorCatalog.Get(ErrorCodes.TopoKendiUzerindeKesisim);
                 bulgular.Add(e with { TechnicalMessage = e.TechnicalMessage.Replace("{parcelId}", p.ParselId, StringComparison.Ordinal) });
             }
+            else
+            {
+                topolojiGirdisi.Add(p);
+            }
 
             parseller.Add(new DegerlendirilenParsel(p, halka.Value, GaussAreaCalculator.Compute(halka.Value).AreaM2));
         }
+
+        IReadOnlyList<ParselTopolojiBulgusu> topolojiSonucu;
+        try
+        {
+            topolojiSonucu = topoloji.Denetle(topolojiGirdisi);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Fail-safe (reviewer M3): port uygulamasının beklenmeyen istisnası onay komutunu çökertmez; hesap eksik sayılır.
+            topolojiSonucu = [new ParselTopolojiBulgusu(TopolojiBulguTuru.AnalizYapilamadi, [], 0m)];
+        }
+
+        Topoloji(topolojiSonucu, bulgular, Eksik);
 
         if (belge.Parseller.Count == 0)
         {
@@ -254,6 +291,44 @@ public static class ProjeDegerlendirici
             if (beklenen != i.AlanM2)
             {
                 eksik(Ad, Gecersiz($"allocation zoning area differs from balanced geometry area for {i.GeciciKod}"));
+            }
+        }
+    }
+
+    private static void Topoloji(IReadOnlyList<ParselTopolojiBulgusu> sonuc, List<AppError> bulgular, Action<string, AppError> eksik)
+    {
+        foreach (var b in sonuc)
+        {
+            var (kod, tur) = b.Tur switch
+            {
+                TopolojiBulguTuru.KadastroCakismasi => (ErrorCodes.TopoParselCakismasi, "cadastral parcels"),
+                TopolojiBulguTuru.OlusanCakismasi => (ErrorCodes.TopoParselCakismasi, "new parcels"),
+                TopolojiBulguTuru.KadastroBoslugu => (ErrorCodes.TopoParselBoslugu, "hole inside cadastral parcels"),
+                TopolojiBulguTuru.OlusanKapsamaBoslugu => (ErrorCodes.TopoParselBoslugu, "readjustment area not covered by new parcels"),
+                TopolojiBulguTuru.KadastroDisinaTasma => (ErrorCodes.TopoKadastroDisinaTasma, "outside"),
+                _ => (ErrorCodes.TopoAnalizYapilamadi, "analysis"),
+            };
+
+            var e = ErrorCatalog.Get(kod);
+            var idler = b.ParselIdleri.Count <= MesajdakiEnFazlaKimlik
+                ? string.Join(", ", b.ParselIdleri)
+                : string.Join(", ", b.ParselIdleri.Take(MesajdakiEnFazlaKimlik)) + $" (+{b.ParselIdleri.Count - MesajdakiEnFazlaKimlik})";
+            e = e with
+            {
+                TechnicalMessage = e.TechnicalMessage
+                    .Replace("{parcelIds}", idler, StringComparison.Ordinal)
+                    .Replace("{area}", b.AlanM2.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal)
+                    .Replace("{kind}", tur, StringComparison.Ordinal)
+                    .Replace("{reason}", b.ParselIdleri.Count > 0 ? "invalid polygon for parcels " + idler : "geometry engine overlay failed", StringComparison.Ordinal),
+            };
+
+            if (b.Tur == TopolojiBulguTuru.AnalizYapilamadi)
+            {
+                eksik("topoloji analizi", e);
+            }
+            else
+            {
+                bulgular.Add(e);
             }
         }
     }

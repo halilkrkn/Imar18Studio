@@ -105,7 +105,7 @@ public static class ProjeRevizyonu
     public const string MevzuatProfiliSurumu = "TPYS_2022";
 
     /// <summary>Hesap kuralları sürümü: Domain/Application hesap kuralları değiştiğinde artırılır; eski onaylar düşer.</summary>
-    public const string KuralSurumu = "p5-1";
+    public const string KuralSurumu = "p6-1"; // P6: parseller arası topoloji (çakışma/boşluk/taşma) onay kuralı eklendi
 
     /// <exception cref="ArgumentException">Liste null veya null öğe içeriyorsa.</exception>
     public static RevisionId Hesapla(ProjeRevizyonGirdisi girdi)

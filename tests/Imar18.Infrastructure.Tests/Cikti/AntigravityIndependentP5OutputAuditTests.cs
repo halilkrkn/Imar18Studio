@@ -30,11 +30,11 @@ public sealed class AntigravityIndependentP5OutputAuditTests
     private static async Task<CiktiPaketi> OnayliPaketAsync()
     {
         var (yol, _, zaman) = await OrnekProje.TamProjeAsync();
-        var onayServisi = new ApprovalService(yol, zaman);
+        var onayServisi = new ApprovalService(yol, zaman, OrnekProje.Topoloji);
         var onaySonuc = await onayServisi.OnaylaAsync(OrnekProje.Muhendis, ApprovalService.OnayMetni);
         onaySonuc.IsSuccess.Should().BeTrue();
 
-        var deg = ProjeDegerlendirici.Degerlendir(yol.Belge);
+        var deg = ProjeDegerlendirici.Degerlendir(yol.Belge, OrnekProje.Topoloji);
         var paketSonuc = CiktiPaketiOlusturucu.Olustur(yol.Belge, deg);
         paketSonuc.IsSuccess.Should().BeTrue();
         return paketSonuc.Value;

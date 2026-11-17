@@ -74,7 +74,8 @@ public sealed class QuestPdfFenKlasoruUretici : ICiktiUretici
     {
         page.Size(PageSizes.A4);
         page.Margin(1.5f, Unit.Centimetre);
-        page.DefaultTextStyle(t => t.FontSize(9));
+        // Ligatür kapalı: RevisionId/hash ve kodlar PDF metninden birebir kopyalanabilmeli (P6 regresyonu: "ff", "fb", "ti").
+        page.DefaultTextStyle(t => t.FontSize(9).DisableFontFeature(FontFeatures.StandardLigatures));
         page.Header().Column(col =>
         {
             col.Item().Text(p.PilotDamgasi).Bold().FontSize(11).FontColor(Colors.Red.Darken2);

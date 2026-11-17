@@ -386,18 +386,8 @@ public sealed class LargestRemainderAllocatorTests
 
     // ---------- Proje-B altin veri (sentetik, pilot-3-shared-parcel) ----------
 
-    private static JsonElement ProjeBAltinVeri()
-    {
-        var kok = AppContext.BaseDirectory;
-        while (kok is not null && !File.Exists(Path.Combine(kok, "Imar18Studio.sln")))
-        {
-            kok = Path.GetDirectoryName(kok);
-        }
-
-        kok.Should().NotBeNull("depo kokunde Imar18Studio.sln aranir");
-        var yol = Path.Combine(kok!, "test-data", "synthetic", "pilot-3-shared-parcel", "saha_proje_2_hisse_golden.json");
-        return JsonDocument.Parse(File.ReadAllText(yol)).RootElement.Clone();
-    }
+    private static JsonElement ProjeBAltinVeri() =>
+        JsonDocument.Parse(File.ReadAllText(Imar18.TestDestek.TestDataLocator.Sentetik("pilot-3-shared-parcel", "saha_proje_2_hisse_golden.json"))).RootElement.Clone();
 
     private static decimal Dec(JsonElement e) => e.GetDecimal();
 

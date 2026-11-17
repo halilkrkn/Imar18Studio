@@ -28,6 +28,10 @@ public static class ErrorCodes
     public const string TopoAcikPoligon = "ERR-TOPO-002";
     public const string TopoDejenerePoligon = "ERR-TOPO-003";
     public const string TopoKonkavKesimCokParcali = "ERR-TOPO-004";
+    public const string TopoParselCakismasi = "ERR-TOPO-005";
+    public const string TopoParselBoslugu = "ERR-TOPO-006";
+    public const string TopoKadastroDisinaTasma = "ERR-TOPO-007";
+    public const string TopoAnalizYapilamadi = "ERR-TOPO-008";
 
     public const string TapuMalikEslesmedi = "ERR-TAPU-001";
     public const string TapuHisseEksik = "ERR-TAPU-002";
@@ -80,7 +84,7 @@ public static class ErrorCodes
 public static class ErrorCatalog
 {
     /// <summary>Katalog sürümü (AC-ERR-01).</summary>
-    public const string Version = "1.6.0";
+    public const string Version = "1.7.0";
 
     private static readonly AppError[] Entries =
     [
@@ -210,9 +214,29 @@ public static class ErrorCatalog
             retryable: false, review: true),
         New(ErrorCodes.TopoKonkavKesimCokParcali, ErrorSeverity.Critical, ErrorCategory.Topology,
             "Kesim, adayı birden fazla parçaya ayırıyor; otomatik bölme durduruldu.",
-            "Cut produced a multi-part piece at angle {angle}; subdivision stopped for engineer review.",
+            "No single-part cut within the angle range (first multi-part piece at angle {angle}); subdivision stopped for engineer review.",
             "Kesim yönünü veya cephe kenarını değiştirin ya da bölmeyi mühendis olarak elle yapın.",
             retryable: false, review: true),
+        New(ErrorCodes.TopoParselCakismasi, ErrorSeverity.Critical, ErrorCategory.Topology,
+            "Parseller birbiriyle çakışıyor.",
+            "Parcels {parcelIds} overlap by {area} m2 ({kind}).",
+            "Çakışan parsellerin ortak sınırını CAD dosyasında düzeltip geometriyi yeniden içe aktarın.",
+            retryable: false, review: true),
+        New(ErrorCodes.TopoParselBoslugu, ErrorSeverity.Critical, ErrorCategory.Topology,
+            "Parseller arasında boşluk var.",
+            "Gap of {area} m2 ({kind}) among parcels {parcelIds}.",
+            "Boşluğu bir parsele, yola veya kamu alanına dahil edin ya da kadastro sınırını kontrol edin.",
+            retryable: false, review: true),
+        New(ErrorCodes.TopoKadastroDisinaTasma, ErrorSeverity.Critical, ErrorCategory.Topology,
+            "Oluşan parseller düzenleme (kadastro) sınırı dışına taşıyor.",
+            "Zoning parcels extend {area} m2 outside the cadastral boundary (parcels {parcelIds}).",
+            "Oluşan parsellerin dış sınırını düzenleme sınırına çekin veya eksik kadastro parselini ekleyin.",
+            retryable: false, review: true),
+        New(ErrorCodes.TopoAnalizYapilamadi, ErrorSeverity.Error, ErrorCategory.Topology,
+            "Parseller arası topoloji analizi tamamlanamadı.",
+            "Overlay analysis failed: {reason}.",
+            "Geometriyi Topoloji Onar ekranıyla kontrol edip yeniden deneyin.",
+            retryable: true, review: true),
 
         // ---- ERR-TAPU: Tapu / kroki / hisse ----
         New(ErrorCodes.TapuMalikEslesmedi, ErrorSeverity.Critical, ErrorCategory.Tapu,

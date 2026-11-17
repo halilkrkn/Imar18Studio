@@ -20,7 +20,7 @@ public sealed class ApprovalServiceTests
     private static async Task<(ProjeKomutYolu Yol, ApprovalService Onay, SabitZaman Zaman)> HazirAsync()
     {
         var (yol, _, zaman) = await OrnekProje.TamProjeAsync();
-        return (yol, new ApprovalService(yol, zaman), zaman);
+        return (yol, new ApprovalService(yol, zaman, OrnekProje.Topoloji), zaman);
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public sealed class ApprovalServiceTests
         var depo = new BellekProjeDeposu();
         var yol = (await ProjeKomutYolu.AcAsync(depo, "Eksik", TimeProvider.System)).Value;
         await yol.GonderAsync(new ProjeCrsAyarlaKomutu(OrnekProje.Crs()), OrnekProje.Muhendis);
-        var servis = new ApprovalService(yol, TimeProvider.System);
+        var servis = new ApprovalService(yol, TimeProvider.System, OrnekProje.Topoloji);
 
         var sonuc = await servis.OnaylaAsync(OrnekProje.Muhendis, ApprovalService.OnayMetni);
 

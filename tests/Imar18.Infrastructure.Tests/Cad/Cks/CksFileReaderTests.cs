@@ -92,8 +92,8 @@ public sealed class CksFileReaderTests
 
     private static void ProjeAAltinVeriyleEslesmeli(CksDopOzeti o)
     {
-        using var altin = JsonDocument.Parse(File.ReadAllText(Path.Combine(
-            GercekVeri.DepoKoku, "test-data", "synthetic", "pilot-1-concave-parcel", "saha_proje_1_golden.json")));
+        using var altin = JsonDocument.Parse(File.ReadAllText(
+            Imar18.TestDestek.TestDataLocator.Sentetik("pilot-1-concave-parcel", "saha_proje_1_golden.json")));
         var m = altin.RootElement.GetProperty("metrics");
 
         o.ToplamDuzenlemeyeGirenDopAlinanM2.Should().Be(m.GetProperty("toplamKadastroAlani_R1").GetDecimal());
@@ -121,8 +121,8 @@ public sealed class CksFileReaderTests
     [Fact]
     public void CksOkuyucu_Public_Sentetik_UTF8_Ornegi_Altin_Veriyle_Eslesmeli()
     {
-        var bayt = File.ReadAllBytes(Path.Combine(
-            GercekVeri.DepoKoku, "test-data", "synthetic", "pilot-1-concave-parcel", "DOP_Ornek.CKS"));
+        var bayt = File.ReadAllBytes(
+            Imar18.TestDestek.TestDataLocator.Sentetik("pilot-1-concave-parcel", "DOP_Ornek.CKS"));
 
         ProjeAAltinVeriyleEslesmeli(Oku(bayt));
     }
