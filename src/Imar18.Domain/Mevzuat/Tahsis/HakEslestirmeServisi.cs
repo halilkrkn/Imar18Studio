@@ -129,7 +129,8 @@ public sealed record HakEslestirmeSonucu(
 /// <summary>
 /// FR-F1.12 hak eşleştirme, tahsis matrisi ve Md. 17/1-(d) hisse çözümlemesi (ShareResolutionService / AllocationMatrixService).
 /// <list type="number">
-/// <item>Giren alan: tapu alanı hisselere Largest Remainder ile dm² olarak dağıtılır (Σ = tapu alanı).</item>
+/// <item>Giren alan: resmî dağıtım cetveli gibi malik bazında round(tapu × hisse, 2, AwayFromZero); Σ giren tapudan birkaç dm²
+/// farklı olabilir (Proje-B: +0.02 m²). Hisseler toplamı tam 1 olmalıdır (ERR-TAPU-003).</item>
 /// <item>Net hak (spec 4.4): DOP_i = round(giren_i × DOPO, 2, AwayFromZero), net_i = giren_i − DOP_i.</item>
 /// <item>Her imar parseli: Σ eşleştirme = parsel alanı ± 1 dm² (aksi ERR-TAPU-005); dm² payda Largest Remainder ile tam kapanır.</item>
 /// <item>Md. 17/1-(d): çok malikli kadastro parselinden muvafakatsız paydaş tek başına (tek farklı malikli, müstakil) parsele tahsis
@@ -158,7 +159,7 @@ public static class HakEslestirmeServisi
             return Gecersiz("DOPO must be in [0, 1)");
         }
 
-        // ---- 1. Kadastro parselleri ve giren alanlar (LR, dm²) ----
+        // ---- 1. Kadastro parselleri ve giren alanlar (malik bazında yuvarlama, dm²) ----
         var kadastro = girdi.KadastroParselleri.ToArray();
         if (kadastro.Length == 0)
         {
@@ -185,17 +186,28 @@ public static class HakEslestirmeServisi
                 return Gecersiz($"cadastral parcel #{i + 1} area must be positive with at most 2 decimals");
             }
 
-            var dagitim = LargestRemainderAllocator.AllocateAlanM2(
-                k.TapuAlaniM2, k.Malikler.Select(m => new AllocationWeight(m?.MalikId ?? string.Empty, m?.Hisse ?? Fraction.Zero)).ToList());
-            if (dagitim.IsFailure)
+            // Hisse doğrulaması (kimlik teknik mesaja yazılmaz — KVKK).
+            var malikIdleri = new HashSet<string>(StringComparer.Ordinal);
+            for (var j = 0; j < k.Malikler.Count; j++)
             {
-                return Result<HakEslestirmeSonucu>.Failure(dagitim.Error);
+                var m = k.Malikler[j];
+                if (m is null || string.IsNullOrWhiteSpace(m.MalikId) || m.Hisse.Sign < 0 || !malikIdleri.Add(m.MalikId))
+                {
+                    return Gecersiz($"invalid, negative or duplicate owner #{j + 1} in cadastral parcel #{i + 1}");
+                }
             }
 
-            var muvafakat = k.Malikler.ToDictionary(m => m.MalikId, m => m.Muvafakatli, StringComparer.Ordinal);
-            foreach (var pay in dagitim.Value)
+            var hisseToplami = Fraction.Sum(k.Malikler.Select(m => m.Hisse));
+            if (hisseToplami != Fraction.One)
             {
-                haklar.Add(Anahtar(k.ParselId, pay.Id), new HakSahibi(k.ParselId, pay.Id, muvafakat[pay.Id], pay.Units));
+                return HataSablonu.Basarisiz<HakEslestirmeSonucu>(ErrorCodes.TapuHisseToplamiBirDegil, ("sum", hisseToplami.ToString()));
+            }
+
+            // Giren alan: resmî dağıtım cetveli gibi malik bazında tapu × hisse, 2 ondalık AwayFromZero (SORU-031 g).
+            foreach (var m in k.Malikler)
+            {
+                var girenDm2 = (Fraction.FromDecimal(k.TapuAlaniM2) * m.Hisse * Fraction.FromInteger(100)).ToDecimal(0);
+                haklar.Add(Anahtar(k.ParselId, m.MalikId), new HakSahibi(k.ParselId, m.MalikId, m.Muvafakatli, new BigInteger(girenDm2)));
             }
         }
 

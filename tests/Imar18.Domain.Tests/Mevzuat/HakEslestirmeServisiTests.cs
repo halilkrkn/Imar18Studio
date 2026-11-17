@@ -75,17 +75,17 @@ public sealed class HakEslestirmeServisiTests
     }
 
     [Fact]
-    public void HakEslestirme_Giren_Alan_Largest_Remainder_Ile_Tapu_Alanina_Tam_Esit_Dagitilmali()
+    public void HakEslestirme_Giren_Alan_Malik_Bazinda_2_Ondalik_AwayFromZero_Yuvarlanmali_Netcad_Cetveli_Gibi()
     {
-        // 1000.01 m2 = 100001 dm2, 3 x 1/3 -> 33334, 33334, 33333 (esit kalan -> Id sirasi)
+        // Resmi dagitim cetveli (Proje-B) her malikin giren alanini ayri yuvarlar: 1000.01 x 1/3 = 333.3366.. -> 333.34 (x3, Σ 1000.02)
         var k = new List<KadastroParseli> { new("K1", 1000.01m, [M("M1", 1, 3), M("M2", 1, 3), M("M3", 1, 3)]) };
         var i = new List<ImarParseli> { new("A1", 1000.01m) };
         var s = new List<HakEslestirmeSatiri> { S("M1", "K1", "A1", 333.34m), S("M2", "K1", "A1", 333.34m), S("M3", "K1", "A1", 333.33m) };
 
         var r = Calistir(0m, k, i, s);
 
-        r.MalikHaklari.Select(h => h.GirenAlanM2).Should().Equal(333.34m, 333.34m, 333.33m);
-        r.MalikHaklari.Sum(h => h.GirenAlanM2).Should().Be(1000.01m);
+        r.MalikHaklari.Select(h => h.GirenAlanM2).Should().Equal(333.34m, 333.34m, 333.34m);
+        r.MalikHaklari.Single(h => h.MalikId == "M3").FarkM2.Should().Be(-0.01m);
         r.Bulgular.Should().BeEmpty();
     }
 

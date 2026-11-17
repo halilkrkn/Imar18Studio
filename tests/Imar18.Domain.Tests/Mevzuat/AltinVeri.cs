@@ -12,6 +12,8 @@ internal static class AltinVeri
 
     public static JsonElement ProjeB() => Yukle("pilot-3-shared-parcel", "saha_proje_2_hisse_golden.json");
 
+    public static JsonElement ProjeBDagitim() => Yukle("pilot-3-shared-parcel", "proje_b_dagitim_eslesmesi.json");
+
     public static JsonElement ProjeC() => Yukle("pilot-2-mixed-ownership", "saha_proje_3_park_golden.json");
 
     public static decimal Dec(this JsonElement e, string ad) => e.GetProperty(ad).GetDecimal();
