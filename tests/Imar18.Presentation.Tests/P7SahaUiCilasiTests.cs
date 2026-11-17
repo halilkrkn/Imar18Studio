@@ -5,6 +5,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -480,6 +481,7 @@ public sealed class P7SahaUiCilasiTests
         GorunurMetinler(satir).Should().Contain("⛔").And.Contain(vm.Wizard.TecvizUretimYontemiHatasi!);
         Bul<Border>(w, "DogrulamaSonucKarti").IsEffectivelyVisible.Should().BeTrue();
         GorunurMetinler(Bul<Border>(w, "DogrulamaSonucKarti")).Should().Contain(m => m.EndsWith(" hata", StringComparison.Ordinal));
+        Bul<TextBlock>(w, "HataRozeti").Text.Should().Be($"{vm.Wizard.HataSayisi} hata");
 
         vm.Wizard.TecvizUretimYontemi = "Sayısallaştırma";
         Dispatcher.UIThread.RunJobs();
@@ -493,12 +495,12 @@ public sealed class P7SahaUiCilasiTests
     {
         var w = Ac(Vm());
 
-        GorunurMetinler(Bul<Border>(w, "SolPanel")).Count(m => m == "(* Zorunlu)").Should().BeGreaterThanOrEqualTo(9);
+        GorunurMetinler(Bul<Border>(w, "SolPanel")).Count(m => m == "Zorunlu").Should().BeGreaterThanOrEqualTo(9);
         w.Close();
 
         var kok = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
         var xaml = XDocument.Load(Path.Combine(kok, "src", "Imar18.Presentation.Avalonia", "Views", "MainWindow.axaml"));
-        xaml.Descendants().Count(e => e.Attribute("Text")?.Value == "(İsteğe bağlı)").Should().BeGreaterThanOrEqualTo(7,
+        xaml.Descendants().Count(e => e.Attribute("Text")?.Value == "İsteğe bağlı").Should().BeGreaterThanOrEqualTo(7,
             "toplam tecviz sınırı, R2, D1, D2, R3, ortak katılım ve geçici↔tescil isteğe bağlıdır");
     }
 
@@ -625,18 +627,86 @@ public sealed class P7SahaUiCilasiTests
     }
 
     [AvaloniaFact]
-    public void Temizle_Dugmeleri_Sol_Kart_Ve_Ust_Cubukta_Onay_Acilir_Penceresiyle_Bulunmali()
+    public void Temizle_Tek_Dugme_Ust_Cubukta_Onay_Acilir_Penceresiyle_Bulunmali()
     {
         var w = Ac(Vm());
 
-        foreach (var ad in new[] { "TemizleDugmesi", "UstTemizleDugmesi" })
-        {
-            var d = Bul<Button>(w, ad);
-            d.IsEffectivelyVisible.Should().BeTrue();
-            d.Flyout.Should().NotBeNull("yanlışlıkla temizlemeye karşı onay istenir");
-        }
+        w.FindControl<Button>("TemizleDugmesi").Should().BeNull("sol karttaki ikinci (çalışmayan) Temizle düğmesi kaldırıldı");
+        var d = Bul<Button>(w, "UstTemizleDugmesi");
+        d.IsEffectivelyVisible.Should().BeTrue();
+        d.Flyout.Should().NotBeNull("yanlışlıkla temizlemeye karşı onay istenir");
+        w.Close();
+    }
 
-        Bul<Button>(w, "TemizleDugmesi").Content.Should().Be("🧹 Projeyi Temizle / Sıfırla");
+    [AvaloniaFact]
+    public async Task Temizle_Onay_Penceresindeki_Evet_Dugmesi_Projeyi_Gercekten_Temizlemeli()
+    {
+        // Canlı hata: onay düğmesinin Command bağlaması, açılır pencere kapanınca DataContext'i kaybettiği için çalışmıyordu.
+        var vm = await ProjeliVm();
+        await vm.ImportAsync(new MemoryStream([1]), ".ncz");
+        var w = Ac(vm);
+        var dugme = Bul<Button>(w, "UstTemizleDugmesi");
+        dugme.Flyout!.ShowAt(dugme);
+        Dispatcher.UIThread.RunJobs();
+        var evet = ((Control)((Flyout)dugme.Flyout).Content!).GetLogicalDescendants().OfType<Button>()
+            .Single(b => b.Content as string == "Evet, temizle");
+
+        evet.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await vm.ProjeyiTemizleCommand.ExecutionTask!;
+        Dispatcher.UIThread.RunJobs();
+
+        vm.Parcels.Should().BeEmpty();
+        vm.Canvas.Scene.Polylines.Should().BeEmpty();
+        vm.StatusText.Should().Contain("Proje temizlendi");
+        w.Close();
+    }
+
+    // ============================ P7.0c: sabit "Girdileri Doğrula" ve responsive yerleşim ============================
+
+    [AvaloniaFact]
+    public void Sihirbaz_Dogrula_Dugmesi_Kaydirma_Alaninin_Disinda_Sabit_Alt_Cubukta_Olmali()
+    {
+        var vm = Vm();
+        var w = Ac(vm);
+        var dogrula = Bul<Button>(w, "DogrulaDugmesi");
+
+        dogrula.IsEffectivelyVisible.Should().BeTrue();
+        dogrula.GetVisualAncestors().Should().NotContain(Bul<ScrollViewer>(w, "SihirbazKaydirma"), "kaydırınca yarısı gizlenmemeli");
+        Bul<TextBlock>(w, "AdimSayaci").Text.Should().Be("Adım 1 / 5");
+
+        vm.Wizard.Validate();
+        vm.Wizard.CurrentIndex = 1;
+        Dispatcher.UIThread.RunJobs();
+        dogrula.IsEffectivelyVisible.Should().BeFalse("doğrulama yalnız 1. adımın eylemidir");
+        Bul<TextBlock>(w, "AdimSayaci").Text.Should().Be("Adım 2 / 5");
+        w.Close();
+    }
+
+    [AvaloniaTheory]
+    [InlineData(1920, false, false)]
+    [InlineData(1680, false, false)]
+    [InlineData(1600, true, false)]
+    [InlineData(1450, true, false)]
+    [InlineData(1280, true, false)]
+    [InlineData(1024, true, true)]
+    [InlineData(1366, true, false)]
+    [InlineData(1100, true, true)]
+    public void Responsive_Pencere_Genisligine_Gore_Siniflar_Atanmali_Ust_Cubuk_Tasmamali(double genislik, bool dar, bool kompakt)
+    {
+        var vm = Vm();
+        var w = new MainWindow { DataContext = vm, Width = genislik, Height = 860 };
+        w.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        w.Classes.Contains("dar").Should().Be(dar);
+        w.Classes.Contains("kompakt").Should().Be(kompakt);
+        var tema = Bul<Button>(w, "TemaAnahtari");
+        var sag = tema.TranslatePoint(new Point(tema.Bounds.Width, 0), w)!.Value.X;
+        sag.Should().BeLessThanOrEqualTo(genislik + 0.5, "üst çubuk dar pencerede de pencere dışına taşmamalı");
+
+        var adimAdlari = Bul<ItemsControl>(w, "AdimCubugu").GetVisualDescendants().OfType<TextBlock>()
+            .Where(x => x.Classes.Contains("adimAdi")).ToList();
+        adimAdlari.Count(x => x.IsEffectivelyVisible).Should().Be(kompakt ? 1 : 5, "kompakt modda yalnız aktif adımın adı görünür");
         w.Close();
     }
 
