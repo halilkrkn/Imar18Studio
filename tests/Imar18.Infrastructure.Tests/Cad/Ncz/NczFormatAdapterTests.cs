@@ -269,7 +269,7 @@ public sealed class NczFormatAdapterTests
     }
 
     [Fact]
-    public void NczAdaptor_1mm_Izgara_Disi_Koseleri_Kuantize_Etmeden_Saymali()
+    public void NczAdaptor_1mm_Izgara_Disi_Koseleri_Kuantize_Etmeden_Sayip_ERR_GIRD_006_Uyarisi_Uretmeli()
     {
         (double, double, double)[] izgaraDisi =
         [
@@ -278,7 +278,10 @@ public sealed class NczFormatAdapterTests
 
         var belge = Oku(TemelDosya().Poligon(2, "T", izgaraDisi).Poligon(1, "U", Dikdortgen30x40));
 
-        belge.OffGridVertexCount.Should().Be(3); // ilk kose, kapanis tekrari ve ikinci kose
+        belge.OffGridVertexCount.Should().Be(2); // ilk ve ikinci kose (kapanis tekrari sayilmaz)
+        var uyari = belge.Warnings.Should().ContainSingle(w => w.Code == ErrorCodes.GirdIzgaraDisiKose).Subject;
+        uyari.TechnicalMessage.Should().Contain("2 vertices").And.Contain("NCZ input").And.NotContain("4000000");
+        uyari.RequiresEngineerReview.Should().BeTrue();
         belge.Polylines[0].Vertices[0].X.Should().Be(4_000_000.0004m);
         belge.Polylines[0].Vertices[1].Y.Should().Be(500_000.123457m);
     }

@@ -17,8 +17,6 @@ public sealed class NczFormatAdapter : ICadFormatAdapter
     /// <summary>Kabul edilen en buyuk dosya boyutu (uygulama guvenlik siniri; DoS korumasi).</summary>
     public const long MaxFileSizeBytes = 64L * 1024 * 1024;
 
-    private const int ReadChunkBytes = 81_920;
-
     /// <inheritdoc />
     public CadFormat Format => CadFormat.Ncz;
 
@@ -36,26 +34,12 @@ public sealed class NczFormatAdapter : ICadFormatAdapter
         ArgumentNullException.ThrowIfNull(source);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (source.CanSeek && source.Length - source.Position > MaxFileSizeBytes)
+        if (!CadInputBuffer.TryReadAll(source, MaxFileSizeBytes, cancellationToken, out var data))
         {
             return NczParser.Fail("file too large (limit 64 MiB)");
         }
 
-        using var buffer = new MemoryStream();
-        var chunk = new byte[ReadChunkBytes];
-        int read;
-        while ((read = source.Read(chunk, 0, chunk.Length)) > 0)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (buffer.Length + read > MaxFileSizeBytes)
-            {
-                return NczParser.Fail("file too large (limit 64 MiB)");
-            }
-
-            buffer.Write(chunk, 0, read);
-        }
-
-        return NczParser.Parse(buffer.GetBuffer().AsSpan(0, (int)buffer.Length), cancellationToken);
+        return NczParser.Parse(data, cancellationToken);
     }
 }
 
@@ -157,10 +141,9 @@ internal static class NczParser
         }
 
         var polylines = new List<CadPolyline>();
+        var gate = new CadNormalizationGate("NCZ");
         var skipped = 0;
         var unrecognized = 0;
-        var offGrid = 0;
-        var zPolylines = 0;
         var position = entityStart;
         var recordIndex = 0;
         while (position < data.Length)
@@ -207,29 +190,16 @@ internal static class NczParser
                 continue;
             }
 
-            var reason = ReadPolyline(payload, flag == ExtendedEntityRecord, layers, out var polyline, out var hadZ);
+            var reason = ReadPolyline(payload, flag == ExtendedEntityRecord, layers, gate, out var polyline);
             if (reason is not null)
             {
                 return Fail(reason);
             }
 
             polylines.Add(polyline!);
-            offGrid += polyline!.Vertices.Count(v => !CoordinateQuantizer.IsOnGrid(v));
-            if (hadZ)
-            {
-                zPolylines++;
-            }
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-
-        IReadOnlyList<AppError> warnings = [];
-        if (zPolylines > 0)
-        {
-            var z = ErrorCatalog.Get(ErrorCodes.GirdZKoduIndirgendi);
-            warnings = [z with { TechnicalMessage = z.TechnicalMessage.Replace(
-                "{path}", $"NCZ input ({zPolylines} of {polylines.Count} polylines)", StringComparison.Ordinal) }];
-        }
 
         return Result<CadLayerDocument>.Success(new CadLayerDocument(
             CadFormat.Ncz,
@@ -237,8 +207,8 @@ internal static class NczParser
             polylines.AsReadOnly(),
             skipped,
             unrecognized,
-            offGrid,
-            warnings));
+            gate.OffGridVertexCount,
+            gate.Warnings()));
     }
 
     private static string? ReadLayers(ReadOnlySpan<byte> data, int tableOffset, int declaredEnd, out IReadOnlyList<CadLayer> layers)
@@ -281,11 +251,10 @@ internal static class NczParser
         ReadOnlySpan<byte> p,
         bool extended,
         IReadOnlyList<CadLayer> layers,
-        out CadPolyline? polyline,
-        out bool hadZ)
+        CadNormalizationGate gate,
+        out CadPolyline? polyline)
     {
         polyline = null;
-        hadZ = false;
 
         var fixedSize = PolylineStringsOffset + (extended ? ExtendedClassFieldSize : 0) + LabelFieldSize + PolylineFlagsSize + DeclaredAreaSize;
         if (p.Length < fixedSize)
@@ -358,16 +327,8 @@ internal static class NczParser
             declaredArea = area;
         }
 
-        var projected = HorizontalProjection.ToHorizontal(raw);
-        hadZ = projected.Warnings.Count > 0;
-        var points = projected.Points;
-        polyline = new CadPolyline(
-            layers[layerIndex].Name,
-            label,
-            featureClass,
-            points,
-            points.Count > 1 && points[0] == points[^1],
-            declaredArea);
+        // NCZ kapali halkayi ilk kosenin tekrariyla saklar (P4.0 DOGRULANDI): bayrak/tolerans kullanilmaz.
+        polyline = gate.Add(layers[layerIndex].Name, label, featureClass, raw, closedFlag: false, closureToleranceM: 0m, declaredArea);
         return null;
     }
 
