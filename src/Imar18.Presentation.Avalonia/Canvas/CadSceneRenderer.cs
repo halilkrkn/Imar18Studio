@@ -23,12 +23,13 @@ internal sealed record CadRenderState(
     bool AcikPafta,
     bool IzgaraGoster,
     bool EtiketGoster,
-    OsnapSonucu? Yakalama)
+    OsnapSonucu? Yakalama,
+    OsnapSonucu? SecilenNokta = null)
 {
     public static CadRenderState From(CadCanvasViewModel vm, double width, double height) => new(
         vm.Scene, vm.Camera.Origin, vm.Camera.Scale, vm.Camera.OffsetX, vm.Camera.OffsetY, vm.SwipePercent,
         vm.Selected, vm.CutHandle.IsVisible, vm.CutHandle.AngleDeg, vm.CutHandle.PositionRatio, width, height,
-        vm.AcikPafta, vm.IzgaraGoster, vm.EtiketGoster, vm.Yakalama);
+        vm.AcikPafta, vm.IzgaraGoster, vm.EtiketGoster, vm.Yakalama, vm.SecilenNokta);
 
     /// <summary>İmar perdesinin (swipe) sağ kenarı (yerel piksel).</summary>
     public double PerdeX => Width * SwipePercent / 100d;
@@ -59,17 +60,53 @@ internal static class CadSceneRenderer
     private static readonly ConditionalWeakTable<CanvasScene, ScenePaths> PathCache = new();
 
     private sealed record Palet(SKColor Arkaplan, SKColor IzgaraKucuk, SKColor IzgaraBuyuk, SKColor Kadastro, SKColor Imar,
-        SKColor SecimDolgu, SKColor SecimCizgi, SKColor KadastroEtiket, SKColor ImarEtiket, SKColor Kesim, SKColor Yakalama, SKColor Perde);
+        SKColor SecimDolgu, SKColor SecimCizgi, SKColor KadastroEtiket, SKColor ImarEtiket, SKColor Kesim, SKColor Yakalama, SKColor Perde,
+        SKColor Yol, SKColor Park, SKColor Sinir, SKColor AdaKenari, SKColor Diger, SKColor EtiketZemin, SKColor EtiketYazi);
 
+    // P7 cilası: koyu paftada ızgara kontrastı artırıldı (ince çizgi ~%12, ana çizgi ~%33 opaklık; önceki %3 / %6 koyu zeminde
+    // görünmüyordu). OSNAP sembolü parlak camgöbeği, etiket kutusu yarı saydam zeminlidir.
     private static readonly Palet Koyu = new(
-        SKColor.Parse("#0D0F13"), new SKColor(255, 255, 255, 7), new SKColor(59, 130, 246, 16), SKColor.Parse("#FBBF24"),
+        SKColor.Parse("#0D0F13"), new SKColor(148, 163, 184, 30), new SKColor(96, 165, 250, 84), SKColor.Parse("#FBBF24"),
         SKColor.Parse("#60A5FA"), new SKColor(59, 130, 246, 64), SKColor.Parse("#93C5FD"), SKColor.Parse("#FCD34D"),
-        SKColor.Parse("#E2E8F0"), SKColor.Parse("#F59E0B"), SKColor.Parse("#34D399"), new SKColor(251, 191, 36, 140));
+        SKColor.Parse("#E2E8F0"), SKColor.Parse("#F59E0B"), SKColor.Parse("#22D3EE"), new SKColor(251, 191, 36, 140),
+        SKColor.Parse("#94A3B8"), SKColor.Parse("#34D399"), SKColor.Parse("#F87171"), SKColor.Parse("#C084FC"), new SKColor(148, 163, 184, 110),
+        new SKColor(15, 23, 42, 225), SKColor.Parse("#E0F2FE"));
 
     private static readonly Palet Acik = new(
-        SKColor.Parse("#F8FAFC"), new SKColor(15, 23, 42, 14), new SKColor(37, 99, 235, 36), SKColor.Parse("#B45309"),
+        SKColor.Parse("#F8FAFC"), new SKColor(15, 23, 42, 22), new SKColor(37, 99, 235, 60), SKColor.Parse("#B45309"),
         SKColor.Parse("#2563EB"), new SKColor(37, 99, 235, 48), SKColor.Parse("#1D4ED8"), SKColor.Parse("#92400E"),
-        SKColor.Parse("#0F172A"), SKColor.Parse("#D97706"), SKColor.Parse("#059669"), new SKColor(180, 83, 9, 150));
+        SKColor.Parse("#0F172A"), SKColor.Parse("#D97706"), SKColor.Parse("#0891B2"), new SKColor(180, 83, 9, 150),
+        SKColor.Parse("#475569"), SKColor.Parse("#047857"), SKColor.Parse("#DC2626"), SKColor.Parse("#7C3AED"), new SKColor(71, 85, 105, 120),
+        new SKColor(255, 255, 255, 235), SKColor.Parse("#0C4A6E"));
+
+    /// <summary>Izgara renkleri (testler kontrastı doğrular): arka plan, ince ve ana çizgi.</summary>
+    internal static (SKColor Arkaplan, SKColor Kucuk, SKColor Buyuk) IzgaraRenkleri(bool acikPafta)
+    {
+        var p = acikPafta ? Acik : Koyu;
+        return (p.Arkaplan, p.IzgaraKucuk, p.IzgaraBuyuk);
+    }
+
+    /// <summary>OSNAP yakalama sembolü rengi (parlak, zeminden belirgin).</summary>
+    internal static SKColor YakalamaRengi(bool acikPafta) => (acikPafta ? Acik : Koyu).Yakalama;
+
+    /// <summary>
+    /// P7: katman rolüne göre çizgi rengi — Katman → Rol eşlemesi değişince tuval anında farklı renkle çizilir (kadastro amber,
+    /// imar mavi, yola terk gri, park yeşil, düzenleme sınırı kırmızı, ada kenarı mor, atanmamış soluk).
+    /// </summary>
+    internal static SKColor RolRengi(CadLayerRole rol, bool acikPafta)
+    {
+        var p = acikPafta ? Acik : Koyu;
+        return rol switch
+        {
+            CadLayerRole.CadastralParcel or CadLayerRole.CadastralLine => p.Kadastro,
+            CadLayerRole.ZoningParcel => p.Imar,
+            CadLayerRole.RoadDedication => p.Yol,
+            CadLayerRole.Park => p.Park,
+            CadLayerRole.RegulationBoundary => p.Sinir,
+            CadLayerRole.BlockEdge => p.AdaKenari,
+            _ => p.Diger,
+        };
+    }
 
     public static void Render(SKCanvas canvas, CadRenderState s)
     {
@@ -154,7 +191,7 @@ internal static class CadSceneRenderer
         }
 
         using var kucuk = new SKPaint { Color = palet.IzgaraKucuk, StrokeWidth = 1, IsAntialias = false };
-        using var buyuk = new SKPaint { Color = palet.IzgaraBuyuk, StrokeWidth = 1, IsAntialias = false };
+        using var buyuk = new SKPaint { Color = palet.IzgaraBuyuk, StrokeWidth = 1.25f, IsAntialias = false };
         var anaAdim = px * 10;
         for (var x = Mod(s.OffsetX, px); x < s.Width; x += px)
         {
@@ -178,18 +215,17 @@ internal static class CadSceneRenderer
         var unit = (float)(1 / s.Scale);
 
         using var dash = SKPathEffect.CreateDash([6 * unit, 4 * unit], 0);
-        using var cadastre = new SKPaint
-        {
-            Color = palet.Kadastro, IsStroke = true, StrokeWidth = unit, IsAntialias = true, PathEffect = dash,
-        };
-        using var zoning = new SKPaint { Color = palet.Imar, IsStroke = true, StrokeWidth = 1.5f * unit, IsAntialias = true };
+        using var cizgi = new SKPaint { IsStroke = true, IsAntialias = true };
 
-        // Başlangıç matrisi (kontrol konumu) korunur: Concat.
+        // Başlangıç matrisi (kontrol konumu) korunur: Concat. Kadastro tarafı kesikli; renk role göredir (P7).
         canvas.Save();
         canvas.Concat(ref matrix);
         foreach (var e in paths.Entries.Where(e => IsCadastre(e.Role)))
         {
-            canvas.DrawPath(e.Path, cadastre);
+            cizgi.Color = RolRengi(e.Role, s.AcikPafta);
+            cizgi.StrokeWidth = (e.Role == CadLayerRole.RegulationBoundary ? 2f : 1f) * unit;
+            cizgi.PathEffect = dash;
+            canvas.DrawPath(e.Path, cizgi);
         }
 
         canvas.Restore();
@@ -198,9 +234,12 @@ internal static class CadSceneRenderer
         canvas.Save();
         canvas.ClipRect(new SKRect(0, 0, (float)s.PerdeX, (float)s.Height));
         canvas.Concat(ref matrix);
+        cizgi.PathEffect = null;
         foreach (var e in paths.Entries.Where(e => !IsCadastre(e.Role)))
         {
-            canvas.DrawPath(e.Path, zoning);
+            cizgi.Color = RolRengi(e.Role, s.AcikPafta);
+            cizgi.StrokeWidth = (e.Role is CadLayerRole.Unassigned or CadLayerRole.NewParcelPoint or CadLayerRole.RegisteredPoint ? 1f : 1.5f) * unit;
+            canvas.DrawPath(e.Path, cizgi);
         }
 
         canvas.Restore();
@@ -229,10 +268,61 @@ internal static class CadSceneRenderer
             DrawCutHandle(canvas, matrix.MapPoint(selected.Centroid), s, palet);
         }
 
+        if (s.SecilenNokta is { } secilen)
+        {
+            DrawSecilenNokta(canvas, s.Ekran(secilen.Nokta), palet);
+        }
+
         if (s.Yakalama is { } y)
         {
-            DrawSnap(canvas, s.Ekran(y.Nokta), y.Kip, palet);
+            var p = s.Ekran(y.Nokta);
+            DrawSnap(canvas, p, y.Kip, palet);
+            DrawEtiketKutusu(canvas, p, CadCanvasViewModel.OsnapEtiketi(y), s, palet);
         }
+    }
+
+    /// <summary>Seçilen OSNAP noktası: dolgu baklava + artı (imleç ayrılsa da işaretli kalır).</summary>
+    private static void DrawSecilenNokta(SKCanvas canvas, SKPoint p, Palet palet)
+    {
+        const float r = 7f;
+        using var dolgu = new SKPaint { Color = palet.Yakalama.WithAlpha(110), IsStroke = false, IsAntialias = true };
+        using var cizgi = new SKPaint { Color = palet.Yakalama, IsStroke = true, StrokeWidth = 2f, IsAntialias = true };
+        using var baklava = new SKPath();
+        baklava.MoveTo(p.X, p.Y - r);
+        baklava.LineTo(p.X + r, p.Y);
+        baklava.LineTo(p.X, p.Y + r);
+        baklava.LineTo(p.X - r, p.Y);
+        baklava.Close();
+        canvas.DrawPath(baklava, dolgu);
+        canvas.DrawPath(baklava, cizgi);
+        canvas.DrawLine(p.X - (2 * r), p.Y, p.X + (2 * r), p.Y, cizgi);
+        canvas.DrawLine(p.X, p.Y - (2 * r), p.X, p.Y + (2 * r), cizgi);
+    }
+
+    /// <summary>Yakalama sembolünün sağ üstünde yarı saydam zeminli koordinat etiketi (tuval dışına taşmaz).</summary>
+    private static void DrawEtiketKutusu(SKCanvas canvas, SKPoint p, string metin, CadRenderState s, Palet palet)
+    {
+        using var yazi = new SKPaint { Color = palet.EtiketYazi, TextSize = 11f, IsAntialias = true, FakeBoldText = true };
+        var genislik = yazi.MeasureText(metin) + 12f;
+        const float yukseklik = 20f;
+        var x = p.X + 14f;
+        var y = p.Y - 14f - yukseklik;
+        if (x + genislik > s.Width)
+        {
+            x = p.X - 14f - genislik;
+        }
+
+        if (y < 0)
+        {
+            y = p.Y + 14f;
+        }
+
+        var kutu = new SKRect(x, y, x + genislik, y + yukseklik);
+        using var zemin = new SKPaint { Color = palet.EtiketZemin, IsStroke = false, IsAntialias = true };
+        using var kenar = new SKPaint { Color = palet.Yakalama, IsStroke = true, StrokeWidth = 1f, IsAntialias = true };
+        canvas.DrawRoundRect(kutu, 5f, 5f, zemin);
+        canvas.DrawRoundRect(kutu, 5f, 5f, kenar);
+        canvas.DrawText(metin, x + 6f, y + 14f, yazi);
     }
 
     private static void DrawLabels(SKCanvas canvas, CadRenderState s, Palet palet)
@@ -267,8 +357,11 @@ internal static class CadSceneRenderer
 
     private static void DrawSnap(SKCanvas canvas, SKPoint p, OsnapKipi kip, Palet palet)
     {
-        using var paint = new SKPaint { Color = palet.Yakalama, IsStroke = true, StrokeWidth = 1.5f, IsAntialias = true };
-        const float r = 6f;
+        // P7: parlak, kalın sembol + yumuşak hale (koyu ve açık paftada belirgin).
+        using var hale = new SKPaint { Color = palet.Yakalama.WithAlpha(60), IsStroke = false, IsAntialias = true };
+        canvas.DrawCircle(p, 13f, hale);
+        using var paint = new SKPaint { Color = palet.Yakalama, IsStroke = true, StrokeWidth = 2.25f, IsAntialias = true };
+        const float r = 7f;
         switch (kip)
         {
             case OsnapKipi.Uc:
@@ -292,8 +385,10 @@ internal static class CadSceneRenderer
                 canvas.DrawLine(p.X, p.Y, p.X, p.Y + r, paint);
                 break;
             default:
+                // Kesişim: çarpı + halka.
                 canvas.DrawLine(p.X - r, p.Y - r, p.X + r, p.Y + r, paint);
                 canvas.DrawLine(p.X - r, p.Y + r, p.X + r, p.Y - r, paint);
+                canvas.DrawCircle(p, r + 2f, paint);
                 break;
         }
     }

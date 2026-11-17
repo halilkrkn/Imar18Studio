@@ -368,7 +368,7 @@ public sealed class AntigravityIndependentPresentationP7AuditTests
 
         vm.AcikPafta.Should().BeFalse();
         vm.Canvas.AcikPafta.Should().BeFalse();
-        vm.TemaEtiketi.Should().Be("☀️ Açık Pafta");
+        vm.TemaEtiketi.Should().Be("☀️ Açık Stüdyo");
 
         vm.TemaDegistirCommand.Execute(null);
 
@@ -380,7 +380,7 @@ public sealed class AntigravityIndependentPresentationP7AuditTests
 
         vm.AcikPafta.Should().BeFalse();
         vm.Canvas.AcikPafta.Should().BeFalse();
-        vm.TemaEtiketi.Should().Be("☀️ Açık Pafta");
+        vm.TemaEtiketi.Should().Be("☀️ Açık Stüdyo");
     }
 
     #endregion

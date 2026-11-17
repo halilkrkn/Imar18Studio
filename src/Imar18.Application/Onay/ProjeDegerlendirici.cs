@@ -8,6 +8,12 @@ using Imar18.Domain.Revizyon;
 
 namespace Imar18.Application.Onay;
 
+/// <summary>
+/// SAHA-004: parseller arası topoloji bulgusunun Türkçe, kopyalanabilir ayrıntısı (hangi parsel çifti / parsel, kaç m²).
+/// <see cref="Seviye"/> Critical ise onay engelidir; Warning sınır toleransı; Info imar yolu bilgisidir.
+/// </summary>
+public sealed record TopolojiNotu(string Kod, ErrorSeverity Seviye, string Metin);
+
 /// <summary>Geçerli parsel halkası ve Decimal Gauss alanı (m², 2 ondalık AwayFromZero).</summary>
 public sealed record DegerlendirilenParsel(ParselGeometrisi Geometri, PolygonRing Halka, decimal AlanM2);
 
@@ -31,6 +37,9 @@ public sealed record ProjeDegerlendirmesi(
 
     public bool KritikVar => KritikSayisi > 0;
 
+    /// <summary>SAHA-004: topoloji bulgularının parsel / alan ayrıntısı (Türkçe; bulgu sırasıyla).</summary>
+    public IReadOnlyList<TopolojiNotu> TopolojiNotlari { get; init; } = [];
+
     /// <summary>DOP R1 önerisi: Σ tecviz tapu alanı (tecviz değerlendirilemediyse null).</summary>
     public decimal? R1TapuToplamiM2 => Tecviz?.ParselSonuclari.Sum(s => s.TapuAlaniM2);
 
@@ -51,7 +60,9 @@ public sealed record ProjeDegerlendirmesi(
 /// (Warning/Critical) listelenir. Ek tutarlılık: hak eşleştirmedeki DOPO, DOP sonucunun 7 haneli DOPO'suna eşit olmalıdır.
 /// P6: geçerli halkalar parseller arası topoloji analizinden (<see cref="IParselTopolojiDenetcisi"/>, NTS overlay GeometryEngine'de)
 /// geçer; çakışma (<c>ERR-TOPO-005</c>), boşluk (<c>ERR-TOPO-006</c>) ve kadastro dışına taşma (<c>ERR-TOPO-007</c>) Critical'dır
-/// (onay engeli, AC-PILOT-05); analiz tamamlanamazsa "topoloji analizi" eksik sayılır (<c>ERR-TOPO-008</c>).
+/// (onay engeli, AC-PILOT-05); analiz tamamlanamazsa "topoloji analizi" eksik sayılır (<c>ERR-TOPO-008</c>). SAHA-004: sınır
+/// toleransı içindeki milimetrik bulgular <c>ERR-TOPO-009</c> (Warning), farklı imar adaları arasındaki çizilmemiş imar yolu
+/// <c>ERR-TOPO-010</c> (Info) olur; her bulgunun parsel/alan ayrıntısı <see cref="ProjeDegerlendirmesi.TopolojiNotlari"/>'ndadır.
 /// </summary>
 public static class ProjeDegerlendirici
 {
@@ -109,7 +120,7 @@ public static class ProjeDegerlendirici
             topolojiSonucu = [new ParselTopolojiBulgusu(TopolojiBulguTuru.AnalizYapilamadi, [], 0m)];
         }
 
-        Topoloji(topolojiSonucu, bulgular, Eksik);
+        var topolojiNotlari = Topoloji(topolojiSonucu, belge, parseller, bulgular, Eksik);
 
         if (belge.Parseller.Count == 0)
         {
@@ -216,7 +227,10 @@ public static class ProjeDegerlendirici
 
         AlanTutarliligi(belge, parseller, dengeleme, Eksik);
 
-        return new ProjeDegerlendirmesi(belge.RevizyonKimligi(), parseller, tecviz, dengeleme, dop, hak, bulgular, eksik);
+        return new ProjeDegerlendirmesi(belge.RevizyonKimligi(), parseller, tecviz, dengeleme, dop, hak, bulgular, eksik)
+        {
+            TopolojiNotlari = topolojiNotlari,
+        };
 
         void Ekle(AppError e)
         {
@@ -295,10 +309,39 @@ public static class ProjeDegerlendirici
         }
     }
 
-    private static void Topoloji(IReadOnlyList<ParselTopolojiBulgusu> sonuc, List<AppError> bulgular, Action<string, AppError> eksik)
+    /// <summary>
+    /// Topoloji bulgularını hata koduna ve Türkçe nota çevirir. Reviewer H1/H2 güvenlik kapıları (SORU-037):
+    /// (1) Sınır toleransı bulgularının toplamı <see cref="ParselTopolojisi.ToplamSinirToleransiAzamiM2"/>'yi aşarsa hiçbiri
+    /// tolerans sayılmaz (onay engeli). (2) DOP girdisi varsa çizilmemiş imar yolu toplamı beklenen yol alanıyla
+    /// (R1 − R2 − Σ çizili yol terk / kamu Gauss) karşılaştırılır; fark tecviz farkı + 0.05 m² + Σ tolerans bulgusunu aşarsa
+    /// (ör. yola bitişik çizilmemiş imar parseli) bulgu <c>ERR-TOPO-006</c> Critical olur. DOP yoksa hesap zaten eksiktir.
+    /// </summary>
+    private static List<TopolojiNotu> Topoloji(
+        IReadOnlyList<ParselTopolojiBulgusu> sonuc,
+        ProjeBelgesi belge,
+        IReadOnlyList<DegerlendirilenParsel> parseller,
+        List<AppError> bulgular,
+        Action<string, AppError> eksik)
     {
+        var notlar = new List<TopolojiNotu>();
+        var toleransToplami = sonuc.Where(b => b.SinirToleransiIcinde).Sum(b => b.AlanM2);
+        var toleransAsildi = toleransToplami > ParselTopolojisi.ToplamSinirToleransiAzamiM2;
+        var yolToplami = sonuc.Where(b => b.Tur == TopolojiBulguTuru.ImarYoluAlani).Sum(b => b.AlanM2);
+        decimal? beklenenYol = null;
+        var yolUyumsuz = false;
+        if (belge.Dop is { } dop && yolToplami > 0m)
+        {
+            var cizili = parseller.Where(p => p.Geometri.Rol is ParselRolu.YolTerk or ParselRolu.KamuAlani).Sum(p => p.AlanM2);
+            var kadastroGauss = parseller.Where(p => p.Geometri.Rol == ParselRolu.Kadastro).Sum(p => p.AlanM2);
+            beklenenYol = dop.R1 - dop.R2 - cizili;
+            var tolerans = Math.Abs(dop.R1 - kadastroGauss) + ParselTopolojisi.SinirToleransiAlanM2 + toleransToplami;
+            yolUyumsuz = Math.Abs(yolToplami - beklenenYol.Value) > tolerans;
+        }
+
         foreach (var b in sonuc)
         {
+            var toleransIcinde = b.SinirToleransiIcinde && !toleransAsildi;
+            var yolEngeli = b.Tur == TopolojiBulguTuru.ImarYoluAlani && yolUyumsuz;
             var (kod, tur) = b.Tur switch
             {
                 TopolojiBulguTuru.KadastroCakismasi => (ErrorCodes.TopoParselCakismasi, "cadastral parcels"),
@@ -306,8 +349,26 @@ public static class ProjeDegerlendirici
                 TopolojiBulguTuru.KadastroBoslugu => (ErrorCodes.TopoParselBoslugu, "hole inside cadastral parcels"),
                 TopolojiBulguTuru.OlusanKapsamaBoslugu => (ErrorCodes.TopoParselBoslugu, "readjustment area not covered by new parcels"),
                 TopolojiBulguTuru.KadastroDisinaTasma => (ErrorCodes.TopoKadastroDisinaTasma, "outside"),
+                TopolojiBulguTuru.ImarYoluAlani => (ErrorCodes.TopoImarYoluAlani, "road"),
                 _ => (ErrorCodes.TopoAnalizYapilamadi, "analysis"),
             };
+
+            if (yolEngeli)
+            {
+                (kod, tur) = (ErrorCodes.TopoParselBoslugu, string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                    $"uncovered area between blocks differs from expected road area R1-R2-drawn {beklenenYol:0.00} m2"));
+            }
+
+            if (toleransIcinde && b.Tur != TopolojiBulguTuru.AnalizYapilamadi)
+            {
+                // SAHA-004: milimetrik sınır dokunması onay engeli değildir (mühendis incelemeli uyarı).
+                (kod, tur) = (ErrorCodes.TopoSinirToleransi, b.Tur switch
+                {
+                    TopolojiBulguTuru.KadastroCakismasi or TopolojiBulguTuru.OlusanCakismasi => "overlap " + tur,
+                    TopolojiBulguTuru.KadastroDisinaTasma => "overflow outside the cadastral boundary",
+                    _ => "gap " + tur,
+                });
+            }
 
             var e = ErrorCatalog.Get(kod);
             var idler = b.ParselIdleri.Count <= MesajdakiEnFazlaKimlik
@@ -319,6 +380,7 @@ public static class ProjeDegerlendirici
                     .Replace("{parcelIds}", idler, StringComparison.Ordinal)
                     .Replace("{area}", b.AlanM2.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal)
                     .Replace("{kind}", tur, StringComparison.Ordinal)
+                    .Replace("{blocks}", string.Join(", ", Adalar(b.ParselIdleri)), StringComparison.Ordinal)
                     .Replace("{reason}", b.ParselIdleri.Count > 0 ? "invalid polygon for parcels " + idler : "geometry engine overlay failed", StringComparison.Ordinal),
             };
 
@@ -329,8 +391,46 @@ public static class ProjeDegerlendirici
             else
             {
                 bulgular.Add(e);
+                notlar.Add(new TopolojiNotu(e.Code, e.Severity, TopolojiNotMetni(b, toleransIcinde, toleransAsildi, yolEngeli ? beklenenYol : null)));
             }
         }
+
+        return notlar;
+    }
+
+    private static IEnumerable<string> Adalar(IEnumerable<string> idler) => idler
+        .Select(ParselTopolojisi.ImarAdasi).OfType<string>().Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+
+    /// <summary>SAHA-004: "Oluşan parseller çakışması: 901/A1 ↔ 901/A2 — 0.01 m² (sınır toleransı içinde; onayı engellemez)".</summary>
+    private static string TopolojiNotMetni(ParselTopolojiBulgusu b, bool toleransIcinde, bool toleransAsildi, decimal? uyumsuzYolBeklenen)
+    {
+        var ad = b.Tur switch
+        {
+            TopolojiBulguTuru.KadastroCakismasi => "Kadastro parselleri çakışması",
+            TopolojiBulguTuru.OlusanCakismasi => "Oluşan parseller çakışması",
+            TopolojiBulguTuru.KadastroBoslugu => "Kadastro parselleri arası boşluk",
+            TopolojiBulguTuru.OlusanKapsamaBoslugu => "Oluşan parseller arası boşluk",
+            TopolojiBulguTuru.KadastroDisinaTasma => "Kadastro sınırı dışına taşma",
+            _ => "İmar yolu / kamu alanı (çizilmemiş)",
+        };
+        var ayrac = b.Tur is TopolojiBulguTuru.KadastroCakismasi or TopolojiBulguTuru.OlusanCakismasi ? " ↔ " : ", ";
+        var idler = b.ParselIdleri.Count <= MesajdakiEnFazlaKimlik
+            ? string.Join(ayrac, b.ParselIdleri)
+            : string.Join(ayrac, b.ParselIdleri.Take(MesajdakiEnFazlaKimlik)) + $" (+{b.ParselIdleri.Count - MesajdakiEnFazlaKimlik})";
+        var alan = b.AlanM2.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        if (uyumsuzYolBeklenen is { } beklenen)
+        {
+            return string.Create(inv, $"Oluşan parseller arası boşluk (adalar arası): {idler} — {alan} m² (beklenen yol alanı R1 − R2 − çizili yol/kamu = {beklenen:0.00} m² ile uyuşmuyor; eksik parsel olabilir; onay engeli)");
+        }
+
+        var durum = b.Tur == TopolojiBulguTuru.ImarYoluAlani
+            ? " (adalar: " + string.Join(", ", Adalar(b.ParselIdleri)) + "; parsel boşluğu sayılmadı)"
+            : toleransIcinde ? " (sınır toleransı içinde; onayı engellemez)"
+            : b.SinirToleransiIcinde && toleransAsildi
+                ? string.Create(inv, $" (toplam sınır toleransı {ParselTopolojisi.ToplamSinirToleransiAzamiM2:0.00} m² aşıldı; onay engeli)")
+                : " (onay engeli)";
+        return $"{ad}: {idler} — {alan} m²{durum}";
     }
 
     private static AppError Gecersiz(string neden)

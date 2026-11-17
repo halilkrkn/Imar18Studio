@@ -22,7 +22,11 @@ public sealed record OnayEkrani(
     string OnayMetni,
     bool OnayVerilebilir,
     bool GecerliOnayVar,
-    IReadOnlyList<string> Engeller);
+    IReadOnlyList<string> Engeller)
+{
+    /// <summary>SAHA-004: topoloji bulgularının Türkçe parsel / alan ayrıntısı (engel, sınır toleransı ve imar yolu bilgisi).</summary>
+    public IReadOnlyList<TopolojiNotu> TopolojiNotlari { get; init; } = [];
+}
 
 /// <summary>Geri alma sonucu (spec 11.5): bu revizyon için nihai çıktı üretilmişse "revizyon gerekli" uyarısı gösterilir.</summary>
 public sealed record OnayGeriAlmaSonucu(RevisionId Revizyon, bool NihaiCiktiUretilmisti);
@@ -89,6 +93,9 @@ public sealed class ApprovalService
         if (d.KritikVar)
         {
             engeller.AddRange(d.Bulgular.Where(b => b.Severity == ErrorSeverity.Critical).Select(b => b.UserMessage).Distinct(StringComparer.Ordinal));
+
+            // SAHA-004: topoloji engelinin hangi parsel çiftinde / parselde kaç m² olduğu ayrı satırda yazılır.
+            engeller.AddRange(d.TopolojiNotlari.Where(n => n.Seviye == ErrorSeverity.Critical).Select(n => "↳ " + n.Metin));
         }
 
         if (!d.Tamamlandi)
@@ -110,7 +117,10 @@ public sealed class ApprovalService
             OnayMetni,
             engeller.Count == 0,
             belge.GecerliOnayVar(rev),
-            engeller);
+            engeller)
+        {
+            TopolojiNotlari = d.TopolojiNotlari,
+        };
     }
 
     /// <summary>Güncel revizyonu onaylar.</summary>

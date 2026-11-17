@@ -44,6 +44,12 @@ public sealed partial class TecvizSatiri : ObservableObject
 
     [ObservableProperty]
     private string _tapuAlaniText;
+
+    /// <summary>P7: alan bazlı hata (kırmızı çerçeve + alt satır); düzenlenince temizlenir.</summary>
+    [ObservableProperty]
+    private string? _hata;
+
+    partial void OnTapuAlaniTextChanged(string value) => Hata = null;
 }
 
 /// <summary>
@@ -109,6 +115,78 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
 
     [ObservableProperty]
     private string _durumMetni = string.Empty;
+
+    // ---- P7: alan bazlı hata metinleri (null: geçerli; düzenlenince temizlenir) ----
+    [ObservableProperty]
+    private string? _toplamTecvizSiniriHatasi;
+
+    [ObservableProperty]
+    private string? _r2Hatasi;
+
+    [ObservableProperty]
+    private string? _d1Hatasi;
+
+    [ObservableProperty]
+    private string? _d2Hatasi;
+
+    [ObservableProperty]
+    private string? _r3Hatasi;
+
+    [ObservableProperty]
+    private string? _ortakKatilimHatasi;
+
+    [ObservableProperty]
+    private string? _takbisHatasi;
+
+    [ObservableProperty]
+    private string? _krokiHatasi;
+
+    [ObservableProperty]
+    private string? _kimlikHatasi;
+
+    partial void OnToplamTecvizSiniriTextChanged(string value) => ToplamTecvizSiniriHatasi = null;
+
+    partial void OnR2TextChanged(string value) => R2Hatasi = null;
+
+    partial void OnD1TextChanged(string value) => D1Hatasi = null;
+
+    partial void OnD2TextChanged(string value) => D2Hatasi = null;
+
+    partial void OnR3TextChanged(string value) => R3Hatasi = null;
+
+    partial void OnOrtakKatilimTextChanged(string value) => OrtakKatilimHatasi = null;
+
+    partial void OnTakbisMetniChanged(string value) => TakbisHatasi = null;
+
+    partial void OnKrokiMetniChanged(string value) => KrokiHatasi = null;
+
+    partial void OnKimlikMetniChanged(string value) => KimlikHatasi = null;
+
+    /// <summary>
+    /// P7 "Projeyi Temizle / Sıfırla": 2–4. adım metin girdileri, alan hataları ve tablolar boşaltılır (proje durumu ayrıca
+    /// CommandBus sıfırlama komutuyla temizlenir; ardından <see cref="YenileAsync"/> çağrılır).
+    /// </summary>
+    public void Sifirla()
+    {
+        _dopYuklendi = false;
+        _hakYuklendi = false;
+        TecvizSatirlari.Clear();
+        ToplamTecvizSiniriText = string.Empty;
+        R2Text = string.Empty;
+        D1Text = "0";
+        D2Text = "0";
+        R3Text = "0";
+        OrtakKatilimText = "0";
+        TakbisMetni = string.Empty;
+        KrokiMetni = string.Empty;
+        KimlikMetni = string.Empty;
+        DurumMetni = string.Empty;
+        foreach (var h in new Action[] { () => ToplamTecvizSiniriHatasi = null, () => R2Hatasi = null, () => D1Hatasi = null, () => D2Hatasi = null,
+                     () => R3Hatasi = null, () => OrtakKatilimHatasi = null, () => TakbisHatasi = null, () => KrokiHatasi = null, () => KimlikHatasi = null })
+        {
+            h();
+        }
+    }
 
     public HesapAdimlariViewModel(ProjeCalismaAlani alan, Func<TecvizGirdisi?> tecvizGirdisi)
     {
@@ -211,15 +289,19 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
             return;
         }
 
+        // P7: tüm satırlar tek seferde denetlenir; her hatalı kutu kendi altında işaretlenir.
         var parseller = new List<TecvizParselGirdisi>(TecvizSatirlari.Count);
+        string? ilkHata = null;
         foreach (var r in TecvizSatirlari)
         {
             if (!SayiGirdisi.TryParse(r.TapuAlaniText, out var tapu))
             {
-                DurumMetni = $"{r.ParselId}: tapu alanı (m²) geçerli bir sayı olmalı.";
-                return;
+                r.Hata = string.IsNullOrWhiteSpace(r.TapuAlaniText) ? "Tapu alanı zorunludur." : "Tapu alanı (m²) geçerli bir sayı olmalı.";
+                ilkHata ??= $"{r.ParselId}: tapu alanı (m²) geçerli bir sayı olmalı.";
+                continue;
             }
 
+            r.Hata = null;
             parseller.Add(new TecvizParselGirdisi(r.ParselId, tapu, r.HesapAlaniM2, tecviz));
         }
 
@@ -228,11 +310,19 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         {
             if (!SayiGirdisi.TryParse(ToplamTecvizSiniriText, out var t))
             {
-                DurumMetni = "Düzenleme toplam tecviz sınırı (m²) geçerli bir sayı olmalı.";
-                return;
+                ToplamTecvizSiniriHatasi = "Geçerli bir sayı girin veya boş bırakın.";
+                ilkHata ??= "Düzenleme toplam tecviz sınırı (m²) geçerli bir sayı olmalı.";
             }
+            else
+            {
+                toplam = t;
+            }
+        }
 
-            toplam = t;
+        if (ilkHata is not null)
+        {
+            DurumMetni = ilkHata;
+            return;
         }
 
         await GonderAsync([new TecvizGirdileriAyarlaKomutu(parseller, toplam)], "Tecviz girdileri projeye yazıldı.").ConfigureAwait(true);
@@ -298,12 +388,21 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         }
         else if (!SayiGirdisi.TryParse(R2Text, out r2))
         {
+            R2Hatasi = "R2 geçerli bir sayı olmalı (boş: otomatik).";
             DurumMetni = "R2 (m²) geçerli bir sayı olmalı.";
             return;
         }
 
-        if (!SayiGirdisi.TryParse(D1Text, out var d1) || !SayiGirdisi.TryParse(D2Text, out var d2)
-            || !SayiGirdisi.TryParse(R3Text, out var r3) || !SayiGirdisi.TryParse(OrtakKatilimText, out var ok))
+        const string SayiOlmali = "Geçerli bir sayı girin (yoksa 0).";
+        var d1Tamam = SayiGirdisi.TryParse(D1Text, out var d1);
+        var d2Tamam = SayiGirdisi.TryParse(D2Text, out var d2);
+        var r3Tamam = SayiGirdisi.TryParse(R3Text, out var r3);
+        var okTamam = SayiGirdisi.TryParse(OrtakKatilimText, out var ok);
+        D1Hatasi = d1Tamam ? null : SayiOlmali;
+        D2Hatasi = d2Tamam ? null : SayiOlmali;
+        R3Hatasi = r3Tamam ? null : SayiOlmali;
+        OrtakKatilimHatasi = okTamam ? null : SayiOlmali;
+        if (!(d1Tamam && d2Tamam && r3Tamam && okTamam))
         {
             DurumMetni = "D1, D2, R3 ve ortak katılım alanları (m²) geçerli sayılar olmalı (yoksa 0).";
             return;
@@ -375,13 +474,13 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         {
             if (grup.Any(s => s.Length != 4))
             {
-                DurumMetni = "TAKBİS satırı biçimi: parselId;malikKodu;pay/payda;E|H";
+                DurumMetni = TakbisHatasi = "TAKBİS satırı biçimi: parselId;malikKodu;pay/payda;E|H";
                 return;
             }
 
             if (!tapu.TryGetValue(grup.Key, out var alan))
             {
-                DurumMetni = $"{grup.Key}: 2. adımda tapu alanı girilmemiş kadastro parseli.";
+                DurumMetni = TakbisHatasi = $"{grup.Key}: 2. adımda tapu alanı girilmemiş kadastro parseli.";
                 return;
             }
 
@@ -392,7 +491,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
                 if (pay.Length != 2 || !BigInteger.TryParse(pay[0], NumberStyles.None, CultureInfo.InvariantCulture, out var p)
                     || !BigInteger.TryParse(pay[1], NumberStyles.None, CultureInfo.InvariantCulture, out var q) || s[3] is not ("E" or "H"))
                 {
-                    DurumMetni = "TAKBİS hissesi pay/payda (tam sayı) ve muvafakat E/H olmalı.";
+                    DurumMetni = TakbisHatasi = "TAKBİS hissesi pay/payda (tam sayı) ve muvafakat E/H olmalı.";
                     return;
                 }
 
@@ -402,7 +501,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
             var k = TakbisGirdiDogrulayici.Dogrula(new TakbisParselGirdisi(grup.Key, alan, hisseler));
             if (k.IsFailure)
             {
-                DurumMetni = grup.Key + ": " + k.Error.UserMessage;
+                DurumMetni = TakbisHatasi = grup.Key + ": " + k.Error.UserMessage;
                 return;
             }
 
@@ -414,7 +513,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         {
             if (s.Length != 4 || !SayiGirdisi.TryParse(s[3], out var a))
             {
-                DurumMetni = "Kroki satırı biçimi: malikKodu;kadastroParselId;imarParselKodu;alan";
+                DurumMetni = KrokiHatasi = "Kroki satırı biçimi: malikKodu;kadastroParselId;imarParselKodu;alan";
                 return;
             }
 
@@ -424,7 +523,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         var satirlar = KrokiGirdiDogrulayici.Dogrula(kroki, kadastro);
         if (satirlar.IsFailure)
         {
-            DurumMetni = satirlar.Error.UserMessage;
+            DurumMetni = KrokiHatasi = satirlar.Error.UserMessage;
             return;
         }
 
@@ -435,7 +534,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         {
             if (s.Length != 2)
             {
-                DurumMetni = "Geçici ↔ tescil satırı biçimi: geciciKod;tescilNo";
+                DurumMetni = KimlikHatasi = "Geçici ↔ tescil satırı biçimi: geciciKod;tescilNo";
                 return;
             }
 
@@ -448,7 +547,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
             var eslesme = ParselKimlikEslemesi.Olustur(ciftler);
             if (eslesme.IsFailure)
             {
-                DurumMetni = eslesme.Error.UserMessage;
+                DurumMetni = KimlikHatasi = eslesme.Error.UserMessage;
                 return;
             }
 

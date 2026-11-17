@@ -98,6 +98,14 @@ public sealed partial class CadCanvasViewModel : ObservableObject
     [ObservableProperty]
     private OsnapSonucu? _yakalama;
 
+    /// <summary>P7: OSNAP açıkken tıklanarak seçilen (ve panoya kopyalanan) yakalama noktası; tuvalde işaretli kalır.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SecilenNoktaMetni))]
+    private OsnapSonucu? _secilenNokta;
+
+    /// <summary>OSNAP çubuğunda gösterilen seçili nokta metni (yoksa boş).</summary>
+    public string SecilenNoktaMetni => SecilenNokta is { } n ? "📍 " + NoktaMetni(n) : string.Empty;
+
     [ObservableProperty]
     private bool _osnapUc = true;
 
@@ -246,6 +254,7 @@ public sealed partial class CadCanvasViewModel : ObservableObject
         Scene = scene;
         Selected = null;
         Yakalama = null;
+        SecilenNokta = null;
         CutHandle.IsVisible = false;
         FitAll();
     }
@@ -301,6 +310,42 @@ public sealed partial class CadCanvasViewModel : ObservableObject
             Yakalama = null;
             Invalidate();
         }
+    }
+
+    /// <summary>
+    /// P7: OSNAP noktası seçildiğinde (tıklama) — metin panoya kopyalanmak üzere görünüme iletilir (platform işi görünümdedir).
+    /// </summary>
+    public event EventHandler<string>? NoktaSecildi;
+
+    /// <summary>
+    /// İmleç bir OSNAP noktasını yakalamışsa onu seçer, tuvalde işaretler ve koordinat metnini <see cref="NoktaSecildi"/> ile
+    /// yayınlar (panoya kopyalama). Yakalama yoksa false (tıklama parsel seçimine kalır). Geometriye/projeye yazmaz.
+    /// </summary>
+    public bool YakalamayiSec()
+    {
+        if (Yakalama is not { } y)
+        {
+            return false;
+        }
+
+        SecilenNokta = y;
+        Invalidate();
+        NoktaSecildi?.Invoke(this, NoktaMetni(y));
+        return true;
+    }
+
+    /// <summary>Panoya kopyalanan nokta metni: "Y=500010.000 X=4000010.000 (Uç)" (kültürden bağımsız, 1 mm).</summary>
+    public static string NoktaMetni(OsnapSonucu nokta)
+    {
+        ArgumentNullException.ThrowIfNull(nokta);
+        return string.Create(CultureInfo.InvariantCulture, $"Y={nokta.Nokta.Y:0.000} X={nokta.Nokta.X:0.000} ({KipAdi(nokta.Kip)})");
+    }
+
+    /// <summary>Tuvalde yakalama sembolünün yanındaki etiket: "Uç · Y 500010.000 · X 4000010.000".</summary>
+    public static string OsnapEtiketi(OsnapSonucu nokta)
+    {
+        ArgumentNullException.ThrowIfNull(nokta);
+        return string.Create(CultureInfo.InvariantCulture, $"{KipAdi(nokta.Kip)} · Y {nokta.Nokta.Y:0.000} · X {nokta.Nokta.X:0.000}");
     }
 
     internal static string KipAdi(OsnapKipi kip) => kip switch
