@@ -59,8 +59,16 @@ internal sealed class PilotProjesi
 
     public decimal Dopo() => DopCalculator.Hesapla(DopGirdisi()).Value.Dopo;
 
+    /// <summary>SAHA-004: doluysa sentetik şerit yerine bu (gerçek, yerel NCZ'den çalışma anında okunan) geometri kullanılır.</summary>
+    public IReadOnlyList<ParselGeometrisi>? GercekGeometri { get; init; }
+
     public IReadOnlyList<ParselGeometrisi> Geometri()
     {
+        if (GercekGeometri is not null)
+        {
+            return GercekGeometri;
+        }
+
         var liste = new List<ParselGeometrisi>();
         var y = 0m;
         foreach (var k in Kadastro)

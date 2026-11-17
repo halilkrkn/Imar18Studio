@@ -53,6 +53,31 @@ public sealed record ProjeAdiDegistirKomutu(string ProjeAdi) : IProjeKomutu
             : Result<ProjeBelgesi>.Success(mevcut with { ProjeAdi = ProjeAdi.Trim() });
 }
 
+/// <summary>
+/// P7 (Projeyi Temizle / Sıfırla): CRS, parsel geometrisi, tecviz, DOP, hak eşleştirme ve kimlik eşlemesini boşaltır; proje adı
+/// korunur. Onay alanına dokunmaz: içerik revizyonu değiştiği için mevcut onay CommandBus tarafından otomatik düşürülür
+/// (<see cref="AuditSonucu.OnayDustu"/>) ve sıfırlama denetime yazılır. Zaten boş projede de başarılıdır (idempotent).
+/// </summary>
+public sealed record ProjeyiSifirlaKomutu : IProjeKomutu
+{
+    public string Ad => "ProjeyiSifirla";
+
+    public Result<ProjeBelgesi> Uygula(ProjeBelgesi mevcut)
+    {
+        ArgumentNullException.ThrowIfNull(mevcut);
+        return Result<ProjeBelgesi>.Success(mevcut with
+        {
+            Crs = null,
+            Parseller = [],
+            Dop = null,
+            TecvizParselleri = [],
+            DuzenlemeToplamTecvizSiniriM2 = null,
+            HakEslestirme = null,
+            KimlikCiftleri = [],
+        });
+    }
+}
+
 /// <summary>Proje CRS/dilim/epok/ölçek girdisini ayarlar (D3; doğrulama <see cref="ProjeCrs.Olustur"/>'dadır).</summary>
 public sealed record ProjeCrsAyarlaKomutu(ProjeCrs Crs) : IProjeKomutu
 {

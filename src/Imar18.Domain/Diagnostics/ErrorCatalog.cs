@@ -32,6 +32,8 @@ public static class ErrorCodes
     public const string TopoParselBoslugu = "ERR-TOPO-006";
     public const string TopoKadastroDisinaTasma = "ERR-TOPO-007";
     public const string TopoAnalizYapilamadi = "ERR-TOPO-008";
+    public const string TopoSinirToleransi = "ERR-TOPO-009";
+    public const string TopoImarYoluAlani = "ERR-TOPO-010";
 
     public const string TapuMalikEslesmedi = "ERR-TAPU-001";
     public const string TapuHisseEksik = "ERR-TAPU-002";
@@ -84,7 +86,7 @@ public static class ErrorCodes
 public static class ErrorCatalog
 {
     /// <summary>Katalog sürümü (AC-ERR-01).</summary>
-    public const string Version = "1.7.0";
+    public const string Version = "1.8.0";
 
     private static readonly AppError[] Entries =
     [
@@ -237,6 +239,18 @@ public static class ErrorCatalog
             "Overlay analysis failed: {reason}.",
             "Geometriyi Topoloji Onar ekranıyla kontrol edip yeniden deneyin.",
             retryable: true, review: true),
+
+        // SAHA-004 (katalog 1.8.0, SORU-037): gerçek NCZ çizimlerinde milimetrik sınır dokunması ve çizilmemiş imar yolu.
+        New(ErrorCodes.TopoSinirToleransi, ErrorSeverity.Warning, ErrorCategory.Topology,
+            "Parsel sınırlarında sınır toleransı içinde milimetrik çakışma, taşma veya boşluk var; onayı engellemez.",
+            "{kind} within boundary tolerance: parcels {parcelIds}, {area} m2.",
+            "Netcad çiziminde ortak sınır köşelerini kontrol edin; fark resmî alanı etkilemiyorsa onaylayabilirsiniz.",
+            retryable: false, review: true),
+        New(ErrorCodes.TopoImarYoluAlani, ErrorSeverity.Info, ErrorCategory.Topology,
+            "Oluşan parsellerle karşılanmayan alan, imar adaları arasındaki imar yolu olarak değerlendirildi.",
+            "Uncovered area of {area} m2 between blocks {blocks} treated as road/public area (parcels {parcelIds}).",
+            "Yol terk alanını ayrı parsel olarak çizerseniz Y1 dengelemesine dahil edilir.",
+            retryable: false, review: true),
 
         // ---- ERR-TAPU: Tapu / kroki / hisse ----
         New(ErrorCodes.TapuMalikEslesmedi, ErrorSeverity.Critical, ErrorCategory.Tapu,

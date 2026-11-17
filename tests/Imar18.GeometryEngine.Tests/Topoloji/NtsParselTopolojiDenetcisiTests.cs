@@ -64,7 +64,7 @@ public sealed class NtsParselTopolojiDenetcisiTests
         var b = Denetci.Denetle([D("K1", ParselRolu.Kadastro, 0m, 20m), D("A1", ParselRolu.Imar, 0m, 12m), D("Y1", ParselRolu.YolTerk, 12m, 21.5m)]);
 
         b.Should().ContainSingle().Which.Should().BeEquivalentTo(
-            new ParselTopolojiBulgusu(TopolojiBulguTuru.KadastroDisinaTasma, ["A1", "K1", "Y1"], 15.00m));
+            new ParselTopolojiBulgusu(TopolojiBulguTuru.KadastroDisinaTasma, ["K1", "Y1"], 15.00m)); // SAHA-004: taşan parsel + komşu kadastro
     }
 
     [Fact]

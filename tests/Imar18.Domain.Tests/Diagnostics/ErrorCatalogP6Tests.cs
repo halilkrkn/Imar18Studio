@@ -23,8 +23,9 @@ public sealed class ErrorCatalogP6Tests
     }
 
     [Fact]
-    public void HataKatalogu_P6_Ile_Surum_1_7_0_Olmali()
+    public void HataKatalogu_P6_Ile_Surum_En_Az_1_7_0_Olmali()
     {
-        ErrorCatalog.Version.Should().Be("1.7.0");
+        // SAHA-004 katalogu 1.8.0'a yükseltti; P6 kodları 1.7.0'dan beri vardır.
+        Version.Parse(ErrorCatalog.Version).Should().BeGreaterThanOrEqualTo(new Version(1, 7, 0));
     }
 }
