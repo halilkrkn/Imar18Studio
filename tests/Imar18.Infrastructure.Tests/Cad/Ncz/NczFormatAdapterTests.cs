@@ -171,6 +171,7 @@ public sealed class NczFormatAdapterTests
 
         belge.Polylines.Should().ContainSingle();
         belge.SkippedEntityCount.Should().Be(2);
+        belge.Texts.Should().BeEmpty("NCZ etiketi poligon kaydindadir; NCZ yazi varliklari bu adimda cozulmez");
     }
 
     [Fact]

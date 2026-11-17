@@ -442,7 +442,8 @@ public sealed class AcadFormatAdapterTests
         var d = Oku(Dxf, DxfBayt(belge));
 
         d.Polylines.Should().ContainSingle();
-        d.SkippedEntityCount.Should().Be(2);
+        d.SkippedEntityCount.Should().Be(1, "cizgi atlanir; yazi P4.2'de etiket adayi olarak okunur");
+        d.Texts.Should().ContainSingle().Which.Text.Should().Be("101/1");
         d.Warnings.Should().BeEmpty("cizgi ve yazi parsel geometrisi degildir");
         d.UnrecognizedRecordCount.Should().Be(0);
         d.Polylines[0].Label.Should().BeEmpty("DXF/DWG cizgisi parsel etiketi tasimaz; etiket eslemesi P4.2'dedir");

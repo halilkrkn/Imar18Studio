@@ -52,6 +52,12 @@ public sealed record CadPolyline(
     decimal? DeclaredAreaM2);
 
 /// <summary>
+/// CAD yazi varligi (TEXT/MTEXT; P4.2 etiket eslestirmesi). <see cref="Position"/> jeodezik (X = Kuzey, Y = Dogu)
+/// ekleme noktasidir; <see cref="Text"/> bicim kodlarindan arindirilmis, bas/son bosluksuz metindir.
+/// </summary>
+public sealed record CadText(string LayerName, string Text, GeodeticPoint Position);
+
+/// <summary>
 /// Bicimden bagimsiz CAD okuma sonucu (spec 2.1 <c>CadLayerDocument</c>).
 /// <see cref="SkippedEntityCount"/>: taninan ama bu adaptorun cozmedigi varliklar (nokta, yazi, cizgi...).
 /// <see cref="UnrecognizedRecordCount"/>: bicimi bilinmeyen kayitlar (sessiz veri kaybini gorunur kilar).
@@ -61,6 +67,7 @@ public sealed record CadLayerDocument(
     CadFormat Format,
     IReadOnlyList<CadLayer> Layers,
     IReadOnlyList<CadPolyline> Polylines,
+    IReadOnlyList<CadText> Texts,
     int SkippedEntityCount,
     int UnrecognizedRecordCount,
     int OffGridVertexCount,

@@ -205,6 +205,7 @@ internal static class NczParser
             CadFormat.Ncz,
             layers,
             polylines.AsReadOnly(),
+            [],
             skipped,
             unrecognized,
             gate.OffGridVertexCount,

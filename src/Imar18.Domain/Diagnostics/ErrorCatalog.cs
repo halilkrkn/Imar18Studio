@@ -15,10 +15,13 @@ public static class ErrorCodes
     public const string GirdCksOkunamadi = "ERR-GIRD-007";
     public const string GirdDesteklenmeyenGeometriAtlandi = "ERR-GIRD-008";
     public const string GirdToleranslaKapatildi = "ERR-GIRD-009";
+    public const string GirdEtiketPoligonEslesmedi = "ERR-GIRD-010";
 
     public const string CrsEksik = "ERR-CRS-001";
     public const string CrsEpokUyumsuz = "ERR-CRS-002";
     public const string CrsGirdisiGecersiz = "ERR-CRS-003";
+    public const string CrsDonusumHesaplanamadi = "ERR-CRS-004";
+    public const string CrsDonusumToleransAsimi = "ERR-CRS-005";
 
     public const string TopoKendiUzerindeKesisim = "ERR-TOPO-001";
     public const string TopoAcikPoligon = "ERR-TOPO-002";
@@ -70,7 +73,7 @@ public static class ErrorCodes
 public static class ErrorCatalog
 {
     /// <summary>Katalog sürümü (AC-ERR-01).</summary>
-    public const string Version = "1.4.0";
+    public const string Version = "1.5.0";
 
     private static readonly AppError[] Entries =
     [
@@ -137,6 +140,13 @@ public static class ErrorCatalog
             "Kapatılan çizgilerin ilk/son köşesini kontrol edin; gerekirse CAD'de kapatıp yeniden dışa aktarın.",
             retryable: false, review: true),
 
+        // P4.2 (katalog 1.5.0): etiket–poligon eşleştirmesi.
+        New(ErrorCodes.GirdEtiketPoligonEslesmedi, ErrorSeverity.Warning, ErrorCategory.Input,
+            "Bazı parsel poligonlarına etiket eşleştirilemedi.",
+            "{unlabeled} unlabeled and {ambiguous} ambiguous polygons after label matching in {path}.",
+            "Etiketsiz veya birden çok yazı içeren poligonların parsel kodunu elle atayın.",
+            retryable: false, review: true),
+
         // ---- ERR-CRS: Koordinat sistemi ----
         New(ErrorCodes.CrsEksik, ErrorSeverity.Critical, ErrorCategory.Crs,
             "Koordinat sistemi (CRS/dilim) tanımlı değil.",
@@ -154,6 +164,18 @@ public static class ErrorCatalog
             "Invalid CRS/scale input: {reason}.",
             "Proje ayarlarından CRS, dilim ve pafta ölçeğini kontrol edin.",
             retryable: false, review: false),
+
+        // P4.2 (katalog 1.5.0): 2B Helmert/Afin dönüşüm raporu.
+        New(ErrorCodes.CrsDonusumHesaplanamadi, ErrorSeverity.Error, ErrorCategory.Crs,
+            "Koordinat dönüşümü hesaplanamadı.",
+            "Transformation could not be estimated: {reason}.",
+            "Yeterli sayıda, iyi dağılmış ve benzersiz kimlikli ortak nokta girin.",
+            retryable: false, review: false),
+        New(ErrorCodes.CrsDonusumToleransAsimi, ErrorSeverity.Warning, ErrorCategory.Crs,
+            "Bazı ortak noktaların dönüşüm artığı toleransı aşıyor.",
+            "{count} common points exceed the {tolerance} m residual tolerance.",
+            "Toleransı aşan ortak noktaları kontrol edin; hatalı noktayı çıkarıp dönüşümü yeniden hesaplayın.",
+            retryable: false, review: true),
 
         // ---- ERR-TOPO: Topoloji (spec 5.3 örneği birebir) ----
         New(ErrorCodes.TopoKendiUzerindeKesisim, ErrorSeverity.Critical, ErrorCategory.Topology,

@@ -34,8 +34,8 @@ public sealed class ErrorCatalogP4Tests
     }
 
     [Fact]
-    public void HataKatalogu_P4_Ile_Surum_1_4_0_Olmali()
+    public void HataKatalogu_P4_Kodlari_Surum_1_4_0_Ve_Sonrasinda_Bulunmali()
     {
-        ErrorCatalog.Version.Should().Be("1.4.0");
+        new Version(ErrorCatalog.Version).Should().BeGreaterThanOrEqualTo(new Version(1, 4, 0));
     }
 }

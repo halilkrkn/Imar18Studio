@@ -51,7 +51,7 @@ public sealed class DwgFormatAdapter : ICadFormatAdapter
 /// +Z disi OCS normalli cizgiler alan hatasini onlemek icin atlanir (<c>ERR-GIRD-008</c>).
 /// Yalnizca model alani (<see cref="CadDocument.Entities"/>) okunur; blok ici (INSERT) varliklar acilmaz.
 /// </summary>
-internal static class AcadDocumentConverter
+internal static partial class AcadDocumentConverter
 {
     public const long MaxFileSizeBytes = 256L * 1024 * 1024;
 
@@ -141,6 +141,7 @@ internal static class AcadDocumentConverter
         var layers = document.Layers.Select((l, i) => new CadLayer(i, Name(l.Name))).ToList().AsReadOnly();
         var gate = new CadNormalizationGate(format.ToString().ToUpperInvariant());
         var polylines = new List<CadPolyline>();
+        var texts = new List<CadText>();
         var skipped = 0;
         var index = 0;
 
@@ -164,6 +165,12 @@ internal static class AcadDocumentConverter
                 case Polyline2D p2:
                     reason = AddPolyline(p2, layerName, threeD: false, gate, polylines);
                     break;
+                case TextEntity text:
+                    AddText(layerName, StripMTextFormatting(text.Value), text.InsertPoint.X, text.InsertPoint.Y, gate, texts);
+                    continue;
+                case MText mtext:
+                    AddText(layerName, StripMTextFormatting(mtext.Value), mtext.InsertPoint.X, mtext.InsertPoint.Y, gate, texts);
+                    continue;
                 case Insert:
                     // Blok icindeki parseller acilmaz; sessiz kayip olmamasi icin uyari uretilir.
                     gate.Unsupported(InsertReason);
@@ -185,6 +192,7 @@ internal static class AcadDocumentConverter
             format,
             layers,
             polylines.AsReadOnly(),
+            texts.AsReadOnly(),
             skipped,
             UnrecognizedRecordCount: 0,
             gate.OffGridVertexCount,
@@ -271,6 +279,57 @@ internal static class AcadDocumentConverter
         polylines.Add(gate.Add(layerName, string.Empty, null, raw, polyline.IsClosed, ClosureToleranceM, null));
         return null;
     }
+
+    private static void AddText(string layerName, string? value, double cadX, double cadY, CadNormalizationGate gate, List<CadText> texts)
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        if (!TryPoint(cadX, cadY, 0d, out var p))
+        {
+            gate.Unsupported(NonFiniteReason);
+            return;
+        }
+
+        texts.Add(new CadText(layerName, text, new GeodeticPoint(X: p.X, Y: p.Y)));
+    }
+
+    /// <summary>MTEXT bicim kodlarini temizler: \P/\~ bosluk, \A..;/\H..;/\f..; vb. silinir, { } atilir.</summary>
+    internal static string StripMTextFormatting(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        var s = MTextUnicode().Replace(value, m => ((char)int.Parse(m.Groups[1].Value, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture)).ToString());
+        s = s.Replace("%%c", "Ø", StringComparison.OrdinalIgnoreCase).Replace("%%d", "°", StringComparison.OrdinalIgnoreCase)
+            .Replace("%%p", "±", StringComparison.OrdinalIgnoreCase);
+        s = MTextParagraph().Replace(s, " ");
+        s = MTextCode().Replace(s, string.Empty);
+        s = MTextToggle().Replace(s, string.Empty);
+        s = s.Replace("{", string.Empty, StringComparison.Ordinal).Replace("}", string.Empty, StringComparison.Ordinal)
+            .Replace("\\\\", "\\", StringComparison.Ordinal);
+        return MultiSpace().Replace(s, " ").Trim();
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\\U\+([0-9A-Fa-f]{4})", System.Text.RegularExpressions.RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial System.Text.RegularExpressions.Regex MTextUnicode();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\\[Pp~]", System.Text.RegularExpressions.RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial System.Text.RegularExpressions.Regex MTextParagraph();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\\[ACFHQTWacfhqtw][^;\\]*;", System.Text.RegularExpressions.RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial System.Text.RegularExpressions.Regex MTextCode();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\\[LlOoKk]", System.Text.RegularExpressions.RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial System.Text.RegularExpressions.Regex MTextToggle();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\s+", System.Text.RegularExpressions.RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial System.Text.RegularExpressions.Regex MultiSpace();
 
     /// <summary>CAD (X = Dogu, Y = Kuzey, Z) -> jeodezik (X = Kuzey, Y = Dogu, Z); tek yuvarlamali decimal.</summary>
     private static bool TryPoint(double cadX, double cadY, double cadZ, out GeodeticPoint3D point)

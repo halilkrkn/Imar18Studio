@@ -1,0 +1,183 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="clr-namespace:Imar18.Presentation.Avalonia.Controls"
+        x:Class="Imar18.Presentation.Avalonia.Views.MainWindow"
+        Title="Imar18Studio — PİLOT (Resmî işlemde kullanılamaz)"
+        Width="1440" Height="900" MinWidth="1024" MinHeight="640"
+        Background="{StaticResource CadBg}">
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+K" Command="{Binding TogglePaletteCommand}" />
+    <KeyBinding Gesture="Ctrl+O" Command="{Binding RequestOpenFileCommand}" />
+  </Window.KeyBindings>
+
+  <Grid RowDefinitions="Auto,*,180,Auto">
+    <!-- Ust: 5 adimli sihirbaz cubugu ve durum -->
+    <Border Grid.Row="0" Background="{StaticResource CadPanel}" BorderBrush="{StaticResource CadBorder}" BorderThickness="0,0,0,1" Padding="12,8">
+      <Grid ColumnDefinitions="*,Auto">
+        <ItemsControl ItemsSource="{Binding Wizard.Steps}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="6" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Background="{StaticResource CadCard}" BorderBrush="{StaticResource CadBorder}" BorderThickness="1" CornerRadius="6" Padding="10,4">
+                <TextBlock Text="{Binding}" Foreground="{StaticResource CadText}" FontSize="12" />
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <TextBlock Text="{Binding Wizard.CurrentStepTitle}" Foreground="{StaticResource CadAmber}" FontWeight="SemiBold" />
+          <TextBlock Text="⏳ Mühendis Onayı Bekleniyor" Foreground="{StaticResource CadMuted}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1" ColumnDefinitions="300,*,280">
+      <!-- Sol: sihirbaz adim 1 girdileri (CRS, Tecviz, katman-rol) -->
+      <Border Grid.Column="0" Background="{StaticResource CadPanel}" BorderBrush="{StaticResource CadBorder}" BorderThickness="0,0,1,0">
+        <ScrollViewer Padding="12">
+          <StackPanel Spacing="8">
+            <TextBlock Text="1. Girdi &amp; Sınır" FontWeight="Bold" Foreground="{StaticResource CadText}" />
+            <Button Content="CAD Dosyası Aç (Ctrl+O)" Command="{Binding RequestOpenFileCommand}" HorizontalAlignment="Stretch" />
+            <TextBlock Text="Proje CRS / Dilim / Ölçek (D3)" Foreground="{StaticResource CadMuted}" FontSize="11" />
+            <ComboBox ItemsSource="{Binding Wizard.Datumlar}" SelectedItem="{Binding Wizard.Datum}" HorizontalAlignment="Stretch" />
+            <ComboBox ItemsSource="{Binding Wizard.OrtaMeridyenler}" SelectedItem="{Binding Wizard.OrtaMeridyen}" HorizontalAlignment="Stretch" />
+            <TextBox Watermark="Epok (ITRF96: 2005.00)" Text="{Binding Wizard.EpokText}" />
+            <TextBox Watermark="Pafta ölçeği paydası (1/M)" Text="{Binding Wizard.OlcekPaydasi}" />
+            <TextBlock Text="Tecviz girdisi (mühendis, RG 27.09.2022/31966)" Foreground="{StaticResource CadMuted}" FontSize="11" />
+            <TextBox Watermark="Ölçek paydası" Text="{Binding Wizard.TecvizOlcekPaydasi}" />
+            <TextBox Watermark="Üretim yöntemi" Text="{Binding Wizard.TecvizUretimYontemi}" />
+            <ComboBox ItemsSource="{Binding Wizard.Kaliteler}" SelectedItem="{Binding Wizard.TecvizKoordinatKalitesi}" HorizontalAlignment="Stretch" />
+            <TextBox Watermark="Tecviz sınırı (m²)" Text="{Binding Wizard.TecvizSiniriText}" />
+            <TextBox Watermark="Kaynak notu" Text="{Binding Wizard.TecvizKaynakNotu}" />
+            <TextBlock Text="Katman → Rol eşlemesi" Foreground="{StaticResource CadMuted}" FontSize="11" />
+            <ItemsControl ItemsSource="{Binding Wizard.LayerRoles}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid ColumnDefinitions="*,150" Margin="0,2">
+                    <TextBlock Text="{Binding LayerName}" Foreground="{StaticResource CadText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <ComboBox Grid.Column="1" ItemsSource="{Binding $parent[ItemsControl].DataContext.Wizard.Roller}" SelectedItem="{Binding Role}" HorizontalAlignment="Stretch" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Button Content="Doğrula" Click="OnValidateClick" />
+              <Button Content="◀ Geri" Command="{Binding Wizard.BackCommand}" />
+              <Button Content="İleri ▶" Command="{Binding Wizard.NextCommand}" />
+            </StackPanel>
+            <ItemsControl ItemsSource="{Binding Wizard.Errors}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding}" Foreground="#F87171" TextWrapping="Wrap" FontSize="11" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+
+      <!-- Orta: SkiaSharp 2B CAD tuvali -->
+      <Grid Grid.Column="1">
+        <c:CadCanvasControl ViewModel="{Binding Canvas}">
+          <c:CadCanvasControl.ContextMenu>
+            <ContextMenu ItemsSource="{Binding Canvas.ContextMenuItems}">
+              <ContextMenu.Styles>
+                <Style Selector="MenuItem">
+                  <Setter Property="Header" Value="{Binding Title}" />
+                  <Setter Property="Command" Value="{Binding Command}" />
+                  <Setter Property="ToolTip.Tip" Value="{Binding DisabledReason}" />
+                </Style>
+              </ContextMenu.Styles>
+            </ContextMenu>
+          </c:CadCanvasControl.ContextMenu>
+        </c:CadCanvasControl>
+        <Border Background="#E6181B22" BorderBrush="{StaticResource CadBorder}" BorderThickness="1" CornerRadius="6"
+                Padding="10,6" Margin="12" HorizontalAlignment="Left" VerticalAlignment="Top">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Text="Kadastro" Foreground="{StaticResource CadAmber}" VerticalAlignment="Center" />
+            <Slider Minimum="0" Maximum="100" Width="120" Value="{Binding Canvas.SwipePercent}"
+                    ToolTip.Tip="Sola çekerek eski kadastro ile yeni imar durumunu karşılaştırın" />
+            <TextBlock Text="İmar" Foreground="#60A5FA" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Canvas.ZoomText}" Foreground="{StaticResource CadMuted}" VerticalAlignment="Center" />
+            <Button Content="Sığdır" Command="{Binding FitAllCommand}" />
+          </StackPanel>
+        </Border>
+        <TextBlock Text="{Binding Canvas.CursorText}" Foreground="{StaticResource CadMuted}" FontFamily="Consolas"
+                   Margin="12" HorizontalAlignment="Left" VerticalAlignment="Bottom" />
+      </Grid>
+
+      <!-- Sag: geometri ve mevzuat denetcisi (secili parsel) -->
+      <Border Grid.Column="2" Background="{StaticResource CadPanel}" BorderBrush="{StaticResource CadBorder}" BorderThickness="1,0,0,0" Padding="12">
+        <StackPanel Spacing="6">
+          <TextBlock Text="Geometri &amp; Mevzuat Denetçisi" FontWeight="Bold" Foreground="{StaticResource CadText}" />
+          <TextBlock Text="{Binding Canvas.ContextMenuTitle}" Foreground="{StaticResource CadAmber}" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding Canvas.Selected.LayerName, StringFormat='Katman: {0}'}" Foreground="{StaticResource CadText}" />
+          <TextBlock Text="{Binding Canvas.Selected.Role, StringFormat='Rol: {0}'}" Foreground="{StaticResource CadText}" />
+          <TextBlock Text="{Binding Canvas.Selected.AreaM2, StringFormat='Decimal Gauss alanı: {0} m²'}" Foreground="{StaticResource CadText}" />
+          <StackPanel IsVisible="{Binding Canvas.CutHandle.IsVisible}" Spacing="4">
+            <TextBlock Text="Canlı kesim tutamacı (75°–105°)" Foreground="#F59E0B" />
+            <Slider Minimum="75" Maximum="105" Value="{Binding Canvas.CutHandle.AngleDeg}" />
+            <Slider Minimum="0" Maximum="1" Value="{Binding Canvas.CutHandle.PositionRatio}" />
+          </StackPanel>
+          <TextBlock Text="Uyarılar" FontWeight="SemiBold" Foreground="{StaticResource CadText}" Margin="0,8,0,0" />
+          <ItemsControl ItemsSource="{Binding Warnings}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding}" Foreground="{StaticResource CadAmber}" TextWrapping="Wrap" FontSize="11" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- Alt: canli parsel tablosu -->
+    <Border Grid.Row="2" Background="{StaticResource CadPanel}" BorderBrush="{StaticResource CadBorder}" BorderThickness="0,1,0,0">
+      <ScrollViewer Padding="12,6">
+        <ItemsControl ItemsSource="{Binding Parcels}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Grid ColumnDefinitions="220,160,160,*" Margin="0,1">
+                <TextBlock Text="{Binding LayerName}" Foreground="{StaticResource CadText}" />
+                <TextBlock Grid.Column="1" Text="{Binding Role}" Foreground="{StaticResource CadMuted}" />
+                <TextBlock Grid.Column="2" Text="{Binding Label}" Foreground="{StaticResource CadAmber}" />
+                <TextBlock Grid.Column="3" Text="{Binding AreaM2, StringFormat='{}{0} m²'}" Foreground="{StaticResource CadText}" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+
+    <!-- Durum cubugu -->
+    <Border Grid.Row="3" Background="{StaticResource CadCard}" Padding="12,4">
+      <Grid ColumnDefinitions="*,200,Auto">
+        <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource CadText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <ProgressBar Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding ProgressPercent}" IsVisible="{Binding IsBusy}" Margin="8,0" />
+        <Button Grid.Column="2" Content="İptal" Command="{Binding CancelImportCommand}" IsVisible="{Binding IsBusy}" />
+      </Grid>
+    </Border>
+
+    <!-- Ctrl+K kural tabanli komut cubugu -->
+    <Border Grid.RowSpan="4" IsVisible="{Binding Palette.IsOpen}" Background="#99000000">
+      <Border Width="560" VerticalAlignment="Top" Margin="0,80,0,0" Background="{StaticResource CadPanel}"
+              BorderBrush="{StaticResource CadAccent}" BorderThickness="1" CornerRadius="8" Padding="10">
+        <StackPanel Spacing="6">
+          <TextBlock Text="⌨️ Komut (Ctrl+K) — kural tabanlı, yapay zekâ içermez" Foreground="{StaticResource CadMuted}" FontSize="11" />
+          <TextBox x:Name="PaletteInput" Text="{Binding Palette.Query}" Watermark="Komut yazın: 'sığdır', 'kadastro', 'dxf'…" KeyDown="OnPaletteKeyDown" />
+          <ListBox ItemsSource="{Binding Palette.Results}" SelectedIndex="{Binding Palette.SelectedIndex}" MaxHeight="320">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Title}" />
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </StackPanel>
+      </Border>
+    </Border>
+  </Grid>
+</Window>
