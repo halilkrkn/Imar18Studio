@@ -11,10 +11,17 @@ public static class ErrorCodes
     public const string GirdNczOkunamadi = "ERR-GIRD-NCZ-001";
     public const string GirdZKoduIndirgendi = "ERR-GIRD-004";
     public const string GirdKoordinatKesinlikZarfiDisinda = "ERR-GIRD-005";
+    public const string GirdIzgaraDisiKose = "ERR-GIRD-006";
+    public const string GirdCksOkunamadi = "ERR-GIRD-007";
+    public const string GirdDesteklenmeyenGeometriAtlandi = "ERR-GIRD-008";
+    public const string GirdToleranslaKapatildi = "ERR-GIRD-009";
+    public const string GirdEtiketPoligonEslesmedi = "ERR-GIRD-010";
 
     public const string CrsEksik = "ERR-CRS-001";
     public const string CrsEpokUyumsuz = "ERR-CRS-002";
     public const string CrsGirdisiGecersiz = "ERR-CRS-003";
+    public const string CrsDonusumHesaplanamadi = "ERR-CRS-004";
+    public const string CrsDonusumToleransAsimi = "ERR-CRS-005";
 
     public const string TopoKendiUzerindeKesisim = "ERR-TOPO-001";
     public const string TopoAcikPoligon = "ERR-TOPO-002";
@@ -66,7 +73,7 @@ public static class ErrorCodes
 public static class ErrorCatalog
 {
     /// <summary>Katalog sürümü (AC-ERR-01).</summary>
-    public const string Version = "1.3.0";
+    public const string Version = "1.5.0";
 
     private static readonly AppError[] Entries =
     [
@@ -111,6 +118,35 @@ public static class ErrorCatalog
             "Koordinatları en fazla 6 ondalık basamakla ve aynı proje bölgesinde girin.",
             retryable: false, review: false),
 
+        // P4.1 (katalog 1.4.0): SORU-025 ızgara dışı köşe uyarısı, CKS okuma ve desteklenmeyen CAD geometrisi.
+        New(ErrorCodes.GirdIzgaraDisiKose, ErrorSeverity.Warning, ErrorCategory.Input,
+            "Bazı köşeler 1 mm koordinat ızgarasında değil.",
+            "{count} vertices are off the 1 mm grid in {path}; coordinates were kept unquantized.",
+            "Köşeler kuantize edilmeden korundu; ızgaraya çekmek için mühendis onayı gerekir (resmî alan değişebilir).",
+            retryable: false, review: true),
+        New(ErrorCodes.GirdCksOkunamadi, ErrorSeverity.Error, ErrorCategory.Input,
+            "Netcad CKS DOP özet dosyası okunamadı veya tutarsız.",
+            "CKS DOP summary {path} could not be parsed: {reason}.",
+            "Dosyayı Netcad'den yeniden dışa aktarın veya DOP değerlerini elle girin.",
+            retryable: true, review: false),
+        New(ErrorCodes.GirdDesteklenmeyenGeometriAtlandi, ErrorSeverity.Warning, ErrorCategory.Input,
+            "Desteklenmeyen geometrili çizgiler (yay segmenti veya eğik düzlem) atlandı.",
+            "{count} polylines with unsupported geometry ({reason}) were skipped in {path}.",
+            "Yayları köşe noktalarına dönüştürüp (explode/segment) dosyayı yeniden dışa aktarın; atlanan alanları kontrol edin.",
+            retryable: false, review: true),
+        New(ErrorCodes.GirdToleranslaKapatildi, ErrorSeverity.Warning, ErrorCategory.Input,
+            "Bazı çizgiler 1 mm kapanma toleransıyla kapatıldı (son köşe ilk köşeye eşitlendi).",
+            "{count} polylines were closed within the {tolerance} m closure tolerance in {path}.",
+            "Kapatılan çizgilerin ilk/son köşesini kontrol edin; gerekirse CAD'de kapatıp yeniden dışa aktarın.",
+            retryable: false, review: true),
+
+        // P4.2 (katalog 1.5.0): etiket–poligon eşleştirmesi.
+        New(ErrorCodes.GirdEtiketPoligonEslesmedi, ErrorSeverity.Warning, ErrorCategory.Input,
+            "Bazı parsel poligonlarına etiket eşleştirilemedi.",
+            "{unlabeled} unlabeled and {ambiguous} ambiguous polygons after label matching in {path}.",
+            "Etiketsiz veya birden çok yazı içeren poligonların parsel kodunu elle atayın.",
+            retryable: false, review: true),
+
         // ---- ERR-CRS: Koordinat sistemi ----
         New(ErrorCodes.CrsEksik, ErrorSeverity.Critical, ErrorCategory.Crs,
             "Koordinat sistemi (CRS/dilim) tanımlı değil.",
@@ -128,6 +164,18 @@ public static class ErrorCatalog
             "Invalid CRS/scale input: {reason}.",
             "Proje ayarlarından CRS, dilim ve pafta ölçeğini kontrol edin.",
             retryable: false, review: false),
+
+        // P4.2 (katalog 1.5.0): 2B Helmert/Afin dönüşüm raporu.
+        New(ErrorCodes.CrsDonusumHesaplanamadi, ErrorSeverity.Error, ErrorCategory.Crs,
+            "Koordinat dönüşümü hesaplanamadı.",
+            "Transformation could not be estimated: {reason}.",
+            "Yeterli sayıda, iyi dağılmış ve benzersiz kimlikli ortak nokta girin.",
+            retryable: false, review: false),
+        New(ErrorCodes.CrsDonusumToleransAsimi, ErrorSeverity.Warning, ErrorCategory.Crs,
+            "Bazı ortak noktaların dönüşüm artığı toleransı aşıyor.",
+            "{count} common points exceed the {tolerance} m residual tolerance.",
+            "Toleransı aşan ortak noktaları kontrol edin; hatalı noktayı çıkarıp dönüşümü yeniden hesaplayın.",
+            retryable: false, review: true),
 
         // ---- ERR-TOPO: Topoloji (spec 5.3 örneği birebir) ----
         New(ErrorCodes.TopoKendiUzerindeKesisim, ErrorSeverity.Critical, ErrorCategory.Topology,

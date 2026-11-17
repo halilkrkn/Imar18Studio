@@ -11,5 +11,11 @@
     <PackageReference Include="Avalonia" Version="11.2.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
     <PackageReference Include="SkiaSharp" Version="2.88.8" />
+    <!-- P4.3: sabitlenmis Avalonia 11.2.0 ile birebir uyumlu yeni paketler (mevcut surumler degistirilmedi). -->
+    <PackageReference Include="Avalonia.Skia" Version="11.2.0" />
+    <PackageReference Include="Semi.Avalonia" Version="11.2.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Imar18.Presentation.Tests" />
   </ItemGroup>
 </Project>

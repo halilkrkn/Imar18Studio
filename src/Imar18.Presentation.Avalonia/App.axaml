@@ -1,0 +1,20 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:semi="https://irihi.tech/semi"
+             x:Class="Imar18.Presentation.Avalonia.App"
+             RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <!-- UI_UX_Referans_v2_19.html "cad" renk paleti -->
+    <SolidColorBrush x:Key="CadBg" Color="#0F1115" />
+    <SolidColorBrush x:Key="CadPanel" Color="#181B22" />
+    <SolidColorBrush x:Key="CadCard" Color="#212631" />
+    <SolidColorBrush x:Key="CadBorder" Color="#2D3443" />
+    <SolidColorBrush x:Key="CadAccent" Color="#3B82F6" />
+    <SolidColorBrush x:Key="CadText" Color="#E2E8F0" />
+    <SolidColorBrush x:Key="CadMuted" Color="#94A3B8" />
+    <SolidColorBrush x:Key="CadAmber" Color="#FBBF24" />
+  </Application.Resources>
+  <Application.Styles>
+    <semi:SemiTheme />
+  </Application.Styles>
+</Application>

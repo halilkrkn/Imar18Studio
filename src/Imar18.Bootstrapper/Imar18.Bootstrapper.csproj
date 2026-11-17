@@ -11,4 +11,9 @@
     <ProjectReference Include="..\Imar18.Infrastructure\Imar18.Infrastructure.csproj" />
     <ProjectReference Include="..\Imar18.Presentation.Avalonia\Imar18.Presentation.Avalonia.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- P4.3 (proje sahibi karari, NU1903): Avalonia.Desktop yerine yalnizca Windows platformu; Linux DBus bagimliligi gelmez. -->
+    <PackageReference Include="Avalonia.Win32" Version="11.2.0" />
+    <PackageReference Include="Avalonia.Skia" Version="11.2.0" />
+  </ItemGroup>
 </Project>

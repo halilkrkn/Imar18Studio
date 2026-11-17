@@ -27,9 +27,10 @@ public sealed class ErrorCatalogP3Tests
     }
 
     [Fact]
-    public void HataKatalogu_P3_Ile_Surum_1_3_0_Olmali()
+    public void HataKatalogu_P3_Kodlari_Surum_1_3_0_Ve_Sonrasinda_Bulunmali()
     {
-        ErrorCatalog.Version.Should().Be("1.3.0");
+        // P3 kodlari 1.3.0'da eklendi; sonraki fazlarin kod eklemesi (1.4.0+) bu kodlari kaldirmamalidir.
+        new Version(ErrorCatalog.Version).Should().BeGreaterThanOrEqualTo(new Version(1, 3, 0));
     }
 
     [Theory]
