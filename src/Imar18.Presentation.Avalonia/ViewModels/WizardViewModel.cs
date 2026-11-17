@@ -208,6 +208,12 @@ public sealed partial class WizardViewModel : ObservableObject
 
     public string CurrentStepTitle => Steps[CurrentIndex];
 
+    /// <summary>Sihirbaz başlığındaki ilerleme rozeti ("Adım 1 / 5").</summary>
+    public string AdimSayaci => string.Create(CultureInfo.InvariantCulture, $"Adım {CurrentIndex + 1} / {Steps.Count}");
+
+    /// <summary>"Girdileri Doğrula" düğmesi sabit alt çubukta yalnız 1. adımda görünür.</summary>
+    public bool DogrulamaGorunur => CurrentIndex == 0;
+
     public bool IsStep1 => CurrentIndex == 0;
 
     public bool IsStep2 => CurrentIndex == 1;
@@ -510,6 +516,8 @@ public sealed partial class WizardViewModel : ObservableObject
     partial void OnCurrentIndexChanged(int value)
     {
         OnPropertyChanged(nameof(CurrentStepTitle));
+        OnPropertyChanged(nameof(AdimSayaci));
+        OnPropertyChanged(nameof(DogrulamaGorunur));
         foreach (var ad in new[] { nameof(IsStep1), nameof(IsStep2), nameof(IsStep3), nameof(IsStep4), nameof(IsStep5), nameof(SagPanelOnayModu), nameof(SagPanelOzetModu) })
         {
             OnPropertyChanged(ad);

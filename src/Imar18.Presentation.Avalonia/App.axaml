@@ -36,6 +36,9 @@
           <SolidColorBrush x:Key="CadViolet" Color="#C084FC" />
           <SolidColorBrush x:Key="CadCyan" Color="#22D3EE" />
           <SolidColorBrush x:Key="CadHud" Color="#E6171A21" />
+          <SolidColorBrush x:Key="CadZorunluMetin" Color="#E8A3A3" />
+          <SolidColorBrush x:Key="CadZorunluZemin" Color="#14F87171" />
+          <SolidColorBrush x:Key="CadZorunluKenar" Color="#2EF87171" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Light">
           <SolidColorBrush x:Key="CadBg" Color="#EEF2F7" />
@@ -61,6 +64,9 @@
           <SolidColorBrush x:Key="CadViolet" Color="#7C3AED" />
           <SolidColorBrush x:Key="CadCyan" Color="#0891B2" />
           <SolidColorBrush x:Key="CadHud" Color="#F0FFFFFF" />
+          <SolidColorBrush x:Key="CadZorunluMetin" Color="#B4534F" />
+          <SolidColorBrush x:Key="CadZorunluZemin" Color="#0FDC2626" />
+          <SolidColorBrush x:Key="CadZorunluKenar" Color="#24DC2626" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
 
@@ -169,25 +175,26 @@
       <Setter Property="BorderBrush" Value="{DynamicResource CadRose}" />
     </Style>
     <!-- Form alanı etiketinin yanındaki Zorunlu / İsteğe bağlı rozetleri -->
+    <!-- Yumuşak (düşük kontrastlı) hap rozetler: etiketin yanında dikkat dağıtmadan durum bildirir. -->
     <Style Selector="Border.zorunlu">
-      <Setter Property="Background" Value="{DynamicResource CadRoseSoft}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource CadRose}" />
+      <Setter Property="Background" Value="{DynamicResource CadZorunluZemin}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CadZorunluKenar}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="4" />
-      <Setter Property="Padding" Value="5,0" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="7,0,7,1" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="Border.zorunlu > TextBlock">
       <Setter Property="FontSize" Value="9.5" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="{DynamicResource CadRose}" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="Foreground" Value="{DynamicResource CadZorunluMetin}" />
     </Style>
     <Style Selector="Border.istege">
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="{DynamicResource CadBorderStrong}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CadBorder}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="4" />
-      <Setter Property="Padding" Value="5,0" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="7,0,7,1" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="Border.istege > TextBlock">

@@ -94,9 +94,23 @@ public sealed partial class MainWindow : Window
     /// <summary>Dar pencere eşiği (px): altında açık yan paneller en küçük genişliğe indirilir (tuval alanı korunur).</summary>
     internal const double DarPencereEsigi = 1200d;
 
+    /// <summary>Responsive: bu genişliğin altında pencere "dar" sınıfı alır (alt başlık ve uzun pilot rozeti kısalır; tam etiketli üst çubuk ~1600 px ister).</summary>
+    internal const double DarSinifEsigi = 1680d;
+
+    /// <summary>Responsive: bu genişliğin altında pencere "kompakt" sınıfı alır (ikincil etiketler gizlenir).</summary>
+    internal const double KompaktSinifEsigi = 1280d;
+
+    /// <summary>Genişliğe göre responsive sınıfları uygular (stiller MainWindow.axaml içindedir).</summary>
+    internal void ResponsiveSiniflariUygula(double genislik)
+    {
+        Classes.Set("dar", genislik < DarSinifEsigi);
+        Classes.Set("kompakt", genislik < KompaktSinifEsigi);
+    }
+
     protected override void OnSizeChanged(SizeChangedEventArgs e)
     {
         base.OnSizeChanged(e);
+        ResponsiveSiniflariUygula(e.NewSize.Width);
         // Yalnızca gerçek boyutta (MinWidth üstü) geniş → dar geçişinde; ilk yerleşimin ara boyutları ve kullanıcının dar
         // pencerede bölmeyle yaptığı ayar ezilmez.
         var yeni = e.NewSize.Width;
@@ -318,12 +332,27 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>"Evet, projeyi temizle": komut bağlamayla çalışır; burada yalnız onay açılır pencereleri kapatılır.</summary>
+    /// <summary>
+    /// "Evet, temizle": komut burada çalıştırılır. Command bağlaması kullanılmaz — açılır pencere kapanınca düğme görsel ağaçtan
+    /// ayrılıp DataContext'ini kaybettiğinden bağlı komut çalışmıyordu (canlı kullanım hatası).
+    /// </summary>
     private void OnTemizleOnayClick(object? sender, RoutedEventArgs e)
     {
-        foreach (var ad in new[] { "TemizleDugmesi", "UstTemizleDugmesi" })
+        var komut = _vm?.ProjeyiTemizleCommand;
+        TemizleOnayiniKapat();
+        if (komut?.CanExecute(null) == true)
         {
-            this.FindControl<Button>(ad)?.Flyout?.Hide();
+            komut.Execute(null);
         }
+
+        e.Handled = true;
     }
+
+    private void OnTemizleVazgecClick(object? sender, RoutedEventArgs e)
+    {
+        TemizleOnayiniKapat();
+        e.Handled = true;
+    }
+
+    private void TemizleOnayiniKapat() => this.FindControl<Button>("UstTemizleDugmesi")?.Flyout?.Hide();
 }
