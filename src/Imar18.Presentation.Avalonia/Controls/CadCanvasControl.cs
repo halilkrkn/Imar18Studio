@@ -350,7 +350,7 @@ public sealed class CadCanvasControl : Control
         private static void DrawCutHandle(SKCanvas canvas, SKMatrix matrix, PathEntry selected, Snapshot s)
         {
             // Gosterim: secili poligon merkezinden gecen, Dogu eksenine gore AngleDeg acili 120 px'lik kesim cizgisi;
-            // tutamac cizgi boyunca PositionRatio konumundadir. Gercek kesim BisectionEngine ile sihirbaz 3. adimda yapilir.
+            // tutamac cizgi boyunca PositionRatio konumundadir. Gercek kesim BisectionEngine ile yapilir; tutamac yalniz onizlemedir (P6: sihirbaza bagli degildir, P7 kapsami).
             var c = matrix.MapPoint(selected.Centroid);
             var rad = s.CutAngleDeg * Math.PI / 180d;
             var dx = (float)(Math.Cos(rad) * 60);

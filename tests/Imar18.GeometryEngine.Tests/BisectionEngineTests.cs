@@ -160,17 +160,39 @@ public sealed class BisectionEngineTests
     }
 
     [Fact]
-    public void Bisection_U_Adada_Cok_Parcali_Kesimde_ERR_TOPO_004_Ile_Guvenli_Durmali()
+    public void Bisection_U_Adada_Hicbir_Acida_Tek_Parcali_Cozum_Yoksa_Tum_Araligi_Tarayip_ERR_TOPO_004_Ile_Durmali()
     {
-        // Cephe 7: (100,0)->(0,0). X >= 55 yari duzlemi iki kolu ayri keser: MultiPolygon (2 x 450).
+        // Cephe 7: (100,0)->(0,0). X >= 55 yari duzlemi iki kolu ayri keser: MultiPolygon (2 x 450). 75–105 araliginda
+        // 900 m2 hicbir acida tek kolda kalmaz (alt kol 900 m2): SORU-023 karari — tum aralik taranir, sonra ERR-TOPO-004.
         var sonuc = BisectionEngine.Cut(new BisectionRequest(UAda(), 7, 900m, Secenek(min: 75m, max: 105m)));
 
         sonuc.Result.IsFailure.Should().BeTrue();
         sonuc.Result.Error.Code.Should().Be(ErrorCodes.TopoKonkavKesimCokParcali);
         sonuc.Result.Error.RequiresEngineerReview.Should().BeTrue();
-        sonuc.Attempts.Should().HaveCount(1, "MultiPolygon ilk tespitte taramayi durdurur (SORU-023)");
-        sonuc.Attempts[0].AngleDeg.Should().Be(90m);
+        sonuc.Attempts.Select(a => a.AngleDeg).Should().Equal(90m, 85m, 95m, 80m, 100m, 75m, 105m);
         sonuc.Attempts[0].Outcome.Should().Be(AttemptOutcome.MultiPolygon);
+        sonuc.Attempts.Should().NotContain(a => a.Outcome == AttemptOutcome.Accepted);
+    }
+
+    [Fact]
+    public void Bisection_U_Adada_90_Derece_Cok_Parcali_Ama_95_Derecede_Tek_Parcali_Cozum_Kabul_Edilmeli_SORU_023()
+    {
+        // Bagimsiz hesap (elle + scratchpad Python kirpma): hedef 20 m2.
+        //  90: X >= 98.5 iki kolu keser (MultiPolygon). 85: dogru ust kola egilir; t = 0'da bile alan 43.74 > 20 (erisilemez).
+        //  95: kesim alt kolda kalir ve x(Y) = c + Y·tan 5 ust kolda X > 100'e cikar (tek parca):
+        //      alan = 10·(100 − c) − 50·tan 5 = 20  =>  c = 97.56256 (1 mm: 97.563).
+        var sonuc = BisectionEngine.Cut(new BisectionRequest(UAda(), 7, 20m, Secenek(min: 75m, max: 105m)));
+
+        var kesim = Basarili(sonuc);
+        sonuc.Attempts.Select(a => (a.AngleDeg, a.Outcome)).Should().Equal(
+            (90m, AttemptOutcome.MultiPolygon), (85m, AttemptOutcome.TargetUnreachable), (95m, AttemptOutcome.Accepted));
+        kesim.AngleDeg.Should().Be(95m);
+        kesim.CutStart.Should().Be(P(97.563m, 0m));
+        Math.Abs(kesim.PieceArea.AreaM2Exact - 20m).Should().BeLessThanOrEqualTo(0.01m);
+        (kesim.PieceArea.AreaM2Exact + kesim.RemainderArea.AreaM2Exact - Alan(UAda())).Should().Be(kesim.BlockAreaDeviationM2);
+        Math.Abs(kesim.BlockAreaDeviationM2).Should().BeLessThanOrEqualTo(0.01m);
+        NtsValidity.IsValid(kesim.Piece.Vertices, kesim.Piece.Vertices[0]).Should().BeTrue();
+        NtsValidity.IsValid(kesim.Remainder.Vertices, kesim.Remainder.Vertices[0]).Should().BeTrue();
     }
 
     [Fact]

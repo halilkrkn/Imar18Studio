@@ -69,7 +69,7 @@ public sealed class CiktiServisiTests
         Func<CiktiPaketi, Result<byte[]>>? uret = null)
     {
         var (yol, depo, zaman) = await OrnekProje.TamProjeAsync();
-        var onay = new ApprovalService(yol, zaman);
+        var onay = new ApprovalService(yol, zaman, OrnekProje.Topoloji);
         if (onayla)
         {
             (await onay.OnaylaAsync(OrnekProje.Muhendis, ApprovalService.OnayMetni)).IsSuccess.Should().BeTrue();
@@ -77,7 +77,7 @@ public sealed class CiktiServisiTests
 
         var uretici = new SahteUretici(CiktiTuru.FenKlasoru, uret ?? (_ => Result<byte[]>.Success(Icerik)));
         var yazici = new BellekYazici(depo);
-        return (yol, depo, onay, new CiktiServisi(yol, [uretici], yazici), uretici, yazici, zaman);
+        return (yol, depo, onay, new CiktiServisi(yol, [uretici], yazici, OrnekProje.Topoloji), uretici, yazici, zaman);
     }
 
     [Fact]

@@ -28,7 +28,7 @@ public sealed class AntigravityIndependentP5AuditTests
     private static async Task<(ProjeKomutYolu Yol, BellekProjeDeposu Depo, ApprovalService Onay, SabitZaman Zaman)> HazirProjeAsync()
     {
         var (yol, depo, zaman) = await OrnekProje.TamProjeAsync();
-        var onay = new ApprovalService(yol, zaman);
+        var onay = new ApprovalService(yol, zaman, OrnekProje.Topoloji);
         return (yol, depo, onay, zaman);
     }
 
@@ -346,7 +346,7 @@ public sealed class AntigravityIndependentP5AuditTests
 
         var uretici = new DummyCiktiUretici();
         var yazici = new BellekCiktiYazici();
-        var ciktiServisi = new CiktiServisi(yol, [uretici], yazici);
+        var ciktiServisi = new CiktiServisi(yol, [uretici], yazici, OrnekProje.Topoloji);
 
         var sonuc = await ciktiServisi.UretAsync(CiktiTuru.FenKlasoru, OrnekProje.Muhendis, "test_cikti.pdf");
 

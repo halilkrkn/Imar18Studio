@@ -1,0 +1,24 @@
+<Project>
+  <!-- Kök Directory.Build.props ayarları korunur. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)..'))" />
+
+  <!--
+    BULGU-3 (P6): Ortak TestDataLocator. Test projeleri altın veriyi depo kökünde Imar18Studio.sln arayarak bulmaz:
+    - test-data/synthetic/** derleme çıktısına (bin/.../test-data/synthetic/) kopyalanır; izole ortamda (yalnız bin) da çalışır.
+    - test-data/real/ ASLA kopyalanmaz (AC-PILOT-08). Yerel gerçek veri kökü derleme zamanında assembly meta verisine yazılır;
+      IMAR18_GERCEK_VERI_KOKU ortam değişkeni (ör. worktree'de ana klasörün test-data/real yolu) bunu ezer.
+  -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Shared\TestDataLocator.cs" Link="Shared\TestDataLocator.cs" />
+    <None Include="$(MSBuildThisFileDirectory)..\test-data\synthetic\**\*"
+          Exclude="$(MSBuildThisFileDirectory)..\test-data\synthetic\**\.gitkeep"
+          Link="test-data\synthetic\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          Visible="false" />
+    <!-- CI derlemesinde (ContinuousIntegrationBuild) yerel mutlak yol gömülmez: kullanıcı adı DLL'e yazılmaz, derleme deterministik kalır. -->
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute" Condition="'$(ContinuousIntegrationBuild)' != 'true'">
+      <_Parameter1>Imar18.GercekVeriKoku</_Parameter1>
+      <_Parameter2>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\test-data\real'))</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

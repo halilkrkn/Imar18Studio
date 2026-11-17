@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Imar18.NczAnonimlestirici</RootNamespace>
+    <AssemblyName>Imar18.NczAnonimlestirici</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Imar18.Infrastructure\Imar18.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

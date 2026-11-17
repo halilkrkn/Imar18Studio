@@ -31,7 +31,7 @@ public sealed class WizardPaletteMainTests
     [Fact]
     public void Sihirbaz_Bes_Adimi_Roadmap_Sirasiyla_Sunmali()
     {
-        new WizardViewModel().Steps.Should().Equal("1. Girdi & Sınır", "2. DOP & Özet", "3. Ada Bölümleme", "4. Tahsis & Hisse", "5. Cetvel & Çıktı");
+        new WizardViewModel().Steps.Should().Equal("1. Girdi & Sınır", "2. Tecviz", "3. DOP & Y1 Dengeleme", "4. Hak Eşleştirme & Hisse", "5. Onay & Çıktı");
     }
 
     [Fact]

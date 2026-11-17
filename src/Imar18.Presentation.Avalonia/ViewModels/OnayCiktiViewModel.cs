@@ -55,11 +55,16 @@ public sealed partial class OnayCiktiViewModel : ObservableObject
     /// <summary>Kayıtlı üreticinin uzantısı (dosya seçici süzgeci için).</summary>
     public string? Uzanti(CiktiTuru tur) => _alan.Cikti.Uzanti(tur);
 
-    /// <summary>Onay ekranını güncel proje durumundan yeniden kurar.</summary>
-    public void Yenile()
+    /// <summary>Onay ekranını güncel proje durumundan yeniden kurar (senkron; yalnız yapıcı ve testler).</summary>
+    public void Yenile() => Uygula(_alan.Onay.OnayEkraniHazirla());
+
+    /// <summary>Onay ekranını arka planda (NTS overlay dahil değerlendirme, 50 ms kuralı — reviewer M2) yeniden kurar.</summary>
+    public async Task YenileAsync() => Uygula(await Task.Run(_alan.Onay.OnayEkraniHazirla).ConfigureAwait(true));
+
+    private void Uygula(OnayEkrani ekran)
     {
         var onceki = GecerliOnayVar;
-        Ekran = _alan.Onay.OnayEkraniHazirla();
+        Ekran = ekran;
         Engeller.Clear();
         foreach (var e in Ekran.Engeller)
         {
@@ -80,14 +85,16 @@ public sealed partial class OnayCiktiViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var sonuc = await _alan.Onay.OnaylaAsync(_alan.KullaniciId, ApprovalService.OnayMetni).ConfigureAwait(true);
+            // Onay komutu kilit altında değerlendirme (NTS overlay) yapar: UI thread'inde değil, arka planda (reviewer M2).
+            var sonuc = await Task.Run(() => _alan.Onay.OnaylaAsync(_alan.KullaniciId, ApprovalService.OnayMetni)).ConfigureAwait(true);
             DurumMetni = sonuc.IsSuccess ? "Revizyon onaylandı: " + Kisa(sonuc.Value.RevizyonId.Deger) : sonuc.Error.UserMessage;
         }
         finally
         {
             IsBusy = false;
-            Yenile();
         }
+
+        await YenileAsync().ConfigureAwait(true);
     }
 
     private bool GeriAlinabilirMi() => !IsBusy && GecerliOnayVar;
@@ -98,7 +105,7 @@ public sealed partial class OnayCiktiViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var sonuc = await _alan.Onay.GeriAlAsync(_alan.KullaniciId).ConfigureAwait(true);
+            var sonuc = await Task.Run(() => _alan.Onay.GeriAlAsync(_alan.KullaniciId)).ConfigureAwait(true);
             DurumMetni = sonuc.IsFailure
                 ? sonuc.Error.UserMessage
                 : sonuc.Value.NihaiCiktiUretilmisti
@@ -109,8 +116,9 @@ public sealed partial class OnayCiktiViewModel : ObservableObject
         finally
         {
             IsBusy = false;
-            Yenile();
         }
+
+        await YenileAsync().ConfigureAwait(true);
     }
 
     [RelayCommand]
@@ -138,7 +146,7 @@ public sealed partial class OnayCiktiViewModel : ObservableObject
         finally
         {
             IsBusy = false;
-            Yenile();
+            await YenileAsync().ConfigureAwait(true);
         }
     }
 

@@ -3,6 +3,8 @@ using Imar18.Application.Cad;
 using Imar18.Application.Cikti;
 using Imar18.Application.Onay;
 using Imar18.Application.Proje;
+using Imar18.Domain.Geometry;
+using Imar18.GeometryEngine.Topoloji;
 using Imar18.Infrastructure.Cad.Acad;
 using Imar18.Infrastructure.Cad.Ncz;
 using Imar18.Infrastructure.Cikti;
@@ -20,6 +22,9 @@ namespace Imar18.Bootstrapper;
 /// </summary>
 public static class Program
 {
+    /// <summary>Parseller arası çakışma/boşluk analizi (NTS overlay, GeometryEngine — P6).</summary>
+    private static readonly IParselTopolojiDenetcisi Topoloji = new NtsParselTopolojiDenetcisi();
+
     [STAThread]
     public static void Main(string[] args)
     {
@@ -49,8 +54,8 @@ public static class Program
         var kullanici = string.IsNullOrWhiteSpace(Environment.UserName) ? "muhendis" : Environment.UserName;
         return new ProjeCalismaAlani(
             yol,
-            new ApprovalService(yol, TimeProvider.System),
-            new CiktiServisi(yol, [new ClosedXmlCetvelUretici(), new QuestPdfFenKlasoruUretici(), new CksDosyaUretici()], new AtomikCiktiYazici()),
+            new ApprovalService(yol, TimeProvider.System, Topoloji),
+            new CiktiServisi(yol, [new ClosedXmlCetvelUretici(), new QuestPdfFenKlasoruUretici(), new CksDosyaUretici()], new AtomikCiktiYazici(), Topoloji),
             kullanici.Length > 64 ? kullanici[..64] : kullanici);
     }
 

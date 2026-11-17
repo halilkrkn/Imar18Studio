@@ -199,15 +199,18 @@ public sealed class CiktiServisi
     private readonly ProjeKomutYolu _yol;
     private readonly Dictionary<CiktiTuru, ICiktiUretici> _ureticiler;
     private readonly ICiktiYazici _yazici;
+    private readonly IParselTopolojiDenetcisi _topoloji;
 
-    public CiktiServisi(ProjeKomutYolu yol, IEnumerable<ICiktiUretici> ureticiler, ICiktiYazici yazici)
+    public CiktiServisi(ProjeKomutYolu yol, IEnumerable<ICiktiUretici> ureticiler, ICiktiYazici yazici, IParselTopolojiDenetcisi topoloji)
     {
         ArgumentNullException.ThrowIfNull(yol);
         ArgumentNullException.ThrowIfNull(ureticiler);
         ArgumentNullException.ThrowIfNull(yazici);
+        ArgumentNullException.ThrowIfNull(topoloji);
         _yol = yol;
         _ureticiler = ureticiler.ToDictionary(u => u.Tur);
         _yazici = yazici;
+        _topoloji = topoloji;
     }
 
     /// <summary>Kayıtlı üretici varsa noktalı dosya uzantısı.</summary>
@@ -247,7 +250,7 @@ public sealed class CiktiServisi
             var uretim = await Task.Run(
                 () =>
                 {
-                    var paket = CiktiPaketiOlusturucu.Olustur(belge, ProjeDegerlendirici.Degerlendir(belge));
+                    var paket = CiktiPaketiOlusturucu.Olustur(belge, ProjeDegerlendirici.Degerlendir(belge, _topoloji));
                     ilerleme?.Report(30);
                     return paket.IsFailure ? Result<byte[]>.Failure(paket.Error) : uretici.Uret(paket.Value, cancellationToken);
                 },

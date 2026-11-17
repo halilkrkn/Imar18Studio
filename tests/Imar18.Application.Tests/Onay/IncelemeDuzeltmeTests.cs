@@ -55,7 +55,7 @@ public sealed class IncelemeDuzeltmeTests
             new GeodeticPoint(OrnekProje.X0 + 10m, OrnekProje.Y0), new GeodeticPoint(OrnekProje.X0, OrnekProje.Y0 + 4m),
         ]);
         (await yol.GonderAsync(new ParselGeometrileriAyarlaKomutu(g), OrnekProje.Muhendis)).IsSuccess.Should().BeTrue();
-        var servis = new ApprovalService(yol, zaman);
+        var servis = new ApprovalService(yol, zaman, OrnekProje.Topoloji);
 
         servis.Degerlendir().Bulgular.Should().Contain(b => b.Code == ErrorCodes.TopoKendiUzerindeKesisim && b.Severity == ErrorSeverity.Critical);
         (await servis.OnaylaAsync(OrnekProje.Muhendis, ApprovalService.OnayMetni)).Error.Code.Should().Be(ErrorCodes.CiktiOnayKritikHataEngeli);
@@ -72,7 +72,7 @@ public sealed class IncelemeDuzeltmeTests
             Eslestirme = [new HakEslestirmeSatiri("MLK-001", "K1", "A1", 60.01m), new HakEslestirmeSatiri("MLK-002", "K1", "A1", 60.00m)],
         }), OrnekProje.Muhendis);
 
-        var d = new ApprovalService(yol, zaman).Degerlendir();
+        var d = new ApprovalService(yol, zaman, OrnekProje.Topoloji).Degerlendir();
 
         d.Tamamlandi.Should().BeFalse();
         d.EksikGirdiler.Should().Contain("alan tutarlılığı");
@@ -84,7 +84,7 @@ public sealed class IncelemeDuzeltmeTests
         var (yol, _, zaman) = await OrnekProje.TamProjeAsync();
         await yol.GonderAsync(new TecvizGirdileriAyarlaKomutu([new TecvizParselGirdisi("K1", 200.00m, 199.99m, OrnekProje.Tecviz())], null), OrnekProje.Muhendis);
 
-        new ApprovalService(yol, zaman).Degerlendir().EksikGirdiler.Should().Contain("alan tutarlılığı");
+        new ApprovalService(yol, zaman, OrnekProje.Topoloji).Degerlendir().EksikGirdiler.Should().Contain("alan tutarlılığı");
     }
 
     /// <summary>Tapu 200.50, hesap 200.00 (fark +0.50 ≤ tecviz 1.00) → Y1 80.00 + 0.50 = 80.50; DOPO = 80.50 / 200.50 = 0.4014963.</summary>
@@ -105,7 +105,7 @@ public sealed class IncelemeDuzeltmeTests
     public async Task FenKlasoru_Alan_Tablosu_Y1_Dengelenmis_Alani_Gostermeli_Tecviz_Farki_Sifirdan_Farkli()
     {
         var (yol, zaman) = await FarkliTapuluProjeAsync();
-        var servis = new ApprovalService(yol, zaman);
+        var servis = new ApprovalService(yol, zaman, OrnekProje.Topoloji);
         var d = servis.Degerlendir();
         d.Tamamlandi.Should().BeTrue(string.Join(" | ", d.EksikGirdiler.Concat(d.Bulgular.Select(b => b.TechnicalMessage))));
         (await servis.OnaylaAsync(OrnekProje.Muhendis, ApprovalService.OnayMetni)).IsSuccess.Should().BeTrue();
@@ -158,7 +158,7 @@ public sealed class IncelemeDuzeltmeTests
     private static async Task<(ProjeKomutYolu Yol, ApprovalService Onay)> OnayliAsync()
     {
         var (yol, _, zaman) = await OrnekProje.TamProjeAsync();
-        var onay = new ApprovalService(yol, zaman);
+        var onay = new ApprovalService(yol, zaman, OrnekProje.Topoloji);
         (await onay.OnaylaAsync(OrnekProje.Muhendis, ApprovalService.OnayMetni)).IsSuccess.Should().BeTrue();
         return (yol, onay);
     }
@@ -168,7 +168,7 @@ public sealed class IncelemeDuzeltmeTests
     {
         var (yol, _) = await OnayliAsync();
         var yazici = new Yazici { BozukMu = y => y.EndsWith(".sha256", StringComparison.Ordinal) };
-        var servis = new CiktiServisi(yol, [new SahteUretici(_ => Result<byte[]>.Success([1]))], yazici);
+        var servis = new CiktiServisi(yol, [new SahteUretici(_ => Result<byte[]>.Success([1]))], yazici, OrnekProje.Topoloji);
 
         var sonuc = await servis.UretAsync(CiktiTuru.FenKlasoru, OrnekProje.Muhendis, "fen.pdf");
 
@@ -181,7 +181,7 @@ public sealed class IncelemeDuzeltmeTests
     public async Task FenKlasoru_Uretici_Istisnasi_Reddedilen_Girisim_Olarak_Denetlenmeli()
     {
         var (yol, _) = await OnayliAsync();
-        var servis = new CiktiServisi(yol, [new SahteUretici(_ => throw new InvalidOperationException("beklenmeyen"))], new Yazici());
+        var servis = new CiktiServisi(yol, [new SahteUretici(_ => throw new InvalidOperationException("beklenmeyen"))], new Yazici(), OrnekProje.Topoloji);
 
         var sonuc = await servis.UretAsync(CiktiTuru.FenKlasoru, OrnekProje.Muhendis, "fen.pdf");
 
@@ -199,7 +199,7 @@ public sealed class IncelemeDuzeltmeTests
         {
             cts.Cancel();
             return Result<byte[]>.Success([1]);
-        })], yazici);
+        })], yazici, OrnekProje.Topoloji);
 
         var act = () => servis.UretAsync(CiktiTuru.FenKlasoru, OrnekProje.Muhendis, "fen.pdf", cancellationToken: cts.Token);
 
@@ -217,7 +217,7 @@ public sealed class IncelemeDuzeltmeTests
         {
             yol.GonderAsync(new ProjeAdiDegistirKomutu("Araya giren değişiklik"), OrnekProje.Muhendis).GetAwaiter().GetResult();
             return Result<byte[]>.Success([1]);
-        })], yazici);
+        })], yazici, OrnekProje.Topoloji);
 
         var sonuc = await servis.UretAsync(CiktiTuru.FenKlasoru, OrnekProje.Muhendis, "fen.pdf");
 
@@ -242,7 +242,7 @@ public sealed class IncelemeDuzeltmeTests
     public async Task KullaniciOnayi_Tam_24_Saatte_GeriAlinabilmeli()
     {
         var (yol, _, zaman) = await OrnekProje.TamProjeAsync();
-        var onay = new ApprovalService(yol, zaman);
+        var onay = new ApprovalService(yol, zaman, OrnekProje.Topoloji);
         await onay.OnaylaAsync(OrnekProje.Muhendis, ApprovalService.OnayMetni);
         zaman.Ilerlet(ApprovalService.GeriAlmaSuresi);
 

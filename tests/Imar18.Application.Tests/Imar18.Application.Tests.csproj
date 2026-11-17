@@ -7,6 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Imar18.Domain\Imar18.Domain.csproj" />
     <ProjectReference Include="..\..\src\Imar18.Application\Imar18.Application.csproj" />
+    <ProjectReference Include="..\..\src\Imar18.GeometryEngine\Imar18.GeometryEngine.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />

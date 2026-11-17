@@ -11,6 +11,10 @@
     <ProjectReference Include="..\..\src\Imar18.Infrastructure\Imar18.Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Tamamen sentetik NCZ uretici (P4 test yardimcisi) pilot coklu CAD senaryosunda yeniden kullanilir. -->
+    <Compile Include="..\Imar18.Infrastructure.Tests\Cad\Ncz\NczSentetikDosya.cs" Link="Destek\NczSentetikDosya.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />

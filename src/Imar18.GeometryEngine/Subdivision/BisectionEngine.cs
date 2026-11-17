@@ -14,8 +14,10 @@ namespace Imar18.GeometryEngine.Subdivision;
 /// dogru uzerindeki geri donen cikintilar temizlenir); kesim koseleri MUTLAK koordinatta 1 mm'ye kuantize edilir.</item>
 /// <item>Kuantizasyon sonrasi NTS IsValid ve Decimal Gauss alani (parca, kalan ve parca+kalan−ada) toleransla yeniden dogrulanir;
 /// aksi halde sonuc dondurulmez.</item>
-/// <item>Kesim dogrusu halkayi ikiden fazla noktada keserse (konkav ada, MultiPolygon) tarama durur ve muhendis incelemesi istenir;
-/// dogruya yalnizca teget dokunan koseler kesisim sayilmaz.</item>
+/// <item>Kesim dogrusu halkayi ikiden fazla noktada keserse (konkav ada, MultiPolygon) o aci reddedilir ve tarama surer
+/// (SORU-023 karari, 17 Kasim 2026): [min, max] icinde tek parcali gecerli cozum bulunan ilk aci kabul edilir; hicbir acida
+/// tek parcali cozum yoksa ve en az bir aci MultiPolygon urettiyse <c>ERR-TOPO-004</c> (muhendis incelemesi) doner.
+/// Dogruya yalnizca teget dokunan koseler kesisim sayilmaz.</item>
 /// </list>
 /// Motor durumsuzdur; "geri alma" hicbir kismi sonuc dondurmemek demektir.
 /// </summary>
@@ -69,12 +71,9 @@ public static class BisectionEngine
             var attempt = TryAngle(request, blockArea, local, origin, angle, cancellationToken);
             attempts.Add(new AngleAttempt(angle, attempt.Outcome, attempt.Iterations));
 
-            switch (attempt.Outcome)
+            if (attempt.Outcome == AttemptOutcome.Accepted)
             {
-                case AttemptOutcome.Accepted:
-                    return new BisectionOutcome(Result<BisectionCut>.Success(attempt.Cut!), attempts.AsReadOnly());
-                case AttemptOutcome.MultiPolygon:
-                    return Stop(attempt.Error!, attempts);
+                return new BisectionOutcome(Result<BisectionCut>.Success(attempt.Cut!), attempts.AsReadOnly());
             }
 
             var rank = Rank(attempt.Outcome);
@@ -156,9 +155,13 @@ public static class BisectionEngine
         }
     }
 
-    /// <summary>Tum acilar basarisizsa dondurulecek hatanin onceligi (en ileri asamaya ulasan deneme).</summary>
+    /// <summary>
+    /// Tum acilar basarisizsa dondurulecek hatanin onceligi. MultiPolygon en ustundedir (SORU-023: hicbir acida tek parcali
+    /// cozum yoksa ERR-TOPO-004); digerleri en ileri asamaya ulasan denemeye gore siralanir.
+    /// </summary>
     private static int Rank(AttemptOutcome outcome) => outcome switch
     {
+        AttemptOutcome.MultiPolygon => 6,
         AttemptOutcome.QuantizationTopologyBroken => 5,
         AttemptOutcome.QuantizationAreaDeviation => 4,
         AttemptOutcome.DegeneratePiece => 3,

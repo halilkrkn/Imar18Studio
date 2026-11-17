@@ -55,13 +55,16 @@ public sealed class ApprovalService
 
     private readonly ProjeKomutYolu _yol;
     private readonly TimeProvider _zaman;
+    private readonly IParselTopolojiDenetcisi _topoloji;
 
-    public ApprovalService(ProjeKomutYolu yol, TimeProvider zaman)
+    public ApprovalService(ProjeKomutYolu yol, TimeProvider zaman, IParselTopolojiDenetcisi topoloji)
     {
         ArgumentNullException.ThrowIfNull(yol);
         ArgumentNullException.ThrowIfNull(zaman);
+        ArgumentNullException.ThrowIfNull(topoloji);
         _yol = yol;
         _zaman = zaman;
+        _topoloji = topoloji;
     }
 
     /// <summary>Güncel revizyon için geçerli onay var mı?</summary>
@@ -75,13 +78,13 @@ public sealed class ApprovalService
     }
 
     /// <summary>Güncel durum değerlendirmesi (salt okunur).</summary>
-    public ProjeDegerlendirmesi Degerlendir() => ProjeDegerlendirici.Degerlendir(_yol.AnlikGoruntu().Belge);
+    public ProjeDegerlendirmesi Degerlendir() => ProjeDegerlendirici.Degerlendir(_yol.AnlikGoruntu().Belge, _topoloji);
 
     /// <summary>Onay ekranı özetini hazırlar (spec 11.3).</summary>
     public OnayEkrani OnayEkraniHazirla()
     {
         var (belge, rev) = _yol.AnlikGoruntu();
-        var d = ProjeDegerlendirici.Degerlendir(belge);
+        var d = ProjeDegerlendirici.Degerlendir(belge, _topoloji);
         var engeller = new List<string>();
         if (d.KritikVar)
         {
@@ -113,7 +116,7 @@ public sealed class ApprovalService
     /// <summary>Güncel revizyonu onaylar.</summary>
     public async Task<Result<MuhendisOnayi>> OnaylaAsync(string muhendisId, string kabulEdilenOnayMetni, CancellationToken cancellationToken = default)
     {
-        var sonuc = await _yol.GonderAsync(new OnayVerKomutu(muhendisId, kabulEdilenOnayMetni, _zaman.GetUtcNow()), muhendisId, cancellationToken).ConfigureAwait(false);
+        var sonuc = await _yol.GonderAsync(new OnayVerKomutu(muhendisId, kabulEdilenOnayMetni, _zaman.GetUtcNow(), _topoloji), muhendisId, cancellationToken).ConfigureAwait(false);
         return sonuc.IsFailure ? Result<MuhendisOnayi>.Failure(sonuc.Error) : Result<MuhendisOnayi>.Success(sonuc.Value.Onay!);
     }
 
@@ -147,13 +150,13 @@ public sealed class ApprovalService
         return e with { TechnicalMessage = m };
     }
 
-    private sealed record OnayVerKomutu(string MuhendisId, string KabulEdilenMetin, DateTimeOffset Zaman) : IOnayKomutu
+    private sealed record OnayVerKomutu(string MuhendisId, string KabulEdilenMetin, DateTimeOffset Zaman, IParselTopolojiDenetcisi Topoloji) : IOnayKomutu
     {
         public string Ad => "OnayVer";
 
         public Result<Proje.ProjeBelgesi> Uygula(Proje.ProjeBelgesi mevcut)
         {
-            var d = ProjeDegerlendirici.Degerlendir(mevcut);
+            var d = ProjeDegerlendirici.Degerlendir(mevcut, Topoloji);
             var rev = d.Revizyon.Deger;
             if (d.KritikVar)
             {
