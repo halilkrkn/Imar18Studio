@@ -1,0 +1,870 @@
+{
+  "projectCode": "PROJE-B (902 Ada 1 Parsel - Anonim Dağıtım Eşleşmesi)",
+  "sourceNote": "2.zip/TESCİLE ESAS DAĞITIM CETVELİ-1-2-3.pdf dosyasından kişisel veriler temizlenerek üretilmiştir (SORU-015). malikKodu = cetveldeki kadastro malik sıra numarası (SNo) ile sabit anonim kimlik (Malik-01..Malik-40); aynı malik tüm imar parsellerinde aynı kodu taşır.",
+  "kadastroParsel": "902/1",
+  "toplamKadastroAlaniM2": 26629.48,
+  "toplamImarTahsisAlaniM2": 21262.44,
+  "dopo": 0.2015451,
+  "imarParselSayisi": 37,
+  "toplamTahsisSatirSayisi": 94,
+  "malikSayisi": 40,
+  "soru011Notu": "101/1 parselinde resmî cetveldeki payların toplamı 353975 (3539.75 m²) görünürken parsel alanı 3539.74 m²'dir; yazılımda Largest Remainder (353974) esas alınır.",
+  "soru105_2Notu": "105/2 parselinde resmî cetveldeki payların toplamı 36964 (1 dm² = 0.01 m² eksik) görünürken payda 36965'tir; yazılımda Largest Remainder (36965) esas alınır (SORU-011 ile aynı kural).",
+  "resmiCiktiPayToplamlari": {
+    "101/1": 353975,
+    "105/2": 36964
+  },
+  "largestRemainderPayToplamlari": {
+    "101/1": 353974,
+    "105/2": 36965
+  },
+  "muvafakatNotu": "Cetvel muvafakat bilgisi içermez; müstakil (TAM) tahsislerin Md. 17/1-(d) muvafakat kaydı fixture dışındadır. Testler tüm malikleri muvafakatli varsayar.",
+  "eslesmeler": [
+    {
+      "imarParsel": "101/1",
+      "imarParselAlaniM2": 3539.74,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-01",
+      "girenHisse": "1/24",
+      "tescilHissesi": "66387/353974",
+      "tahsisAlaniM2": 663.87
+    },
+    {
+      "imarParsel": "101/1",
+      "imarParselAlaniM2": 3539.74,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-02",
+      "girenHisse": "1/24",
+      "tescilHissesi": "66396/353974",
+      "tahsisAlaniM2": 663.96
+    },
+    {
+      "imarParsel": "101/1",
+      "imarParselAlaniM2": 3539.74,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-03",
+      "girenHisse": "1/24",
+      "tescilHissesi": "66397/353974",
+      "tahsisAlaniM2": 663.97
+    },
+    {
+      "imarParsel": "101/1",
+      "imarParselAlaniM2": 3539.74,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-04",
+      "girenHisse": "1/24",
+      "tescilHissesi": "66397/353974",
+      "tahsisAlaniM2": 663.97
+    },
+    {
+      "imarParsel": "101/1",
+      "imarParselAlaniM2": 3539.74,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-05",
+      "girenHisse": "1/24",
+      "tescilHissesi": "66397/353974",
+      "tahsisAlaniM2": 663.97
+    },
+    {
+      "imarParsel": "101/1",
+      "imarParselAlaniM2": 3539.74,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-06",
+      "girenHisse": "1/72",
+      "tescilHissesi": "7334/353974",
+      "tahsisAlaniM2": 73.34
+    },
+    {
+      "imarParsel": "101/1",
+      "imarParselAlaniM2": 3539.74,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-07",
+      "girenHisse": "1/72",
+      "tescilHissesi": "7334/353974",
+      "tahsisAlaniM2": 73.34
+    },
+    {
+      "imarParsel": "101/1",
+      "imarParselAlaniM2": 3539.74,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-08",
+      "girenHisse": "1/72",
+      "tescilHissesi": "7333/353974",
+      "tahsisAlaniM2": 73.33
+    },
+    {
+      "imarParsel": "102/1",
+      "imarParselAlaniM2": 326.37,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-01",
+      "girenHisse": "1/24",
+      "tescilHissesi": "757/32637",
+      "tahsisAlaniM2": 7.57
+    },
+    {
+      "imarParsel": "102/1",
+      "imarParselAlaniM2": 326.37,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-02",
+      "girenHisse": "1/24",
+      "tescilHissesi": "757/32637",
+      "tahsisAlaniM2": 7.57
+    },
+    {
+      "imarParsel": "102/1",
+      "imarParselAlaniM2": 326.37,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-03",
+      "girenHisse": "1/24",
+      "tescilHissesi": "757/32637",
+      "tahsisAlaniM2": 7.57
+    },
+    {
+      "imarParsel": "102/1",
+      "imarParselAlaniM2": 326.37,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-04",
+      "girenHisse": "1/24",
+      "tescilHissesi": "757/32637",
+      "tahsisAlaniM2": 7.57
+    },
+    {
+      "imarParsel": "102/1",
+      "imarParselAlaniM2": 326.37,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-05",
+      "girenHisse": "1/24",
+      "tescilHissesi": "757/32637",
+      "tahsisAlaniM2": 7.57
+    },
+    {
+      "imarParsel": "102/1",
+      "imarParselAlaniM2": 326.37,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-06",
+      "girenHisse": "1/72",
+      "tescilHissesi": "757/32637",
+      "tahsisAlaniM2": 7.57
+    },
+    {
+      "imarParsel": "102/1",
+      "imarParselAlaniM2": 326.37,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-07",
+      "girenHisse": "1/72",
+      "tescilHissesi": "757/32637",
+      "tahsisAlaniM2": 7.57
+    },
+    {
+      "imarParsel": "102/1",
+      "imarParselAlaniM2": 326.37,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-08",
+      "girenHisse": "1/72",
+      "tescilHissesi": "760/32637",
+      "tahsisAlaniM2": 7.6
+    },
+    {
+      "imarParsel": "102/1",
+      "imarParselAlaniM2": 326.37,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-39",
+      "girenHisse": "1/80",
+      "tescilHissesi": "26578/32637",
+      "tahsisAlaniM2": 265.78
+    },
+    {
+      "imarParsel": "102/2",
+      "imarParselAlaniM2": 430.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-38",
+      "girenHisse": "1/48",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 430.0
+    },
+    {
+      "imarParsel": "102/3",
+      "imarParselAlaniM2": 430.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-37",
+      "girenHisse": "1/48",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 430.0
+    },
+    {
+      "imarParsel": "102/4",
+      "imarParselAlaniM2": 430.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-36",
+      "girenHisse": "1/48",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 430.0
+    },
+    {
+      "imarParsel": "102/5",
+      "imarParselAlaniM2": 442.96,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-34",
+      "girenHisse": "1/48",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 442.96
+    },
+    {
+      "imarParsel": "102/6",
+      "imarParselAlaniM2": 430.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-35",
+      "girenHisse": "1/48",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 430.0
+    },
+    {
+      "imarParsel": "102/7",
+      "imarParselAlaniM2": 631.24,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-10",
+      "girenHisse": "19/320",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 631.24
+    },
+    {
+      "imarParsel": "102/8",
+      "imarParselAlaniM2": 631.23,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-40",
+      "girenHisse": "19/320",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 631.23
+    },
+    {
+      "imarParsel": "103/1",
+      "imarParselAlaniM2": 426.78,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-01",
+      "girenHisse": "1/24",
+      "tescilHissesi": "5340/42678",
+      "tahsisAlaniM2": 53.4
+    },
+    {
+      "imarParsel": "103/1",
+      "imarParselAlaniM2": 426.78,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-02",
+      "girenHisse": "1/24",
+      "tescilHissesi": "5334/42678",
+      "tahsisAlaniM2": 53.34
+    },
+    {
+      "imarParsel": "103/1",
+      "imarParselAlaniM2": 426.78,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-03",
+      "girenHisse": "1/24",
+      "tescilHissesi": "5334/42678",
+      "tahsisAlaniM2": 53.34
+    },
+    {
+      "imarParsel": "103/1",
+      "imarParselAlaniM2": 426.78,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-04",
+      "girenHisse": "1/24",
+      "tescilHissesi": "5334/42678",
+      "tahsisAlaniM2": 53.34
+    },
+    {
+      "imarParsel": "103/1",
+      "imarParselAlaniM2": 426.78,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-05",
+      "girenHisse": "1/24",
+      "tescilHissesi": "5334/42678",
+      "tahsisAlaniM2": 53.34
+    },
+    {
+      "imarParsel": "103/1",
+      "imarParselAlaniM2": 426.78,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-06",
+      "girenHisse": "1/72",
+      "tescilHissesi": "5334/42678",
+      "tahsisAlaniM2": 53.34
+    },
+    {
+      "imarParsel": "103/1",
+      "imarParselAlaniM2": 426.78,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-07",
+      "girenHisse": "1/72",
+      "tescilHissesi": "5334/42678",
+      "tahsisAlaniM2": 53.34
+    },
+    {
+      "imarParsel": "103/1",
+      "imarParselAlaniM2": 426.78,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-08",
+      "girenHisse": "1/72",
+      "tescilHissesi": "5334/42678",
+      "tahsisAlaniM2": 53.34
+    },
+    {
+      "imarParsel": "103/2",
+      "imarParselAlaniM2": 450.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-11",
+      "girenHisse": "1/44",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 450.0
+    },
+    {
+      "imarParsel": "103/3",
+      "imarParselAlaniM2": 450.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-23",
+      "girenHisse": "1/44",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 450.0
+    },
+    {
+      "imarParsel": "103/4",
+      "imarParselAlaniM2": 483.24,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-21",
+      "girenHisse": "1/88",
+      "tescilHissesi": "24162/48324",
+      "tahsisAlaniM2": 241.62
+    },
+    {
+      "imarParsel": "103/4",
+      "imarParselAlaniM2": 483.24,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-22",
+      "girenHisse": "1/88",
+      "tescilHissesi": "24162/48324",
+      "tahsisAlaniM2": 241.62
+    },
+    {
+      "imarParsel": "103/5",
+      "imarParselAlaniM2": 631.24,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-09",
+      "girenHisse": "19/320",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 631.24
+    },
+    {
+      "imarParsel": "103/6",
+      "imarParselAlaniM2": 631.23,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-13",
+      "girenHisse": "19/320",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 631.23
+    },
+    {
+      "imarParsel": "103/7",
+      "imarParselAlaniM2": 450.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-25",
+      "girenHisse": "1/44",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 450.0
+    },
+    {
+      "imarParsel": "103/8",
+      "imarParselAlaniM2": 450.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-26",
+      "girenHisse": "1/44",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 450.0
+    },
+    {
+      "imarParsel": "103/9",
+      "imarParselAlaniM2": 450.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-27",
+      "girenHisse": "1/44",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 450.0
+    },
+    {
+      "imarParsel": "103/10",
+      "imarParselAlaniM2": 450.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-28",
+      "girenHisse": "1/44",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 450.0
+    },
+    {
+      "imarParsel": "104/1",
+      "imarParselAlaniM2": 765.02,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-01",
+      "girenHisse": "1/24",
+      "tescilHissesi": "9563/76502",
+      "tahsisAlaniM2": 95.63
+    },
+    {
+      "imarParsel": "104/1",
+      "imarParselAlaniM2": 765.02,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-02",
+      "girenHisse": "1/24",
+      "tescilHissesi": "9563/76502",
+      "tahsisAlaniM2": 95.63
+    },
+    {
+      "imarParsel": "104/1",
+      "imarParselAlaniM2": 765.02,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-03",
+      "girenHisse": "1/24",
+      "tescilHissesi": "9563/76502",
+      "tahsisAlaniM2": 95.63
+    },
+    {
+      "imarParsel": "104/1",
+      "imarParselAlaniM2": 765.02,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-04",
+      "girenHisse": "1/24",
+      "tescilHissesi": "9563/76502",
+      "tahsisAlaniM2": 95.63
+    },
+    {
+      "imarParsel": "104/1",
+      "imarParselAlaniM2": 765.02,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-05",
+      "girenHisse": "1/24",
+      "tescilHissesi": "9563/76502",
+      "tahsisAlaniM2": 95.63
+    },
+    {
+      "imarParsel": "104/1",
+      "imarParselAlaniM2": 765.02,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-06",
+      "girenHisse": "1/72",
+      "tescilHissesi": "9563/76502",
+      "tahsisAlaniM2": 95.63
+    },
+    {
+      "imarParsel": "104/1",
+      "imarParselAlaniM2": 765.02,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-07",
+      "girenHisse": "1/72",
+      "tescilHissesi": "9563/76502",
+      "tahsisAlaniM2": 95.63
+    },
+    {
+      "imarParsel": "104/1",
+      "imarParselAlaniM2": 765.02,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-08",
+      "girenHisse": "1/72",
+      "tescilHissesi": "9561/76502",
+      "tahsisAlaniM2": 95.61
+    },
+    {
+      "imarParsel": "104/2",
+      "imarParselAlaniM2": 483.24,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-17",
+      "girenHisse": "1/132",
+      "tescilHissesi": "16108/48324",
+      "tahsisAlaniM2": 161.08
+    },
+    {
+      "imarParsel": "104/2",
+      "imarParselAlaniM2": 483.24,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-20",
+      "girenHisse": "1/132",
+      "tescilHissesi": "16108/48324",
+      "tahsisAlaniM2": 161.08
+    },
+    {
+      "imarParsel": "104/2",
+      "imarParselAlaniM2": 483.24,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-32",
+      "girenHisse": "1/132",
+      "tescilHissesi": "16108/48324",
+      "tahsisAlaniM2": 161.08
+    },
+    {
+      "imarParsel": "104/3",
+      "imarParselAlaniM2": 430.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-18",
+      "girenHisse": "1/48",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 430.0
+    },
+    {
+      "imarParsel": "104/4",
+      "imarParselAlaniM2": 430.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-14",
+      "girenHisse": "1/48",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 430.0
+    },
+    {
+      "imarParsel": "104/5",
+      "imarParselAlaniM2": 631.24,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-13",
+      "girenHisse": "19/320",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 631.24
+    },
+    {
+      "imarParsel": "104/6",
+      "imarParselAlaniM2": 631.23,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-10",
+      "girenHisse": "19/320",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 631.23
+    },
+    {
+      "imarParsel": "104/7",
+      "imarParselAlaniM2": 430.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-15",
+      "girenHisse": "1/48",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 430.0
+    },
+    {
+      "imarParsel": "104/8",
+      "imarParselAlaniM2": 430.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-16",
+      "girenHisse": "1/48",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 430.0
+    },
+    {
+      "imarParsel": "104/9",
+      "imarParselAlaniM2": 483.2,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-19",
+      "girenHisse": "1/176",
+      "tescilHissesi": "12080/48320",
+      "tahsisAlaniM2": 120.8
+    },
+    {
+      "imarParsel": "104/9",
+      "imarParselAlaniM2": 483.2,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-29",
+      "girenHisse": "1/176",
+      "tescilHissesi": "12080/48320",
+      "tahsisAlaniM2": 120.8
+    },
+    {
+      "imarParsel": "104/9",
+      "imarParselAlaniM2": 483.2,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-30",
+      "girenHisse": "1/176",
+      "tescilHissesi": "12080/48320",
+      "tahsisAlaniM2": 120.8
+    },
+    {
+      "imarParsel": "104/9",
+      "imarParselAlaniM2": 483.2,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-31",
+      "girenHisse": "1/176",
+      "tescilHissesi": "12080/48320",
+      "tahsisAlaniM2": 120.8
+    },
+    {
+      "imarParsel": "105/1",
+      "imarParselAlaniM2": 428.9,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-33",
+      "girenHisse": "1/16",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 428.9
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-11",
+      "girenHisse": "1/44",
+      "tescilHissesi": "3325/36965",
+      "tahsisAlaniM2": 33.25
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-12",
+      "girenHisse": "1/44",
+      "tescilHissesi": "3325/36965",
+      "tahsisAlaniM2": 33.25
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-14",
+      "girenHisse": "1/48",
+      "tescilHissesi": "1297/36965",
+      "tahsisAlaniM2": 12.97
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-15",
+      "girenHisse": "1/48",
+      "tescilHissesi": "1297/36965",
+      "tahsisAlaniM2": 12.97
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-16",
+      "girenHisse": "1/48",
+      "tescilHissesi": "1296/36965",
+      "tahsisAlaniM2": 12.96
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-18",
+      "girenHisse": "1/48",
+      "tescilHissesi": "1296/36965",
+      "tahsisAlaniM2": 12.96
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-23",
+      "girenHisse": "1/44",
+      "tescilHissesi": "3324/36965",
+      "tahsisAlaniM2": 33.24
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-24",
+      "girenHisse": "1/44",
+      "tescilHissesi": "3324/36965",
+      "tahsisAlaniM2": 33.24
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-25",
+      "girenHisse": "1/44",
+      "tescilHissesi": "3324/36965",
+      "tahsisAlaniM2": 33.24
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-26",
+      "girenHisse": "1/44",
+      "tescilHissesi": "3324/36965",
+      "tahsisAlaniM2": 33.24
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-27",
+      "girenHisse": "1/44",
+      "tescilHissesi": "3324/36965",
+      "tahsisAlaniM2": 33.24
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-28",
+      "girenHisse": "1/44",
+      "tescilHissesi": "3324/36965",
+      "tahsisAlaniM2": 33.24
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-35",
+      "girenHisse": "1/48",
+      "tescilHissesi": "1296/36965",
+      "tahsisAlaniM2": 12.96
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-36",
+      "girenHisse": "1/48",
+      "tescilHissesi": "1296/36965",
+      "tahsisAlaniM2": 12.96
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-37",
+      "girenHisse": "1/48",
+      "tescilHissesi": "1296/36965",
+      "tahsisAlaniM2": 12.96
+    },
+    {
+      "imarParsel": "105/2",
+      "imarParselAlaniM2": 369.65,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-38",
+      "girenHisse": "1/48",
+      "tescilHissesi": "1296/36965",
+      "tahsisAlaniM2": 12.96
+    },
+    {
+      "imarParsel": "105/3",
+      "imarParselAlaniM2": 450.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-33",
+      "girenHisse": "1/16",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 450.0
+    },
+    {
+      "imarParsel": "105/4",
+      "imarParselAlaniM2": 450.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-33",
+      "girenHisse": "1/16",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 450.0
+    },
+    {
+      "imarParsel": "105/5",
+      "imarParselAlaniM2": 450.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-24",
+      "girenHisse": "1/44",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 450.0
+    },
+    {
+      "imarParsel": "105/6",
+      "imarParselAlaniM2": 450.0,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-12",
+      "girenHisse": "1/44",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 450.0
+    },
+    {
+      "imarParsel": "105/7",
+      "imarParselAlaniM2": 523.47,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-01",
+      "girenHisse": "1/24",
+      "tescilHissesi": "6546/52347",
+      "tahsisAlaniM2": 65.46
+    },
+    {
+      "imarParsel": "105/7",
+      "imarParselAlaniM2": 523.47,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-02",
+      "girenHisse": "1/24",
+      "tescilHissesi": "6543/52347",
+      "tahsisAlaniM2": 65.43
+    },
+    {
+      "imarParsel": "105/7",
+      "imarParselAlaniM2": 523.47,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-03",
+      "girenHisse": "1/24",
+      "tescilHissesi": "6543/52347",
+      "tahsisAlaniM2": 65.43
+    },
+    {
+      "imarParsel": "105/7",
+      "imarParselAlaniM2": 523.47,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-04",
+      "girenHisse": "1/24",
+      "tescilHissesi": "6543/52347",
+      "tahsisAlaniM2": 65.43
+    },
+    {
+      "imarParsel": "105/7",
+      "imarParselAlaniM2": 523.47,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-05",
+      "girenHisse": "1/24",
+      "tescilHissesi": "6543/52347",
+      "tahsisAlaniM2": 65.43
+    },
+    {
+      "imarParsel": "105/7",
+      "imarParselAlaniM2": 523.47,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-06",
+      "girenHisse": "1/72",
+      "tescilHissesi": "6543/52347",
+      "tahsisAlaniM2": 65.43
+    },
+    {
+      "imarParsel": "105/7",
+      "imarParselAlaniM2": 523.47,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-07",
+      "girenHisse": "1/72",
+      "tescilHissesi": "6543/52347",
+      "tahsisAlaniM2": 65.43
+    },
+    {
+      "imarParsel": "105/7",
+      "imarParselAlaniM2": 523.47,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-08",
+      "girenHisse": "1/72",
+      "tescilHissesi": "6543/52347",
+      "tahsisAlaniM2": 65.43
+    },
+    {
+      "imarParsel": "105/8",
+      "imarParselAlaniM2": 631.23,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-40",
+      "girenHisse": "19/320",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 631.23
+    },
+    {
+      "imarParsel": "105/9",
+      "imarParselAlaniM2": 631.23,
+      "kadastroParsel": "902/1",
+      "malikKodu": "Malik-09",
+      "girenHisse": "19/320",
+      "tescilHissesi": "TAM",
+      "tahsisAlaniM2": 631.23
+    }
+  ]
+}
