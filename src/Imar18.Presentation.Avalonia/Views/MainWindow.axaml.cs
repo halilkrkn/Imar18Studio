@@ -1,18 +1,22 @@
 using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using Imar18.Application.Cikti;
+using Imar18.Presentation.Avalonia.Gorunum;
 using Imar18.Presentation.Avalonia.ViewModels;
 
 namespace Imar18.Presentation.Avalonia.Views;
 
 /// <summary>
-/// Ana pencere (P4.3, P7). Kod arkası yalnızca platform işlerini yapar: dosya seçici, pano, komut çubuğu klavyesi, uygulama
-/// tema varyantı (Koyu Stüdyo / Açık Pafta) ve panel sütun/satır genişliklerinin aç-kapa ile saklanıp geri yüklenmesi.
+/// Ana pencere (P4.3, P7). Kod arkası yalnızca platform işlerini yapar: dosya seçici, pano, komut çubuğu klavyesi / fare
+/// (tıklama, çift tıklama, dışarı tıklama), uygulama tema varyantı (Koyu / Açık Stüdyo), pencere ikonu (Imar18Studio amblemi),
+/// temizleme onay açılır penceresi ve panel sütun/satır genişliklerinin aç-kapa ile saklanıp geri yüklenmesi.
 /// </summary>
 public sealed partial class MainWindow : Window
 {
@@ -24,6 +28,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         AvaloniaXamlLoader.Load(this);
+        Icon = Imar18Logo.PencereIkonu();
         DataContextChanged += OnDataContextChanged;
     }
 
@@ -32,6 +37,7 @@ public sealed partial class MainWindow : Window
         if (_vm is not null)
         {
             _vm.OpenFileRequested -= OnOpenFileRequested;
+            _vm.PanoyaKopyalaIstendi -= OnPanoyaKopyalaIstendi;
             _vm.Palette.PropertyChanged -= OnPaletteChanged;
             _vm.PropertyChanged -= OnViewModelChanged;
             if (_vm.OnayCikti is { } eski)
@@ -45,6 +51,7 @@ public sealed partial class MainWindow : Window
         if (_vm is not null)
         {
             _vm.OpenFileRequested += OnOpenFileRequested;
+            _vm.PanoyaKopyalaIstendi += OnPanoyaKopyalaIstendi;
             _vm.Palette.PropertyChanged += OnPaletteChanged;
             _vm.PropertyChanged += OnViewModelChanged;
             if (_vm.OnayCikti is { } yeni)
@@ -53,7 +60,7 @@ public sealed partial class MainWindow : Window
                 yeni.PanoyaKopyalaIstendi += OnPanoyaKopyalaIstendi;
             }
 
-            TemayiUygula(_vm.AcikPafta);
+            TemayiUygula(_vm.AcikStudyo);
             SolPaneliUygula(_vm.SolPanelAcik);
             SagPaneliUygula(_vm.SagPanelAcik);
             AltPaneliUygula(_vm.AltPanelAcik);
@@ -69,8 +76,8 @@ public sealed partial class MainWindow : Window
 
         switch (e.PropertyName)
         {
-            case nameof(MainWindowViewModel.AcikPafta):
-                TemayiUygula(_vm.AcikPafta);
+            case nameof(MainWindowViewModel.AcikStudyo):
+                TemayiUygula(_vm.AcikStudyo);
                 break;
             case nameof(MainWindowViewModel.SolPanelAcik):
                 SolPaneliUygula(_vm.SolPanelAcik);
@@ -108,11 +115,12 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private static void TemayiUygula(bool acikPafta)
+    /// <summary>Stüdyo teması: tüm uygulama tema varyantı (paneller, kartlar). Pafta (tuval) teması ViewModel'dedir.</summary>
+    private static void TemayiUygula(bool acikStudyo)
     {
         if (global::Avalonia.Application.Current is { } uygulama)
         {
-            uygulama.RequestedThemeVariant = acikPafta ? ThemeVariant.Light : ThemeVariant.Dark;
+            uygulama.RequestedThemeVariant = acikStudyo ? ThemeVariant.Light : ThemeVariant.Dark;
         }
     }
 
@@ -274,4 +282,48 @@ public sealed partial class MainWindow : Window
     }
 
     private void OnValidateClick(object? sender, RoutedEventArgs e) => _vm?.Wizard.Validate();
+
+    /// <summary>"⧉" düğmesi / sağ tık "Kopyala": metin <c>Tag</c>'dedir; kopyalama ViewModel komutuyla (durum metni) yapılır.</summary>
+    private void OnKopyalaClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { Tag: string metin } && _vm is not null)
+        {
+            _vm.KopyalaCommand.Execute(metin);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Komut listesinde fare tıklaması / çift tıklama: seçili komut çalışır ve çubuk kapanır.</summary>
+    private void OnKomutListesiTapped(object? sender, RoutedEventArgs e)
+    {
+        if (_vm is null || e.Source is not Visual kaynak || kaynak.FindAncestorOfType<ListBoxItem>(includeSelf: true) is not { } oge)
+        {
+            return;
+        }
+
+        if (oge.DataContext is PaletteCommand komut)
+        {
+            _vm.Palette.Calistir(komut);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Komut çubuğunun dışındaki karartılmış alana tıklama çubuğu kapatır.</summary>
+    private void OnKomutKatmaniPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_vm is not null && ReferenceEquals(e.Source, sender))
+        {
+            _vm.Palette.Close();
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>"Evet, projeyi temizle": komut bağlamayla çalışır; burada yalnız onay açılır pencereleri kapatılır.</summary>
+    private void OnTemizleOnayClick(object? sender, RoutedEventArgs e)
+    {
+        foreach (var ad in new[] { "TemizleDugmesi", "UstTemizleDugmesi" })
+        {
+            this.FindControl<Button>(ad)?.Flyout?.Hide();
+        }
+    }
 }

@@ -217,7 +217,9 @@ public sealed class WizardPaletteMainTests
         vm.Canvas.Scene.Polylines.Should().ContainSingle().Which.Label.Should().Be("101/1");
         vm.Parcels.Should().ContainSingle(r => r.Label == "101/1" && r.AreaM2 == 400.00m);
         vm.Wizard.LayerRoles.Select(r => r.LayerName).Should().Equal("TK_PARSEL_OLUŞAN", "YAZI");
-        vm.Warnings.Should().Contain(w => w.Contains("Z", StringComparison.Ordinal));
+        // P7: Z=0 indirgeme rutin bilgi notudur; hesabı etkileyen uyarı sayısına girmez.
+        vm.BilgiNotlari.Should().Contain(w => w.Contains("Z", StringComparison.Ordinal));
+        vm.Warnings.Should().NotContain(w => w.Contains("Z", StringComparison.Ordinal));
         vm.StatusText.Should().Contain("1 poligon");
     }
 

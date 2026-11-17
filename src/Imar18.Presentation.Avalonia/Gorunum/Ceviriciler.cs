@@ -1,5 +1,9 @@
 using System.Globalization;
 using Avalonia.Data.Converters;
+using Avalonia.Media;
+using Imar18.Application.Cad;
+using Imar18.Domain.Diagnostics;
+using Imar18.Presentation.Avalonia.Canvas;
 
 namespace Imar18.Presentation.Avalonia.Gorunum;
 
@@ -41,4 +45,19 @@ public static class Ceviriciler
     /// <summary>Doğrulama mesajı hata ise (kırmızı gösterilir).</summary>
     public static readonly IValueConverter HataMi =
         new FuncValueConverter<string?, bool>(s => s is { Length: > 0 } && !s.StartsWith(UyariOneki, StringComparison.Ordinal));
+
+    /// <summary>P7: topoloji / denetim satırı ikonu (seviyeye göre).</summary>
+    public static readonly IValueConverter SeviyeIkonu = new FuncValueConverter<ErrorSeverity, string>(s => s switch
+    {
+        ErrorSeverity.Critical or ErrorSeverity.Error => "⛔",
+        ErrorSeverity.Warning => "⚠️",
+        _ => "ℹ️",
+    });
+
+    /// <summary>P7: Katman → Rol satırındaki renk örneği (tuvaldeki çizgi rengiyle aynı, koyu pafta paleti).</summary>
+    public static readonly IValueConverter RolFircasi = new FuncValueConverter<CadLayerRole, IBrush>(r =>
+    {
+        var c = CadSceneRenderer.RolRengi(r, acikPafta: false);
+        return new SolidColorBrush(Color.FromArgb(c.Alpha, c.Red, c.Green, c.Blue));
+    });
 }

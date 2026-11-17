@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace Imar18.Presentation.Avalonia.ViewModels;
 
@@ -10,6 +11,9 @@ public sealed record PaletteCommand(string Id, string Title, string Keywords, Ac
 /// <summary>
 /// Ctrl+K komut cubugu (P4.3, UI referansi "Türkçe kural tabanlı komut çubuğu"). Arama Turkce karakter ve buyuk/kucuk
 /// harf duyarsizdir; puan: baslik oneki (3) &gt; baslik kelime oneki (2) &gt; baslik icerir (1) / anahtar kelime icerir (1).
+/// P7 cilası: listedeki komut fareyle tıklanınca / çift tıklanınca veya Enter'la gerçekten çalışır ve çubuk kapanır
+/// (<see cref="Calistir"/>); çalıştırılamayan komut çubuğu kapatmaz, nedenini <see cref="Mesaj"/>'da gösterir. Esc veya dışarı
+/// tıklama <see cref="KapatCommand"/> ile kapatır.
 /// </summary>
 public sealed partial class CommandPaletteViewModel : ObservableObject
 {
@@ -24,6 +28,10 @@ public sealed partial class CommandPaletteViewModel : ObservableObject
     [ObservableProperty]
     private int _selectedIndex = -1;
 
+    /// <summary>Son çalıştırma girişiminin kullanıcı mesajı (ör. komut şu anda kullanılamaz); boşsa gösterilmez.</summary>
+    [ObservableProperty]
+    private string _mesaj = string.Empty;
+
     public ObservableCollection<PaletteCommand> Results { get; } = [];
 
     public void Register(PaletteCommand command)
@@ -36,6 +44,7 @@ public sealed partial class CommandPaletteViewModel : ObservableObject
     public void Toggle()
     {
         IsOpen = !IsOpen;
+        Mesaj = string.Empty;
         if (!IsOpen)
         {
             Query = string.Empty;
@@ -46,7 +55,12 @@ public sealed partial class CommandPaletteViewModel : ObservableObject
     {
         IsOpen = false;
         Query = string.Empty;
+        Mesaj = string.Empty;
     }
+
+    /// <summary>Esc / dışarı tıklama: çubuğu kapatır (açık değilse etkisiz).</summary>
+    [RelayCommand]
+    private void Kapat() => Close();
 
     public void MoveSelection(int delta)
     {
@@ -59,25 +73,43 @@ public sealed partial class CommandPaletteViewModel : ObservableObject
         SelectedIndex = Math.Clamp(SelectedIndex + delta, 0, Results.Count - 1);
     }
 
-    /// <summary>Secili komutu calistirir ve cubugu kapatir; calistirilamazsa hicbir sey yapmaz.</summary>
+    /// <summary>Secili komutu calistirir ve cubugu kapatir; calistirilamazsa cubuk acik kalir ve neden yazilir.</summary>
     public void ExecuteSelected()
     {
-        if (SelectedIndex < 0 || SelectedIndex >= Results.Count)
+        if (SelectedIndex >= 0 && SelectedIndex < Results.Count)
         {
-            return;
+            Calistir(Results[SelectedIndex]);
         }
-
-        var c = Results[SelectedIndex];
-        if (c.CanExecute is not null && !c.CanExecute())
-        {
-            return;
-        }
-
-        c.Execute();
-        Close();
     }
 
-    partial void OnQueryChanged(string value) => Refresh();
+    /// <summary>Komutu çalıştırır ve çubuğu kapatır (tıklama, çift tıklama, Enter). Çalıştırılamıyorsa false.</summary>
+    public bool Calistir(PaletteCommand? komut)
+    {
+        if (komut is null)
+        {
+            return false;
+        }
+
+        if (komut.CanExecute is not null && !komut.CanExecute())
+        {
+            Mesaj = $"“{komut.Title}” şu anda kullanılamaz (ön koşulu sağlanmadı).";
+            return false;
+        }
+
+        Close();
+        komut.Execute();
+        return true;
+    }
+
+    /// <summary>Listeden tıklanan komutu çalıştırır (görünüm: liste öğesi komutu).</summary>
+    [RelayCommand]
+    private void KomutuCalistir(PaletteCommand? komut) => Calistir(komut);
+
+    partial void OnQueryChanged(string value)
+    {
+        Mesaj = string.Empty;
+        Refresh();
+    }
 
     private void Refresh()
     {

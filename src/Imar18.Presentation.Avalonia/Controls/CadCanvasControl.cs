@@ -14,7 +14,8 @@ namespace Imar18.Presentation.Avalonia.Controls;
 /// <summary>
 /// SkiaSharp 2B CAD tuvali (P4.3, P7). Çizim <see cref="CadSceneRenderer"/>'dadır: yollar sahne başına bir kez üretilir,
 /// her karede yalnızca ekran matrisi (Avalonia'nın kontrol ötelemesi korunarak) uygulanır (60 FPS hedefi). Sol sürükleme
-/// pan, tekerlek imleç etrafında zoom, çift tık sığdır, sol tık seçim, sağ tık seçim + bağlam menüsü.
+/// pan, tekerlek imleç etrafında zoom, çift tık sığdır, sol tık seçim (OSNAP yakalaması varsa nokta seçimi + panoya kopyalama),
+/// sağ tık seçim + bağlam menüsü.
 /// </summary>
 public sealed class CadCanvasControl : Control
 {
@@ -120,6 +121,9 @@ public sealed class CadCanvasControl : Control
         if (_dragStart is not null && !_dragged)
         {
             var p = e.GetPosition(this);
+            // P7: OSNAP noktası yakalanmışsa tıklama o noktayı seçer ve koordinatı panoya kopyalatır; parsel seçimi de sürer.
+            ViewModel?.PointerMoved(p.X, p.Y);
+            ViewModel?.YakalamayiSec();
             ViewModel?.SelectAt(p.X, p.Y);
         }
 

@@ -53,6 +53,16 @@ public sealed partial class OnayCiktiViewModel : ObservableObject
 
     public ObservableCollection<string> Engeller { get; } = [];
 
+    /// <summary>
+    /// SAHA-004: topoloji bulgularının Türkçe parsel / alan ayrıntısı (Uyarı &amp; Denetim sekmesi). İmar yolu (Info) ve
+    /// milimetrik sınır toleransı (Warning) hesabı bozmayan bilgi/uyarı satırlarıdır; sayaca yalnızca onay engeli olan
+    /// (Error/Critical) bulgular girer (<see cref="TopolojiUyariSayisi"/>, P7 uyarı filtresi).
+    /// </summary>
+    public ObservableCollection<TopolojiNotu> TopolojiNotlari { get; } = [];
+
+    /// <summary>Hesabı/topolojiyi gerçekten etkileyen (onay engeli: Error + Critical) topoloji bulgusu sayısı.</summary>
+    public int TopolojiUyariSayisi => TopolojiNotlari.Count(n => n.Seviye >= Imar18.Domain.Diagnostics.ErrorSeverity.Error);
+
     /// <summary>P7: onay engeli var mı (engel listesi yalnızca 5. adımda gösterilir).</summary>
     public bool EngelVar => Ekran is { Engeller.Count: > 0 };
 
@@ -105,6 +115,14 @@ public sealed partial class OnayCiktiViewModel : ObservableObject
         {
             Engeller.Add(e);
         }
+
+        TopolojiNotlari.Clear();
+        foreach (var n in Ekran.TopolojiNotlari)
+        {
+            TopolojiNotlari.Add(n);
+        }
+
+        OnPropertyChanged(nameof(TopolojiUyariSayisi));
 
         if (onceki != GecerliOnayVar)
         {

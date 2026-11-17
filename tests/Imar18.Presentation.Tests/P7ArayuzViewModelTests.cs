@@ -123,7 +123,7 @@ public sealed class P7ArayuzViewModelTests
     {
         var vm = new MainWindowViewModel(new CadImportService([new SahteAdaptor(NczBelgesi())]));
         vm.AcikPafta.Should().BeFalse();
-        vm.TemaEtiketi.Should().Be("☀️ Açık Pafta");
+        vm.TemaEtiketi.Should().Be("☀️ Açık Stüdyo");
 
         vm.TemaDegistirCommand.Execute(null);
 
