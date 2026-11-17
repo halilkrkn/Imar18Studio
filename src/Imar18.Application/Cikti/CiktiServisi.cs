@@ -1,0 +1,334 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using Imar18.Application.Onay;
+using Imar18.Application.Proje;
+using Imar18.Domain.Diagnostics;
+using Imar18.Domain.Geometry;
+using Imar18.Domain.Mevzuat.Tahsis;
+using Imar18.Domain.Numerics;
+using Imar18.Domain.Revizyon;
+
+namespace Imar18.Application.Cikti;
+
+/// <summary>Başarılı çıktı: dosya, SHA-256 checksum ve bağlı revizyon.</summary>
+public sealed record CiktiSonucu(CiktiTuru Tur, string DosyaYolu, string ChecksumDosyasi, string Sha256, long Boyut, RevisionId Revizyon);
+
+/// <summary>
+/// Onaylı revizyonun anlık görüntüsünden <see cref="CiktiPaketi"/> üretir. Nokta numaraları deterministiktir: parseller rol
+/// (Kadastro → İmar → Yol → Kamu) ve kimlik sırasıyla gezilir; aynı koordinatlı köşe tek numara alır.
+/// </summary>
+public static class CiktiPaketiOlusturucu
+{
+    public static Result<CiktiPaketi> Olustur(ProjeBelgesi belge, ProjeDegerlendirmesi degerlendirme)
+    {
+        ArgumentNullException.ThrowIfNull(belge);
+        ArgumentNullException.ThrowIfNull(degerlendirme);
+        if (belge.Onay is null || !belge.Onay.GecerliMi(degerlendirme.Revizyon))
+        {
+            return Hata(ErrorCodes.CiktiGecerliOnayYok, ("output", "package"), ("revisionId", degerlendirme.Revizyon.Deger));
+        }
+
+        if (!degerlendirme.Tamamlandi || degerlendirme.Dop is null || degerlendirme.Hak is null || belge.Crs is null)
+        {
+            return Hata(ErrorCodes.CiktiOnayIcinHesapEksik, ("revisionId", degerlendirme.Revizyon.Deger), ("missing", string.Join(", ", degerlendirme.EksikGirdiler)));
+        }
+
+        if (degerlendirme.KritikVar)
+        {
+            return Hata(ErrorCodes.CiktiOnayKritikHataEngeli,
+                ("count", degerlendirme.KritikSayisi.ToString(CultureInfo.InvariantCulture)), ("revisionId", degerlendirme.Revizyon.Deger));
+        }
+
+        var uyarilar = new List<string>();
+        var eslesme = ParselKimlikEslemesi.Olustur(belge.KimlikCiftleri);
+        string Tescil(string gecici) => eslesme.IsSuccess && eslesme.Value.TryTescilNo(gecici, out var t) ? t : "-";
+
+        var dengelenmis = new Dictionary<string, decimal>(StringComparer.Ordinal);
+        if (degerlendirme.Dengeleme is { } dz)
+        {
+            foreach (var k in dz.ImarParselleri.Append(dz.YolTerk).Concat(dz.DigerKamuAlanlari))
+            {
+                dengelenmis[k.Id] = k.DengelenmisAlanM2;
+            }
+        }
+
+        // ---- Koordine özet ve noktalı / cepheli alan ----
+        var noktalar = new Dictionary<GeodeticPoint, int>();
+        var koordinatlar = new List<KoordinatSatiri>();
+        var parseller = new List<ParselCetvelSatiri>();
+        foreach (var p in degerlendirme.Parseller.OrderBy(p => p.Geometri.Rol).ThenBy(p => p.Geometri.ParselId, StringComparer.Ordinal))
+        {
+            var v = p.Halka.Vertices;
+            var nolar = new int[v.Count];
+            for (var i = 0; i < v.Count; i++)
+            {
+                if (!noktalar.TryGetValue(v[i], out var no))
+                {
+                    no = noktalar.Count + 1;
+                    noktalar.Add(v[i], no);
+                    koordinatlar.Add(new KoordinatSatiri(no, v[i].Y, v[i].X));
+                }
+
+                nolar[i] = no;
+            }
+
+            var kenarlar = v.Select((k, i) => new CepheSatiri(nolar[i], k.Y, k.X,
+                Math.Round(DecimalMath.KenarUzunlugu(k, v[(i + 1) % v.Count]), 2, MidpointRounding.AwayFromZero))).ToArray();
+            var tescil = p.Geometri.Rol == ParselRolu.Kadastro ? p.Geometri.ParselId : Tescil(p.Geometri.ParselId);
+            if (p.Geometri.Rol != ParselRolu.Kadastro && tescil == "-")
+            {
+                uyarilar.Add("Tescil no eşlemesi yok: " + p.Geometri.ParselId);
+            }
+
+            var alan = p.Geometri.Rol != ParselRolu.Kadastro && dengelenmis.TryGetValue(p.Geometri.ParselId, out var da) ? da : p.AlanM2;
+            parseller.Add(new ParselCetvelSatiri(p.Geometri.ParselId, tescil, p.Geometri.Rol, nolar, kenarlar, p.AlanM2, alan, HeM2Dm2.Ayir(alan), v));
+        }
+
+        // ---- Dengeleme ----
+        DengelemeCetveli? dengeleme = null;
+        if (degerlendirme.Dengeleme is { } d)
+        {
+            var satirlar = d.ImarParselleri.Append(d.YolTerk).Concat(d.DigerKamuAlanlari)
+                .Select(k => new DengelemeSatiri(k.Id, Tescil(k.Id), k.HesapAlaniM2, k.DuzeltmeM2, k.DengelenmisAlanM2))
+                .ToArray();
+            dengeleme = new DengelemeCetveli(satirlar, d.TapuToplamiM2, d.HesapToplamiM2, d.FarkM2, d.TecvizSiniriM2);
+        }
+        else
+        {
+            uyarilar.Add("Dengeleme cetveli üretilmedi (yol terk parseli yok).");
+        }
+
+        // ---- İki yönlü dağıtım ----
+        var haklar = degerlendirme.Hak.MalikHaklari.ToDictionary(h => (h.KadastroParselId, h.MalikId));
+        var malikSirali = belge.HakEslestirme!.Eslestirme
+            .OrderBy(s => s.KadastroParselId, ParselNoKarsilastirici.Instance)
+            .ThenBy(s => s.MalikId, StringComparer.Ordinal)
+            .ThenBy(s => Tescil(s.ImarParselKodu), ParselNoKarsilastirici.Instance)
+            .Select(s =>
+            {
+                var h = haklar[(s.KadastroParselId, s.MalikId)];
+                return new MalikDagitimSatiri(s.KadastroParselId, s.MalikId, h.GirenAlanM2, h.DopKesintisiM2, h.NetHakM2, Tescil(s.ImarParselKodu), s.AlanM2);
+            })
+            .ToArray();
+
+        var imarSirali = degerlendirme.Hak.ImarParselleri
+            .OrderBy(p => Tescil(p.GeciciKod), ParselNoKarsilastirici.Instance)
+            .ThenBy(p => p.GeciciKod, StringComparer.Ordinal)
+            .SelectMany(p => p.Paydaslar.Select(s => new TescilDagitimSatiri(
+                Tescil(p.GeciciKod), p.GeciciKod, p.AlanM2, HeM2Dm2.Ayir(p.AlanM2), s.MalikId, string.Join(", ", s.KadastroParselleri), s.AlanM2, s.Hisse.ToString())))
+            .ToArray();
+
+        var crs = belge.Crs;
+        var epok = crs.Epok is { } e ? " · epok " + e.ToString("0.00", CultureInfo.InvariantCulture) : string.Empty;
+        return Result<CiktiPaketi>.Success(new CiktiPaketi(
+            belge.ProjeAdi,
+            degerlendirme.Revizyon.Deger,
+            belge.Onay.OnaylayanId,
+            belge.Onay.Zaman,
+            PilotDamgasi.Metin,
+            PilotDamgasi.FenKlasoruSablonSurumu,
+            $"{crs.Datum.ToString().ToUpperInvariant()} TM3 · orta meridyen {crs.OrtaMeridyenDerece.ToString(CultureInfo.InvariantCulture)}°{epok} · {crs.CrsId}",
+            crs.OlcekPaydasi,
+            koordinatlar,
+            parseller,
+            dengeleme,
+            DopOzeti.From(degerlendirme.Dop),
+            malikSirali,
+            imarSirali,
+            uyarilar.Concat(degerlendirme.Bulgular.Where(b => b.Severity == ErrorSeverity.Warning).Select(b => b.UserMessage)).Distinct(StringComparer.Ordinal).ToArray()));
+    }
+
+    internal static Result<CiktiPaketi> Hata(string kod, params (string Alan, string Deger)[] alanlar)
+    {
+        var e = ErrorCatalog.Get(kod);
+        var m = e.TechnicalMessage;
+        foreach (var (alan, deger) in alanlar)
+        {
+            m = m.Replace("{" + alan + "}", deger, StringComparison.Ordinal);
+        }
+
+        return Result<CiktiPaketi>.Failure(e with { TechnicalMessage = m });
+    }
+}
+
+/// <summary>"101/2" &lt; "101/10" &lt; "102/1": '/' ile ayrılmış parçalar sayıysa sayısal, değilse ordinal karşılaştırılır.</summary>
+public sealed class ParselNoKarsilastirici : IComparer<string>
+{
+    public static ParselNoKarsilastirici Instance { get; } = new();
+
+    public int Compare(string? x, string? y)
+    {
+        if (ReferenceEquals(x, y))
+        {
+            return 0;
+        }
+
+        if (x is null || y is null)
+        {
+            return x is null ? -1 : 1;
+        }
+
+        var a = x.Split('/');
+        var b = y.Split('/');
+        for (var i = 0; i < Math.Min(a.Length, b.Length); i++)
+        {
+            var c = long.TryParse(a[i], NumberStyles.None, CultureInfo.InvariantCulture, out var na)
+                && long.TryParse(b[i], NumberStyles.None, CultureInfo.InvariantCulture, out var nb)
+                ? na.CompareTo(nb)
+                : string.CompareOrdinal(a[i], b[i]);
+            if (c != 0)
+            {
+                return c;
+            }
+        }
+
+        return a.Length.CompareTo(b.Length) is var u && u != 0 ? u : string.CompareOrdinal(x, y);
+    }
+}
+
+/// <summary>
+/// Çıktı servisi (P5.3, spec 14.2): (1) güncel revizyon için geçerli onay yoksa <see cref="AuditSonucu.OnaysizGirisim"/> kaydı
+/// ve <c>ERR-CIKTI-007</c>; (2) paket ve dosya arka planda üretilir (50 ms kuralı); (3) SHA-256 hesaplanır, çıktı ve
+/// <c>.sha256</c> dosyası atomik yazılır; (4) yalnızca bundan sonra başarılı denetim kaydı eklenir (AC-FEN-04). Herhangi bir
+/// adım başarısızsa reddedilen girişim denetime yazılır ve başarılı kayıt oluşmaz (AC-FEN-05). Denetim kaydı yazılamazsa
+/// üretilen dosyalar silinir (her çıktının denetim izi olması kuralı). Pilot checksum'u imza değildir (Ed25519 Faz 12).
+/// </summary>
+public sealed class CiktiServisi
+{
+    private readonly ProjeKomutYolu _yol;
+    private readonly Dictionary<CiktiTuru, ICiktiUretici> _ureticiler;
+    private readonly ICiktiYazici _yazici;
+
+    public CiktiServisi(ProjeKomutYolu yol, IEnumerable<ICiktiUretici> ureticiler, ICiktiYazici yazici)
+    {
+        ArgumentNullException.ThrowIfNull(yol);
+        ArgumentNullException.ThrowIfNull(ureticiler);
+        ArgumentNullException.ThrowIfNull(yazici);
+        _yol = yol;
+        _ureticiler = ureticiler.ToDictionary(u => u.Tur);
+        _yazici = yazici;
+    }
+
+    /// <summary>Kayıtlı üretici varsa noktalı dosya uzantısı.</summary>
+    public string? Uzanti(CiktiTuru tur) => _ureticiler.TryGetValue(tur, out var u) ? u.Uzanti : null;
+
+    public async Task<Result<CiktiSonucu>> UretAsync(
+        CiktiTuru tur,
+        string kullaniciId,
+        string hedefYol,
+        IProgress<int>? ilerleme = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(hedefYol);
+        var islem = ApprovalService.CiktiIslemOneki + tur;
+        var (belge, rev) = _yol.AnlikGoruntu();
+        ilerleme?.Report(0);
+
+        if (!belge.GecerliOnayVar(rev))
+        {
+            var red = CiktiPaketiOlusturucu.Hata(ErrorCodes.CiktiGecerliOnayYok, ("output", tur.ToString()), ("revisionId", rev.Deger)).Error;
+            return await ReddetAsync(kullaniciId, islem, AuditSonucu.OnaysizGirisim, red, rev, null).ConfigureAwait(false);
+        }
+
+        if (!_ureticiler.TryGetValue(tur, out var uretici))
+        {
+            var e = ErrorCatalog.Get(ErrorCodes.CiktiFenKlasoruSablon);
+            return await ReddetAsync(kullaniciId, islem, AuditSonucu.Reddedildi,
+                e with { TechnicalMessage = e.TechnicalMessage.Replace("{templateId}", tur + " (no generator registered)", StringComparison.Ordinal) },
+                rev, null).ConfigureAwait(false);
+        }
+
+        var checksumYolu = hedefYol + ".sha256";
+        var yazildi = false;
+        var basarili = false;
+        try
+        {
+            var uretim = await Task.Run(
+                () =>
+                {
+                    var paket = CiktiPaketiOlusturucu.Olustur(belge, ProjeDegerlendirici.Degerlendir(belge));
+                    ilerleme?.Report(30);
+                    return paket.IsFailure ? Result<byte[]>.Failure(paket.Error) : uretici.Uret(paket.Value, cancellationToken);
+                },
+                cancellationToken).ConfigureAwait(false);
+            if (uretim.IsFailure)
+            {
+                return await ReddetAsync(kullaniciId, islem, AuditSonucu.Reddedildi, uretim.Error, rev, null).ConfigureAwait(false);
+            }
+
+            ilerleme?.Report(80);
+            var bytes = uretim.Value;
+            var sha = Convert.ToHexStringLower(SHA256.HashData(bytes));
+            cancellationToken.ThrowIfCancellationRequested();
+            yazildi = true;
+            await _yazici.YazAsync(hedefYol, bytes, cancellationToken).ConfigureAwait(false);
+            await _yazici.YazAsync(checksumYolu, Encoding.UTF8.GetBytes(sha + "  " + Path.GetFileName(hedefYol) + "\n"), cancellationToken).ConfigureAwait(false);
+
+            // Başarılı kayıt iptal edilmez; kilit altında revizyon ve onay yeniden doğrulanır (AC-FEN-04, reviewer M2).
+            var ayrinti = string.Create(CultureInfo.InvariantCulture, $"sha256={sha};boyut={bytes.Length};uzanti={Path.GetExtension(hedefYol)}");
+            var kayit = await _yol.CiktiBasariKaydiEkleAsync(kullaniciId, islem, rev, ayrinti, CancellationToken.None).ConfigureAwait(false);
+            if (kayit.IsFailure)
+            {
+                return Result<CiktiSonucu>.Failure(kayit.Error);
+            }
+
+            basarili = true;
+            ilerleme?.Report(100);
+            return Result<CiktiSonucu>.Success(new CiktiSonucu(tur, hedefYol, checksumYolu, sha, bytes.Length, rev));
+        }
+        catch (OperationCanceledException)
+        {
+            await ReddetAsync(kullaniciId, islem, AuditSonucu.Reddedildi, null, rev, "iptal edildi").ConfigureAwait(false);
+            throw;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            var e = ErrorCatalog.Get(ErrorCodes.CiktiProjeKaydiHatasi);
+            return await ReddetAsync(kullaniciId, islem, AuditSonucu.Reddedildi,
+                e with { TechnicalMessage = e.TechnicalMessage.Replace("{reason}", "output write failed: " + ex.GetType().Name, StringComparison.Ordinal) },
+                rev, null).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or KeyNotFoundException or FormatException or ArithmeticException)
+        {
+            var e = ErrorCatalog.Get(ErrorCodes.CiktiFenKlasoruSablon);
+            return await ReddetAsync(kullaniciId, islem, AuditSonucu.Reddedildi,
+                e with { TechnicalMessage = e.TechnicalMessage.Replace("{templateId}", tur + " (" + ex.GetType().Name + ")", StringComparison.Ordinal) },
+                rev, null).ConfigureAwait(false);
+        }
+        finally
+        {
+            // Başarılı denetim kaydı yoksa diskte iz bırakılmaz (reviewer M1).
+            if (yazildi && !basarili)
+            {
+                await SessizSilAsync(hedefYol).ConfigureAwait(false);
+                await SessizSilAsync(checksumYolu).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>Reddedilen girişimi iptalden bağımsız (<see cref="CancellationToken.None"/>) denetime yazar.</summary>
+    private async Task<Result<CiktiSonucu>> ReddetAsync(
+        string kullaniciId,
+        string islem,
+        AuditSonucu sonuc,
+        AppError? hata,
+        RevisionId rev,
+        string? ayrinti)
+    {
+        var kayit = await _yol.DenetimKaydiEkleAsync(kullaniciId, islem, sonuc, hata?.Code, rev, ayrinti, CancellationToken.None).ConfigureAwait(false);
+        return kayit.IsFailure ? Result<CiktiSonucu>.Failure(kayit.Error) : Result<CiktiSonucu>.Failure(hata ?? ErrorCatalog.Get(null));
+    }
+
+    private async Task SessizSilAsync(string yol)
+    {
+        try
+        {
+            await _yazici.SilAsync(yol, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Silinemeyen dosya: denetim kaydı yoktur; kullanıcıya hata zaten döner.
+        }
+    }
+}

@@ -111,6 +111,16 @@ public sealed partial class CadCanvasViewModel : ObservableObject
 
     public ObservableCollection<CanvasMenuItem> ContextMenuItems { get; }
 
+    /// <summary>
+    /// P5: "Fen Klasörü" bağlam menüsü öğesini gerçek komuta bağlar (onay yoksa komut pasiftir; gerekçe gösterilir).
+    /// </summary>
+    public void BaglaFenKlasoru(IRelayCommand komut)
+    {
+        ArgumentNullException.ThrowIfNull(komut);
+        var i = ContextMenuItems.ToList().FindIndex(m => m.Id == "fenPreview");
+        ContextMenuItems[i] = new CanvasMenuItem("fenPreview", "📗 Fen Klasörü (He/M2/Dm2) Üret", "Güncel revizyon için mühendis onayı gerekli", komut);
+    }
+
     /// <summary>0 = yalnizca eski kadastro, 100 = tam yeni imar (referans tasarim "swipe" kaydiricisi).</summary>
     public double SwipePercent
     {

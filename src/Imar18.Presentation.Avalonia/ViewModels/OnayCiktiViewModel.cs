@@ -1,0 +1,146 @@
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Imar18.Application.Cikti;
+using Imar18.Application.Onay;
+using Imar18.Application.Proje;
+
+namespace Imar18.Presentation.Avalonia.ViewModels;
+
+/// <summary>
+/// Sihirbaz 5. adım "Cetvel &amp; Çıktı" (P5.3, spec 11): onay ekranı özeti, onay metni onay kutusu, onay / geri alma ve taslak
+/// çıktı komutları. Tüm işlemler Application servisleri (CommandBus, ApprovalService, CiktiServisi) üzerinden yürür; onaysız
+/// çıktı isteği arayüzde engellenmez, servis tarafından reddedilip denetime yazılır (spec 11.2 madde 7). Kullanıcıya yalnızca
+/// Türkçe <c>UserMessage</c> gösterilir.
+/// </summary>
+public sealed partial class OnayCiktiViewModel : ObservableObject
+{
+    private readonly ProjeCalismaAlani _alan;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OnaylaCommand), nameof(GeriAlCommand))]
+    [NotifyPropertyChangedFor(nameof(GecerliOnayVar))]
+    private OnayEkrani? _ekran;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OnaylaCommand))]
+    private bool _onayMetniOkundu;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OnaylaCommand), nameof(GeriAlCommand))]
+    private bool _isBusy;
+
+    [ObservableProperty]
+    private string _durumMetni = string.Empty;
+
+    public OnayCiktiViewModel(ProjeCalismaAlani alan)
+    {
+        ArgumentNullException.ThrowIfNull(alan);
+        _alan = alan;
+        Yenile();
+    }
+
+    /// <summary>Görünüm, istenen çıktı türü için kayıt yolu seçtirir ve <see cref="UretAsync"/>'i çağırır.</summary>
+    public event EventHandler<CiktiTuru>? KayitYoluIstendi;
+
+    /// <summary>Onay durumu değiştiğinde (bağlam menüsü ve komut çubuğu yenilemesi için).</summary>
+    public event EventHandler? OnayDurumuDegisti;
+
+    public string OnayMetni => ApprovalService.OnayMetni;
+
+    public bool GecerliOnayVar => Ekran?.GecerliOnayVar == true;
+
+    public ObservableCollection<string> Engeller { get; } = [];
+
+    /// <summary>Kayıtlı üreticinin uzantısı (dosya seçici süzgeci için).</summary>
+    public string? Uzanti(CiktiTuru tur) => _alan.Cikti.Uzanti(tur);
+
+    /// <summary>Onay ekranını güncel proje durumundan yeniden kurar.</summary>
+    public void Yenile()
+    {
+        var onceki = GecerliOnayVar;
+        Ekran = _alan.Onay.OnayEkraniHazirla();
+        Engeller.Clear();
+        foreach (var e in Ekran.Engeller)
+        {
+            Engeller.Add(e);
+        }
+
+        if (onceki != GecerliOnayVar)
+        {
+            OnayDurumuDegisti?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private bool OnaylanabilirMi() => !IsBusy && OnayMetniOkundu && Ekran is { OnayVerilebilir: true, GecerliOnayVar: false };
+
+    [RelayCommand(CanExecute = nameof(OnaylanabilirMi))]
+    private async Task OnaylaAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var sonuc = await _alan.Onay.OnaylaAsync(_alan.KullaniciId, ApprovalService.OnayMetni).ConfigureAwait(true);
+            DurumMetni = sonuc.IsSuccess ? "Revizyon onaylandı: " + Kisa(sonuc.Value.RevizyonId.Deger) : sonuc.Error.UserMessage;
+        }
+        finally
+        {
+            IsBusy = false;
+            Yenile();
+        }
+    }
+
+    private bool GeriAlinabilirMi() => !IsBusy && GecerliOnayVar;
+
+    [RelayCommand(CanExecute = nameof(GeriAlinabilirMi))]
+    private async Task GeriAlAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var sonuc = await _alan.Onay.GeriAlAsync(_alan.KullaniciId).ConfigureAwait(true);
+            DurumMetni = sonuc.IsFailure
+                ? sonuc.Error.UserMessage
+                : sonuc.Value.NihaiCiktiUretilmisti
+                    ? "Onay geri alındı. Bu revizyon için çıktı üretilmişti: revizyon gerekli."
+                    : "Onay geri alındı.";
+            OnayMetniOkundu = false;
+        }
+        finally
+        {
+            IsBusy = false;
+            Yenile();
+        }
+    }
+
+    [RelayCommand]
+    private void CetvelIste() => KayitYoluIstendi?.Invoke(this, CiktiTuru.Cetveller);
+
+    [RelayCommand]
+    private void FenKlasoruIste() => KayitYoluIstendi?.Invoke(this, CiktiTuru.FenKlasoru);
+
+    [RelayCommand]
+    private void CksIste() => KayitYoluIstendi?.Invoke(this, CiktiTuru.CksDopOzeti);
+
+    /// <summary>Çıktıyı üretir; başarılıysa true. Sonuç <see cref="DurumMetni"/>'nde gösterilir.</summary>
+    public async Task<bool> UretAsync(CiktiTuru tur, string hedefYol)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(hedefYol);
+        IsBusy = true;
+        try
+        {
+            var sonuc = await _alan.Cikti.UretAsync(tur, _alan.KullaniciId, hedefYol).ConfigureAwait(true);
+            DurumMetni = sonuc.IsSuccess
+                ? $"{tur} üretildi · SHA-256 {Kisa(sonuc.Value.Sha256)} · {PilotDamgasi.Metin}"
+                : sonuc.Error.UserMessage;
+            return sonuc.IsSuccess;
+        }
+        finally
+        {
+            IsBusy = false;
+            Yenile();
+        }
+    }
+
+    private static string Kisa(string hex) => hex.Length > 12 ? hex[..12] + "…" : hex;
+}

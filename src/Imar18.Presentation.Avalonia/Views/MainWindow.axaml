@@ -131,6 +131,41 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
+
+          <!-- P5.3: 5. adim "Cetvel & Çıktı" — onay ekrani (spec 11.3) ve taslak ciktilar -->
+          <Border IsVisible="{Binding OnayCikti, Converter={x:Static ObjectConverters.IsNotNull}}" DataContext="{Binding OnayCikti}"
+                  BorderBrush="{StaticResource CadBorder}" BorderThickness="0,1,0,0" Margin="0,10,0,0" Padding="0,8,0,0">
+            <StackPanel Spacing="4">
+              <TextBlock Text="Mühendis Onayı &amp; Çıktı (PİLOT — RESMÎ İŞLEMDE KULLANILAMAZ)" FontWeight="Bold" Foreground="#EF4444" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Ekran.RevizyonId, StringFormat='Revizyon: {0}'}" Foreground="{StaticResource CadMuted}" FontSize="10" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Ekran.ParselSayisi, StringFormat='Parsel sayısı: {0}'}" Foreground="{StaticResource CadText}" />
+              <TextBlock Text="{Binding Ekran.ToplamKadastroAlaniM2, StringFormat='Toplam kadastro alanı: {0} m²'}" Foreground="{StaticResource CadText}" />
+              <TextBlock Text="{Binding Ekran.Dopo, StringFormat='DOPO: {0}'}" Foreground="{StaticResource CadText}" />
+              <TextBlock Text="{Binding Ekran.TecvizUyariSayisi, StringFormat='Tecviz uyarısı: {0}'}" Foreground="{StaticResource CadText}" />
+              <TextBlock Text="{Binding Ekran.KritikHataSayisi, StringFormat='Kritik hata: {0}'}" Foreground="{StaticResource CadText}" />
+              <TextBlock Text="{Binding Ekran.MevzuatProfiliSurumu, StringFormat='Mevzuat profili: {0}'}" Foreground="{StaticResource CadMuted}" FontSize="11" />
+              <TextBlock Text="{Binding Ekran.ParsidSemaDurumu, StringFormat='PARSİD: {0}'}" Foreground="{StaticResource CadMuted}" FontSize="11" TextWrapping="Wrap" />
+              <ItemsControl ItemsSource="{Binding Engeller}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <TextBlock Text="{Binding}" Foreground="#EF4444" TextWrapping="Wrap" FontSize="11" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Text="{Binding OnayMetni}" Foreground="{StaticResource CadText}" TextWrapping="Wrap" FontSize="11" />
+              <CheckBox Content="Onay metnini okudum ve kabul ediyorum" IsChecked="{Binding OnayMetniOkundu}" />
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Content="Onayla" Command="{Binding OnaylaCommand}" />
+                <Button Content="Onayı Geri Al" Command="{Binding GeriAlCommand}" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Content="Excel" Command="{Binding CetvelIsteCommand}" />
+                <Button Content="Fen Klasörü" Command="{Binding FenKlasoruIsteCommand}" />
+                <Button Content="CKS" Command="{Binding CksIsteCommand}" />
+              </StackPanel>
+              <TextBlock Text="{Binding DurumMetni}" Foreground="{StaticResource CadAmber}" TextWrapping="Wrap" FontSize="11" />
+            </StackPanel>
+          </Border>
         </StackPanel>
       </Border>
     </Grid>

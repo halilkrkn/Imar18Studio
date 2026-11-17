@@ -10,6 +10,10 @@
     <ProjectReference Include="..\..\src\Imar18.Presentation.Avalonia\Imar18.Presentation.Avalonia.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- P5: sentetik ornek proje Application testleriyle ortak (kopya yerine baglanti). -->
+    <Compile Include="..\Imar18.Application.Tests\Proje\OrnekProje.cs" Link="Proje\OrnekProje.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />

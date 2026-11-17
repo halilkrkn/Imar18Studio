@@ -21,8 +21,8 @@ public sealed class ErrorCatalogP42Tests
     }
 
     [Fact]
-    public void HataKatalogu_P42_Ile_Surum_1_5_0_Olmali()
+    public void HataKatalogu_P42_Ile_Surum_En_Az_1_5_0_Olmali()
     {
-        ErrorCatalog.Version.Should().Be("1.5.0");
+        new Version(ErrorCatalog.Version).Should().BeGreaterThanOrEqualTo(new Version(1, 5, 0));
     }
 }

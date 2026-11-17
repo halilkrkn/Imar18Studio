@@ -1,7 +1,12 @@
 using Avalonia;
 using Imar18.Application.Cad;
+using Imar18.Application.Cikti;
+using Imar18.Application.Onay;
+using Imar18.Application.Proje;
 using Imar18.Infrastructure.Cad.Acad;
 using Imar18.Infrastructure.Cad.Ncz;
+using Imar18.Infrastructure.Cikti;
+using Imar18.Infrastructure.Proje;
 using Imar18.Presentation.Avalonia;
 using Imar18.Presentation.Avalonia.ViewModels;
 
@@ -18,9 +23,35 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        var proje = ProjeAc();
         App.MainViewModelFactory = () => new MainWindowViewModel(
-            new CadImportService([new NczFormatAdapter(), new DxfFormatAdapter(), new DwgFormatAdapter()]));
+            new CadImportService([new NczFormatAdapter(), new DxfFormatAdapter(), new DwgFormatAdapter()]),
+            proje);
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
+
+    /// <summary>
+    /// P5: yerel pilot proje kaydi (%LOCALAPPDATA%\Imar18Studio\pilot-proje.imar18-pilot.json, atomik + SHA-256) ve onay/cikti
+    /// servisleri. Kayit bozuksa uzerine yazilmaz; uygulama projesiz (P4 davranisi) acilir. Muhendis kimligi pilotta Windows
+    /// kullanici adidir (kimlik dogrulama Faz 11+).
+    /// </summary>
+    private static ProjeCalismaAlani? ProjeAc()
+    {
+        var klasor = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Imar18Studio");
+        var depo = new AtomikJsonProjeDeposu(Path.Combine(klasor, "pilot-proje.imar18-pilot.json"));
+        var acilis = ProjeKomutYolu.AcAsync(depo, "Pilot Proje", TimeProvider.System).GetAwaiter().GetResult();
+        if (acilis.IsFailure)
+        {
+            return null;
+        }
+
+        var yol = acilis.Value;
+        var kullanici = string.IsNullOrWhiteSpace(Environment.UserName) ? "muhendis" : Environment.UserName;
+        return new ProjeCalismaAlani(
+            yol,
+            new ApprovalService(yol, TimeProvider.System),
+            new CiktiServisi(yol, [new ClosedXmlCetvelUretici(), new QuestPdfFenKlasoruUretici(), new CksDosyaUretici()], new AtomikCiktiYazici()),
+            kullanici.Length > 64 ? kullanici[..64] : kullanici);
     }
 
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()
