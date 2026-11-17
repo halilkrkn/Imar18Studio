@@ -17,10 +17,36 @@ public sealed partial class LayerRoleRow : ObservableObject
         _role = role;
     }
 
+    /// <summary>Tüm roller (her satır ComboBox'ı kendi DataContext'inden bağlar; P7 seçili rol görünürlüğü düzeltmesi).</summary>
+    internal static readonly IReadOnlyList<CadLayerRole> TumRoller = Enum.GetValues<CadLayerRole>();
+
     public string LayerName { get; }
+
+    /// <summary>Seçilebilir roller (ekranda Türkçe görünen adla).</summary>
+    public IReadOnlyList<CadLayerRole> Roller => TumRoller;
 
     [ObservableProperty]
     private CadLayerRole _role;
+}
+
+/// <summary>P7: üst adım çubuğundaki tıklanabilir sihirbaz adımı (aktif / tamamlandı rozetleri).</summary>
+public sealed partial class SihirbazAdimi : ObservableObject
+{
+    public SihirbazAdimi(int index, string baslik)
+    {
+        Index = index;
+        Baslik = baslik;
+    }
+
+    public int Index { get; }
+
+    public string Baslik { get; }
+
+    [ObservableProperty]
+    private bool _isActive;
+
+    [ObservableProperty]
+    private bool _isTamam;
 }
 
 /// <summary>
@@ -34,12 +60,27 @@ public sealed partial class LayerRoleRow : ObservableObject
 public sealed partial class WizardViewModel : ObservableObject
 {
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(NextCommand), nameof(BackCommand))]
+    [NotifyCanExecuteChangedFor(nameof(NextCommand), nameof(BackCommand), nameof(AdimaGitCommand))]
     private int _currentIndex;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(NextCommand))]
+    [NotifyCanExecuteChangedFor(nameof(NextCommand), nameof(AdimaGitCommand))]
     private bool _isInputValid;
+
+    public WizardViewModel()
+    {
+        AdimOgeleri = Steps.Select((s, i) => new SihirbazAdimi(i, s)).ToList().AsReadOnly();
+        AdimDurumlariniYenile();
+    }
+
+    /// <summary>P7: üst çubuktaki tıklanabilir adımlar.</summary>
+    public IReadOnlyList<SihirbazAdimi> AdimOgeleri { get; }
+
+    /// <summary>Sağ panel yalnızca 5. adımda onay ve çıktı kartlarını gösterir.</summary>
+    public bool SagPanelOnayModu => CurrentIndex == Steps.Count - 1;
+
+    /// <summary>1–4. adımlarda sağ panel parsel işlemleri ve sade özet kartını gösterir.</summary>
+    public bool SagPanelOzetModu => !SagPanelOnayModu;
 
     [ObservableProperty]
     private GeodetikDatum _datum = GeodetikDatum.Itrf96;
@@ -75,7 +116,7 @@ public sealed partial class WizardViewModel : ObservableObject
 
     public IReadOnlyList<int> OrtaMeridyenler => ProjeCrs.DesteklenenOrtaMeridyenler;
 
-    public IReadOnlyList<CadLayerRole> Roller { get; } = Enum.GetValues<CadLayerRole>();
+    public IReadOnlyList<CadLayerRole> Roller => LayerRoleRow.TumRoller;
 
     public IReadOnlyList<KoordinatKalitesi> Kaliteler { get; } = Enum.GetValues<KoordinatKalitesi>();
 
@@ -248,12 +289,37 @@ public sealed partial class WizardViewModel : ObservableObject
 
     private bool CanGoBack() => CurrentIndex > 0;
 
+    /// <summary>P7: adım çubuğundan doğrudan geçiş. Geri dönüş serbesttir; ileri atlama 1. adım doğrulamasını gerektirir.</summary>
+    [RelayCommand(CanExecute = nameof(AdimaGidilebilir))]
+    private void AdimaGit(SihirbazAdimi? adim)
+    {
+        if (adim is not null && AdimaGidilebilir(adim))
+        {
+            CurrentIndex = adim.Index;
+        }
+    }
+
+    private bool AdimaGidilebilir(SihirbazAdimi? adim) =>
+        adim is not null && adim.Index != CurrentIndex && adim.Index >= 0 && adim.Index < Steps.Count
+        && (adim.Index < CurrentIndex || IsInputValid);
+
     partial void OnCurrentIndexChanged(int value)
     {
         OnPropertyChanged(nameof(CurrentStepTitle));
-        foreach (var ad in new[] { nameof(IsStep1), nameof(IsStep2), nameof(IsStep3), nameof(IsStep4), nameof(IsStep5) })
+        foreach (var ad in new[] { nameof(IsStep1), nameof(IsStep2), nameof(IsStep3), nameof(IsStep4), nameof(IsStep5), nameof(SagPanelOnayModu), nameof(SagPanelOzetModu) })
         {
             OnPropertyChanged(ad);
+        }
+
+        AdimDurumlariniYenile();
+    }
+
+    private void AdimDurumlariniYenile()
+    {
+        foreach (var a in AdimOgeleri)
+        {
+            a.IsActive = a.Index == CurrentIndex;
+            a.IsTamam = a.Index < CurrentIndex;
         }
     }
 

@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Imar18.Application.Cad;
 using Imar18.Application.Proje;
 using Imar18.Presentation.Avalonia.Canvas;
+using Imar18.Presentation.Avalonia.Gorunum;
 
 namespace Imar18.Presentation.Avalonia.ViewModels;
 
@@ -35,6 +36,41 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private string _statusText = "Hazır — CAD dosyası açın (Ctrl+O) veya komut çubuğunu kullanın (Ctrl+K).";
 
+    /// <summary>P7: Koyu Stüdyo (false) / Açık Pafta (true) teması. Görünüm uygulama tema varyantını değiştirir.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TemaEtiketi))]
+    private bool _acikPafta;
+
+    [ObservableProperty]
+    private bool _solPanelAcik = true;
+
+    [ObservableProperty]
+    private bool _sagPanelAcik = true;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AltPanelEtiketi))]
+    private bool _altPanelAcik = true;
+
+    /// <summary>Tema anahtarının etiketi (geçilecek tema).</summary>
+    public string TemaEtiketi => AcikPafta ? "🌙 Koyu Stüdyo" : "☀️ Açık Pafta";
+
+    /// <summary>Alt canlı cetvel panelinin aç/kapat etiketi.</summary>
+    public string AltPanelEtiketi => AltPanelAcik ? "▼ Cetveli Gizle" : "▲ Cetveli Göster";
+
+    partial void OnAcikPaftaChanged(bool value) => Canvas.AcikPafta = value;
+
+    [RelayCommand]
+    private void TemaDegistir() => AcikPafta = !AcikPafta;
+
+    [RelayCommand]
+    private void SolPanelDegistir() => SolPanelAcik = !SolPanelAcik;
+
+    [RelayCommand]
+    private void SagPanelDegistir() => SagPanelAcik = !SagPanelAcik;
+
+    [RelayCommand]
+    private void AltPanelDegistir() => AltPanelAcik = !AltPanelAcik;
+
     public MainWindowViewModel(CadImportService importService, ProjeCalismaAlani? proje = null)
     {
         ArgumentNullException.ThrowIfNull(importService);
@@ -49,6 +85,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Palette.Register(new PaletteCommand("nextStep", "Sonraki Sihirbaz Adımı", "ileri wizard", () => Wizard.NextCommand.Execute(null), () => Wizard.NextCommand.CanExecute(null)));
         Palette.Register(new PaletteCommand("previousStep", "Önceki Sihirbaz Adımı", "geri wizard", () => Wizard.BackCommand.Execute(null), () => Wizard.BackCommand.CanExecute(null)));
         Palette.Register(new PaletteCommand("cancelImport", "İçe Aktarmayı İptal Et", "durdur vazgec", CancelImport, () => IsBusy));
+        Palette.Register(new PaletteCommand("toggleTheme", "Koyu Stüdyo / Açık Pafta Teması", "tema pafta acik koyu kagit", TemaDegistir));
+        Palette.Register(new PaletteCommand("toggleLeft", "Sol Paneli Aç/Kapat", "sihirbaz girdi panel", SolPanelDegistir));
+        Palette.Register(new PaletteCommand("toggleRight", "Sağ Denetçi Panelini Aç/Kapat", "denetci parsel islemleri panel", SagPanelDegistir));
+        Palette.Register(new PaletteCommand("toggleBottom", "Alt Canlı Cetveli Aç/Kapat", "cetvel tablo alt panel", AltPanelDegistir));
+        Palette.Register(new PaletteCommand("toggleLabels", "Parsel Etiketlerini Göster/Gizle", "etiket yazi numara", () => Canvas.EtiketGoster = !Canvas.EtiketGoster));
+        Palette.Register(new PaletteCommand("toggleGrid", "Izgarayı Göster/Gizle", "izgara grid", () => Canvas.IzgaraGoster = !Canvas.IzgaraGoster));
         Wizard.LayerRolesChanged += (_, _) => LastReapplyTask = ReapplyAsync();
 
         if (proje is not null)
@@ -191,10 +233,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Parcels.Clear();
         foreach (var p in scene.Polylines.Where(p => p.IsClosed))
         {
-            Parcels.Add(new ParcelRow(p.LayerName, p.Role.ToString(), p.Label, p.AreaM2));
+            Parcels.Add(new ParcelRow(p.LayerName, TurkceAdlar.Ad(p.Role), p.Label, p.AreaM2));
         }
 
-        StatusText = $"{format.ToString().ToUpperInvariant()}: {scene.Polylines.Count} poligon, {layerCount} katman, {Warnings.Count} uyarı.";
+        StatusText = $"{TurkceAdlar.Ad(format)}: {scene.Polylines.Count} poligon, {layerCount} katman, {Warnings.Count} uyarı.";
 
         if (_proje is not null)
         {

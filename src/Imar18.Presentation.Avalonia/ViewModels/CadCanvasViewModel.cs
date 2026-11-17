@@ -2,12 +2,17 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Imar18.Domain.Geometry;
 using Imar18.Presentation.Avalonia.Canvas;
+using Imar18.Presentation.Avalonia.Gorunum;
 
 namespace Imar18.Presentation.Avalonia.ViewModels;
 
-/// <summary>Sag tik menusu ogesi. Sonraki fazda baglanacak islemler gerekcesiyle pasiftir.</summary>
-public sealed record CanvasMenuItem(string Id, string Title, string? DisabledReason, IRelayCommand Command);
+/// <summary>
+/// Sag tik menusu ogesi. <paramref name="Bagli"/> false ise islem sonraki fazda baglanacaktir (gerekcesiyle pasif) ve sag
+/// paneldeki "Parsel Islemleri" kartinda gosterilmez.
+/// </summary>
+public sealed record CanvasMenuItem(string Id, string Title, string? DisabledReason, IRelayCommand Command, bool Bagli = true);
 
 /// <summary>Canli kesim tutamaci (P4.3). Aci spec §4.2 araligi 75°–105° icinde, konum cephe boyunca 0..1 oranidir.</summary>
 public sealed partial class CutHandleViewModel : ObservableObject
@@ -89,20 +94,58 @@ public sealed partial class CadCanvasViewModel : ObservableObject
     [ObservableProperty]
     private int _renderVersion;
 
+    /// <summary>Son imleç konumundaki OSNAP yakalaması (yoksa null).</summary>
+    [ObservableProperty]
+    private OsnapSonucu? _yakalama;
+
+    [ObservableProperty]
+    private bool _osnapUc = true;
+
+    [ObservableProperty]
+    private bool _osnapOrta = true;
+
+    [ObservableProperty]
+    private bool _osnapDik;
+
+    [ObservableProperty]
+    private bool _osnapKesisim;
+
+    [ObservableProperty]
+    private bool _izgaraGoster = true;
+
+    [ObservableProperty]
+    private bool _etiketGoster = true;
+
+    /// <summary>Açık pafta (kağıt) teması: tuval açık zeminde çizilir.</summary>
+    [ObservableProperty]
+    private bool _acikPafta;
+
+    /// <summary>HUD: seçili parsel özeti (Türkçe).</summary>
+    [ObservableProperty]
+    private string _seciliOzet = SecimYok;
+
+    /// <summary>Yakalama toleransı (ekran pikseli).</summary>
+    public const double YakalamaToleransiPx = 10d;
+
+    private const string SecimYok = "Seçim yok — parsele tıklayın";
+
     public CadCanvasViewModel()
     {
         const string sonraki = "Sonraki fazda (P5/P6) bağlanacak";
         IRelayCommand Pasif() => new RelayCommand(() => { }, () => false);
         ContextMenuItems =
         [
-            new CanvasMenuItem("chamfer45", "📐 45° Köşe Pahı Uygula (5×5 m)", sonraki, Pasif()),
-            new CanvasMenuItem("resolveShared", "🔗 Müşterek Çöz (Md. 17/1-d)", sonraki, Pasif()),
-            new CanvasMenuItem("lockFrontage", "↔ Cepheyi Sabitle (Alan Kilitli)", sonraki, Pasif()),
-            new CanvasMenuItem("balanceY1", "⚖️ Tecviz Farkını Y1 Yolunda Dengele", sonraki, Pasif()),
-            new CanvasMenuItem("fenPreview", "📗 Fen Klasörü (He/M2/Dm2) Önizle", sonraki, Pasif()),
+            new CanvasMenuItem("chamfer45", "📐 45° Köşe Pahı Uygula (5×5 m)", sonraki, Pasif(), false),
+            new CanvasMenuItem("resolveShared", "🔗 Müşterek Çöz (Md. 17/1-d)", sonraki, Pasif(), false),
+            new CanvasMenuItem("lockFrontage", "↔ Cepheyi Sabitle (Alan Kilitli)", sonraki, Pasif(), false),
+            new CanvasMenuItem("balanceY1", "⚖️ Tecviz Farkını Y1 Yolunda Dengele", sonraki, Pasif(), false),
+            new CanvasMenuItem("fenPreview", "📗 Fen Klasörü (He/M2/Dm2) Önizle", sonraki, Pasif(), false),
             new CanvasMenuItem("cutHandle", "✂️ Canlı Kesim Tutamacını Göster", null, new RelayCommand(ShowCutHandle, () => Selected is not null)),
             new CanvasMenuItem("zoomSelection", "🔍 Seçili Parsele Yakınlaş", null, new RelayCommand(ZoomToSelection, () => Selected is not null)),
+            new CanvasMenuItem("clearSelection", "✖ Seçimi Temizle", null, new RelayCommand(ClearSelection, () => Selected is not null)),
+            new CanvasMenuItem("fitAll", "🗺️ Tümünü Sığdır", null, new RelayCommand(FitAll)),
         ];
+        ParselIslemleriniYenile();
     }
 
     public CadCamera Camera { get; } = new();
@@ -110,6 +153,14 @@ public sealed partial class CadCanvasViewModel : ObservableObject
     public CutHandleViewModel CutHandle { get; } = new();
 
     public ObservableCollection<CanvasMenuItem> ContextMenuItems { get; }
+
+    /// <summary>Sağ panel "Parsel İşlemleri" kartı: yalnızca gerçek komuta bağlı işlemler.</summary>
+    public ObservableCollection<CanvasMenuItem> ParselIslemleri { get; } = [];
+
+    /// <summary>Açık OSNAP kipleri.</summary>
+    public OsnapKipi AcikKipler =>
+        (OsnapUc ? OsnapKipi.Uc : OsnapKipi.Yok) | (OsnapOrta ? OsnapKipi.Orta : OsnapKipi.Yok)
+        | (OsnapDik ? OsnapKipi.Dik : OsnapKipi.Yok) | (OsnapKesisim ? OsnapKipi.Kesisim : OsnapKipi.Yok);
 
     /// <summary>
     /// P5: "Fen Klasörü" bağlam menüsü öğesini gerçek komuta bağlar (onay yoksa komut pasiftir; gerekçe gösterilir).
@@ -119,6 +170,40 @@ public sealed partial class CadCanvasViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(komut);
         var i = ContextMenuItems.ToList().FindIndex(m => m.Id == "fenPreview");
         ContextMenuItems[i] = new CanvasMenuItem("fenPreview", "📗 Fen Klasörü (He/M2/Dm2) Üret", "Güncel revizyon için mühendis onayı gerekli", komut);
+        ParselIslemleriniYenile();
+    }
+
+    private void ParselIslemleriniYenile()
+    {
+        ParselIslemleri.Clear();
+        foreach (var m in ContextMenuItems.Where(m => m.Bagli))
+        {
+            ParselIslemleri.Add(m);
+        }
+    }
+
+    partial void OnOsnapUcChanged(bool value) => OsnapDegisti();
+
+    partial void OnOsnapOrtaChanged(bool value) => OsnapDegisti();
+
+    partial void OnOsnapDikChanged(bool value) => OsnapDegisti();
+
+    partial void OnOsnapKesisimChanged(bool value) => OsnapDegisti();
+
+    partial void OnIzgaraGosterChanged(bool value) => Invalidate();
+
+    partial void OnEtiketGosterChanged(bool value) => Invalidate();
+
+    partial void OnAcikPaftaChanged(bool value) => Invalidate();
+
+    private void OsnapDegisti()
+    {
+        OnPropertyChanged(nameof(AcikKipler));
+        if (AcikKipler == OsnapKipi.Yok && Yakalama is not null)
+        {
+            Yakalama = null;
+            Invalidate();
+        }
     }
 
     /// <summary>0 = yalnizca eski kadastro, 100 = tam yeni imar (referans tasarim "swipe" kaydiricisi).</summary>
@@ -135,8 +220,16 @@ public sealed partial class CadCanvasViewModel : ObservableObject
         }
     }
 
-    /// <summary>Gorunum yuzdesi (100 = sigdirilmis olcek degil, mutlak 1 px/m'ye gore).</summary>
-    public string ZoomText => (Camera.Scale * 100d).ToString("0.#", CultureInfo.InvariantCulture) + " %";
+    /// <summary>Gorunum yuzdesi (100 = sigdirilmis olcek degil, mutlak 1 px/m'ye gore; Turkce yazim: %100).</summary>
+    public string ZoomText => "%" + (Camera.Scale * 100d).ToString("0.#", CultureInfo.InvariantCulture);
+
+    /// <summary>Gorunum merkezinde yakinlastirir.</summary>
+    [RelayCommand]
+    private void Yakinlas() => ZoomAt(_viewWidth / 2d, _viewHeight / 2d, 1.25);
+
+    /// <summary>Gorunum merkezinde uzaklastirir.</summary>
+    [RelayCommand]
+    private void Uzaklas() => ZoomAt(_viewWidth / 2d, _viewHeight / 2d, 1 / 1.25);
 
     public void SetViewport(double width, double height)
     {
@@ -152,6 +245,7 @@ public sealed partial class CadCanvasViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(scene);
         Scene = scene;
         Selected = null;
+        Yakalama = null;
         CutHandle.IsVisible = false;
         FitAll();
     }
@@ -178,11 +272,45 @@ public sealed partial class CadCanvasViewModel : ObservableObject
         Invalidate();
     }
 
+    /// <summary>
+    /// Imlec koordinatini (OSNAP acikken yakalanan noktayi) Jeodezik Y (Dogu) / X (Kuzey) olarak yazar. Yakalama yalniz
+    /// gosterimdir; geometriye yazmaz.
+    /// </summary>
     public void PointerMoved(double screenX, double screenY)
     {
         var w = Camera.ScreenToWorld(screenX, screenY);
-        CursorText = string.Create(CultureInfo.InvariantCulture, $"Y: {w.Y:0.000}   X: {w.X:0.000}");
+        var onceki = Yakalama;
+        var tol = YakalamaToleransiPx / Camera.Scale;
+        Yakalama = AcikKipler == OsnapKipi.Yok || !double.IsFinite(tol)
+            ? null
+            : OsnapCozucu.Coz(Scene, w, decimal.Round((decimal)tol, 3, MidpointRounding.AwayFromZero), AcikKipler);
+        var p = Yakalama?.Nokta ?? w;
+        var ek = Yakalama is { } y ? "   · OSNAP: " + KipAdi(y.Kip) : string.Empty;
+        CursorText = string.Create(CultureInfo.InvariantCulture, $"Doğu Y: {p.Y:0.000}   Kuzey X: {p.X:0.000}{ek}");
+        if (onceki != Yakalama)
+        {
+            Invalidate();
+        }
     }
+
+    /// <summary>Imlec tuvalden cikti: yakalama isareti silinir.</summary>
+    public void PointerLeft()
+    {
+        if (Yakalama is not null)
+        {
+            Yakalama = null;
+            Invalidate();
+        }
+    }
+
+    internal static string KipAdi(OsnapKipi kip) => kip switch
+    {
+        OsnapKipi.Uc => "Uç",
+        OsnapKipi.Orta => "Orta",
+        OsnapKipi.Dik => "Dik 90°",
+        OsnapKipi.Kesisim => "Kesişim",
+        _ => "—",
+    };
 
     public void SelectAt(double screenX, double screenY)
     {
@@ -195,6 +323,10 @@ public sealed partial class CadCanvasViewModel : ObservableObject
         ContextMenuTitle = value is null
             ? "PARSEL İŞLEMLERİ"
             : $"PARSEL İŞLEMLERİ ({(value.Label.Length > 0 ? value.Label : value.LayerName)})";
+        SeciliOzet = value is null
+            ? SecimYok
+            : $"🎯 {(value.Label.Length > 0 ? value.Label : value.LayerName)} · {TurkceAdlar.Ad(value.Role)}"
+              + (value.AreaM2 is { } a ? " · " + a.ToString("0.00", CultureInfo.InvariantCulture) + " m²" : string.Empty);
         foreach (var item in ContextMenuItems)
         {
             item.Command.NotifyCanExecuteChanged();
@@ -208,6 +340,13 @@ public sealed partial class CadCanvasViewModel : ObservableObject
         Invalidate();
     }
 
+    private void ClearSelection()
+    {
+        Selected = null;
+        CutHandle.IsVisible = false;
+        Invalidate();
+    }
+
     private void ZoomToSelection()
     {
         if (Selected is null || Selected.Vertices.Count == 0)
@@ -215,8 +354,8 @@ public sealed partial class CadCanvasViewModel : ObservableObject
             return;
         }
 
-        var min = new Domain.Geometry.GeodeticPoint(X: Selected.Vertices.Min(v => v.X), Y: Selected.Vertices.Min(v => v.Y));
-        var max = new Domain.Geometry.GeodeticPoint(X: Selected.Vertices.Max(v => v.X), Y: Selected.Vertices.Max(v => v.Y));
+        var min = new GeodeticPoint(X: Selected.Vertices.Min(v => v.X), Y: Selected.Vertices.Min(v => v.Y));
+        var max = new GeodeticPoint(X: Selected.Vertices.Max(v => v.X), Y: Selected.Vertices.Max(v => v.Y));
         Camera.FitTo(min, max, _viewWidth, _viewHeight, 48);
         Invalidate();
     }

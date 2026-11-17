@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Imar18.Application.Cikti;
 using Imar18.Application.Onay;
 using Imar18.Application.Proje;
+using Imar18.Presentation.Avalonia.Gorunum;
 
 namespace Imar18.Presentation.Avalonia.ViewModels;
 
@@ -19,7 +20,7 @@ public sealed partial class OnayCiktiViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(OnaylaCommand), nameof(GeriAlCommand))]
-    [NotifyPropertyChangedFor(nameof(GecerliOnayVar))]
+    [NotifyPropertyChangedFor(nameof(GecerliOnayVar), nameof(RevizyonKisa), nameof(RevizyonTam), nameof(OnayDurumu), nameof(EngelVar))]
     private OnayEkrani? _ekran;
 
     [ObservableProperty]
@@ -52,8 +53,42 @@ public sealed partial class OnayCiktiViewModel : ObservableObject
 
     public ObservableCollection<string> Engeller { get; } = [];
 
+    /// <summary>P7: onay engeli var mı (engel listesi yalnızca 5. adımda gösterilir).</summary>
+    public bool EngelVar => Ekran is { Engeller.Count: > 0 };
+
+    /// <summary>P7: RevisionId rozeti (ilk 8 karakter + "…").</summary>
+    public string RevizyonKisa => TurkceAdlar.KisaRevizyon(Ekran?.RevizyonId);
+
+    /// <summary>P7: RevisionId'nin tamamı (araç ipucu ve panoya kopyalama).</summary>
+    public string RevizyonTam => Ekran?.RevizyonId ?? string.Empty;
+
+    /// <summary>P7: üst çubuktaki onay durumu rozeti.</summary>
+    public string OnayDurumu => GecerliOnayVar ? "✅ Onaylı Revizyon" : "⏳ Mühendis Onayı Bekleniyor";
+
+    /// <summary>Görünüm, metni sistem panosuna kopyalar (platform işi görünümdedir).</summary>
+    public event EventHandler<string>? PanoyaKopyalaIstendi;
+
+    [RelayCommand]
+    private void RevizyonuKopyala()
+    {
+        if (RevizyonTam.Length > 0)
+        {
+            PanoyaKopyalaIstendi?.Invoke(this, RevizyonTam);
+            DurumMetni = "Revizyon kimliği panoya kopyalandı.";
+        }
+    }
+
     /// <summary>Kayıtlı üreticinin uzantısı (dosya seçici süzgeci için).</summary>
     public string? Uzanti(CiktiTuru tur) => _alan.Cikti.Uzanti(tur);
+
+    /// <summary>Kayıt penceresinde önerilen dosya adı (ASCII güvenli; görünen ad Türkçedir).</summary>
+    public string OnerilenDosyaAdi(CiktiTuru tur) => (tur switch
+    {
+        CiktiTuru.Cetveller => "Imar18_Cetveller",
+        CiktiTuru.FenKlasoru => "Imar18_Fen_Klasoru",
+        CiktiTuru.CksDopOzeti => "Imar18_CKS_DOP_Ozeti",
+        _ => "Imar18_Cikti",
+    }) + (Uzanti(tur) ?? string.Empty);
 
     /// <summary>Onay ekranını güncel proje durumundan yeniden kurar (senkron; yalnız yapıcı ve testler).</summary>
     public void Yenile() => Uygula(_alan.Onay.OnayEkraniHazirla());
@@ -139,7 +174,7 @@ public sealed partial class OnayCiktiViewModel : ObservableObject
         {
             var sonuc = await _alan.Cikti.UretAsync(tur, _alan.KullaniciId, hedefYol).ConfigureAwait(true);
             DurumMetni = sonuc.IsSuccess
-                ? $"{tur} üretildi · SHA-256 {Kisa(sonuc.Value.Sha256)} · {PilotDamgasi.Metin}"
+                ? $"{TurkceAdlar.Ad(tur)} üretildi · SHA-256 {Kisa(sonuc.Value.Sha256)} · {PilotDamgasi.Metin}"
                 : sonuc.Error.UserMessage;
             return sonuc.IsSuccess;
         }
