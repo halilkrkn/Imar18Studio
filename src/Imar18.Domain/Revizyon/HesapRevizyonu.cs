@@ -1,3 +1,4 @@
+using Imar18.Domain.Geometry;
 using Imar18.Domain.Mevzuat.Dop;
 using Imar18.Domain.Mevzuat.Tahsis;
 using Imar18.Domain.Mevzuat.Tecviz;
@@ -8,7 +9,7 @@ namespace Imar18.Domain.Revizyon;
 /// P3 hesap revizyonu (D16, AC-PILOT-06): tecviz girdileri (sınır, ölçek, yöntem, kalite, kaynak notu, toplam sınır),
 /// DOP girdisi (R1, D1, R2, D2, R3, ortak katılım) ve hak eşleştirme girdisinin tek SHA-256 kimliği.
 /// Bunlardan herhangi biri değişirse kimlik değişir ve <see cref="MuhendisOnayi"/> geçersizleşir.
-/// Geometri (köşe koordinatları) ve CRS P4/P5'te aynı oluşturucuya eklenecektir.
+/// Geometri ve CRS dahil proje kimliği P5.2'de <see cref="ProjeRevizyonu"/>'dur.
 /// </summary>
 public static class HesapRevizyonu
 {
@@ -21,15 +22,27 @@ public static class HesapRevizyonu
         ArgumentNullException.ThrowIfNull(hakEslestirme);
         ArgumentNullException.ThrowIfNull(dop);
         ArgumentNullException.ThrowIfNull(tecvizParselleri);
+
+        var o = new RevizyonOzetiOlusturucu().Ekle("tur", "p3-hesap");
+        DopYaz(o, dop);
+        TecvizYaz(o, tecvizParselleri, duzenlemeToplamTecvizSiniriM2);
+        hakEslestirme.Yaz(o);
+        return o.Olustur();
+    }
+
+    internal static void DopYaz(RevizyonOzetiOlusturucu o, DopGirdisi dop) =>
+        o.Ekle("dop.r1", dop.R1).Ekle("dop.d1", dop.D1).Ekle("dop.r2", dop.R2).Ekle("dop.d2", dop.D2)
+            .Ekle("dop.r3", dop.R3).Ekle("dop.ortak", dop.OrtakKatilimM2);
+
+    internal static void TecvizYaz(
+        RevizyonOzetiOlusturucu o,
+        IReadOnlyCollection<TecvizParselGirdisi> tecvizParselleri,
+        decimal? duzenlemeToplamTecvizSiniriM2)
+    {
         if (tecvizParselleri.Any(t => t is null))
         {
             throw new ArgumentException("Tecviz parsel girdisi null olamaz.", nameof(tecvizParselleri));
         }
-
-        var o = new RevizyonOzetiOlusturucu().Ekle("tur", "p3-hesap");
-
-        o.Ekle("dop.r1", dop.R1).Ekle("dop.d1", dop.D1).Ekle("dop.r2", dop.R2).Ekle("dop.d2", dop.D2)
-            .Ekle("dop.r3", dop.R3).Ekle("dop.ortak", dop.OrtakKatilimM2);
 
         var tecviz = tecvizParselleri
             .Select(t => (Parsel: t, Anahtar: t.Tecviz is null
@@ -63,8 +76,97 @@ public static class HesapRevizyonu
         {
             o.Ekle("t.toplam", toplam);
         }
+    }
+}
 
-        hakEslestirme.Yaz(o);
+/// <summary>
+/// Proje revizyon girdisi (P5.2, AC-PILOT-06, spec 11.2 madde 9): proje adı, CRS (datum, dilim, epok, ölçek), parsel
+/// geometrileri (rol + köşeler), DOP, tecviz, hak eşleştirme ve geçici↔tescil kimlik eşlemesi. Henüz girilmemiş bileşen
+/// <c>null</c>'dır; "yok" ile "boş" ayırt edilir.
+/// </summary>
+public sealed record ProjeRevizyonGirdisi(
+    string ProjeAdi,
+    ProjeCrs? Crs,
+    IReadOnlyList<ParselGeometrisi> Geometri,
+    DopGirdisi? Dop,
+    IReadOnlyList<TecvizParselGirdisi> TecvizParselleri,
+    decimal? DuzenlemeToplamTecvizSiniriM2,
+    HakEslestirmeGirdisi? HakEslestirme,
+    IReadOnlyList<ParselKimlikCifti> KimlikEslemesi);
+
+/// <summary>
+/// Proje revizyon kimliği (SHA-256, şema <c>p5-proje</c>). Parsel listesi kimliğe göre sıralanır (girdi sırasından bağımsız);
+/// köşe dizisi ise olduğu gibi yazılır (başlangıç köşesi veya yön değişikliği veri değişikliği sayılır — muhafazakâr kural).
+/// Ondalıklar sadeleştirilmiş kesir biçimindedir (1.10 ≡ 1.1).
+/// </summary>
+public static class ProjeRevizyonu
+{
+    /// <summary>Pilot mevzuat profili (tek uzman onaylı profil — spec 18).</summary>
+    public const string MevzuatProfiliSurumu = "TPYS_2022";
+
+    /// <summary>Hesap kuralları sürümü: Domain/Application hesap kuralları değiştiğinde artırılır; eski onaylar düşer.</summary>
+    public const string KuralSurumu = "p5-1";
+
+    /// <exception cref="ArgumentException">Liste null veya null öğe içeriyorsa.</exception>
+    public static RevisionId Hesapla(ProjeRevizyonGirdisi girdi)
+    {
+        ArgumentNullException.ThrowIfNull(girdi);
+        if (girdi.ProjeAdi is null || girdi.Geometri is null || girdi.TecvizParselleri is null || girdi.KimlikEslemesi is null
+            || girdi.Geometri.Any(p => p?.ParselId is null || p.Koseler is null) || girdi.KimlikEslemesi.Any(k => k is null))
+        {
+            throw new ArgumentException("Proje revizyon girdisinde null liste veya öğe olamaz.", nameof(girdi));
+        }
+
+        // Kural/profil/katalog sürümleri de "parametre"dir (spec 11.2 madde 9, P5 reviewer M5): değişirlerse onay düşer.
+        var o = new RevizyonOzetiOlusturucu().Ekle("tur", "p5-proje")
+            .Ekle("profil", MevzuatProfiliSurumu).Ekle("kural", KuralSurumu).Ekle("katalog", Diagnostics.ErrorCatalog.Version)
+            .Ekle("ad", girdi.ProjeAdi);
+
+        o.Ekle("crsVar", girdi.Crs is not null);
+        if (girdi.Crs is { } crs)
+        {
+            o.Ekle("crs.id", crs.CrsId).Ekle("crs.datum", crs.Datum.ToString()).Ekle("crs.meridyen", crs.OrtaMeridyenDerece)
+                .Ekle("crs.epokVar", crs.Epok.HasValue).Ekle("crs.olcek", crs.OlcekPaydasi);
+            if (crs.Epok is { } epok)
+            {
+                o.Ekle("crs.epok", epok);
+            }
+        }
+
+        var parseller = girdi.Geometri
+            .OrderBy(p => p.ParselId, StringComparer.Ordinal)
+            .ThenBy(p => p.Rol)
+            .ThenBy(p => string.Join(';', p.Koseler.Select(k => Numerics.Fraction.FromDecimal(k.X) + "," + Numerics.Fraction.FromDecimal(k.Y))), StringComparer.Ordinal)
+            .ToArray();
+        o.Ekle("geoSayisi", parseller.Length);
+        foreach (var p in parseller)
+        {
+            o.Ekle("g.id", p.ParselId).Ekle("g.rol", p.Rol.ToString()).Ekle("g.koseSayisi", p.Koseler.Count);
+            foreach (var k in p.Koseler)
+            {
+                o.Ekle("g.x", k.X).Ekle("g.y", k.Y);
+            }
+        }
+
+        o.Ekle("dopVar", girdi.Dop is not null);
+        if (girdi.Dop is { } dop)
+        {
+            HesapRevizyonu.DopYaz(o, dop);
+        }
+
+        HesapRevizyonu.TecvizYaz(o, girdi.TecvizParselleri, girdi.DuzenlemeToplamTecvizSiniriM2);
+
+        o.Ekle("hakVar", girdi.HakEslestirme is not null);
+        girdi.HakEslestirme?.Yaz(o);
+
+        var kimlik = girdi.KimlikEslemesi
+            .OrderBy(k => k.GeciciKod, StringComparer.Ordinal).ThenBy(k => k.TescilNo, StringComparer.Ordinal).ToArray();
+        o.Ekle("kimlikSayisi", kimlik.Length);
+        foreach (var k in kimlik)
+        {
+            o.Ekle("k.gecici", k.GeciciKod).Ekle("k.tescil", k.TescilNo);
+        }
+
         return o.Olustur();
     }
 }

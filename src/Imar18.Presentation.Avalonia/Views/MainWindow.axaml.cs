@@ -3,6 +3,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
+using Imar18.Application.Cikti;
 using Imar18.Presentation.Avalonia.ViewModels;
 
 namespace Imar18.Presentation.Avalonia.Views;
@@ -24,6 +25,10 @@ public sealed partial class MainWindow : Window
         {
             _vm.OpenFileRequested -= OnOpenFileRequested;
             _vm.Palette.PropertyChanged -= OnPaletteChanged;
+            if (_vm.OnayCikti is { } eski)
+            {
+                eski.KayitYoluIstendi -= OnKayitYoluIstendi;
+            }
         }
 
         _vm = DataContext as MainWindowViewModel;
@@ -31,7 +36,35 @@ public sealed partial class MainWindow : Window
         {
             _vm.OpenFileRequested += OnOpenFileRequested;
             _vm.Palette.PropertyChanged += OnPaletteChanged;
+            if (_vm.OnayCikti is { } yeni)
+            {
+                yeni.KayitYoluIstendi += OnKayitYoluIstendi;
+            }
         }
+    }
+
+    /// <summary>P5.3: cikti icin kayit yolu secer; uretim ve denetim ViewModel/Application katmanindadir.</summary>
+    private async void OnKayitYoluIstendi(object? sender, CiktiTuru tur)
+    {
+        if (_vm?.OnayCikti is not { } oc)
+        {
+            return;
+        }
+
+        var uzanti = oc.Uzanti(tur) ?? string.Empty;
+        var dosya = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Taslak çıktıyı kaydet (PİLOT — RESMÎ İŞLEMDE KULLANILAMAZ)",
+            DefaultExtension = uzanti.TrimStart('.'),
+            SuggestedFileName = tur + uzanti,
+        });
+        var yol = dosya?.TryGetLocalPath();
+        if (yol is null)
+        {
+            return;
+        }
+
+        await oc.UretAsync(tur, yol);
     }
 
     private void OnPaletteChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

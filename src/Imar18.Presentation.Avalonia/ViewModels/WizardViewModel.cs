@@ -27,7 +27,7 @@ public sealed partial class LayerRoleRow : ObservableObject
 /// 5 adimli sihirbaz (roadmap P4.2 / UI referansi): 1. Girdi &amp; Sınır → 2. DOP &amp; Özet → 3. Ada Bölümleme →
 /// 4. Tahsis &amp; Hisse → 5. Cetvel &amp; Çıktı. Ilk adim proje CRS/dilim/olcek (<see cref="ProjeCrs"/>),
 /// <see cref="TecvizGirdisi"/> (muhendis girdisi) ve katman–rol eslemesini toplar; dogrulama Domain'e birakilir ve
-/// kullaniciya yalnizca Turkce <c>UserMessage</c> gosterilir. Diger adimlarin is kurallari P5/P6'da baglanacaktir.
+/// kullaniciya yalnizca Turkce <c>UserMessage</c> gosterilir. 5. adim (Cetvel &amp; Çıktı) P5'te <see cref="OnayCiktiViewModel"/> ile baglandi; 2–4. adim is kurallari P6'dadir.
 /// </summary>
 public sealed partial class WizardViewModel : ObservableObject
 {
@@ -94,6 +94,9 @@ public sealed partial class WizardViewModel : ObservableObject
 
     /// <summary>Muhendis bir katmanin rolunu degistirdiginde (etiket eslestirmesi ve sahne yeniden kurulmalidir).</summary>
     public event EventHandler? LayerRolesChanged;
+
+    /// <summary>Ilk adim girdileri basariyla dogrulandiginda (P5: CRS CommandBus ile projeye yazilir).</summary>
+    public event EventHandler? GirdiDogrulandi;
 
     /// <summary>Belge katmanlarini yukler; rol onerisi standart eslemeden gelir.</summary>
     public void LoadLayers(IEnumerable<CadLayer> layers)
@@ -215,6 +218,11 @@ public sealed partial class WizardViewModel : ObservableObject
         }
 
         IsInputValid = Crs is not null && Tecviz is not null && !Errors.Any(e => !e.StartsWith("Uyarı:", StringComparison.Ordinal));
+        if (IsInputValid)
+        {
+            GirdiDogrulandi?.Invoke(this, EventArgs.Empty);
+        }
+
         return IsInputValid;
     }
 

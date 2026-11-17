@@ -76,7 +76,10 @@ public sealed class CleanArchitectureRulesTests
                 "Imar18.Infrastructure",
                 "Imar18.Presentation.Avalonia",
                 "ACadSharp",
-                "Avalonia")
+                "Avalonia",
+                "ClosedXML",
+                "QuestPDF",
+                "UglyToad.PdfPig")
             .GetResult();
 
         result.IsSuccessful.Should().BeTrue(
@@ -149,7 +152,10 @@ public sealed class CleanArchitectureRulesTests
                 "Imar18.Infrastructure",
                 "NetTopologySuite",
                 "ACadSharp",
-                "Microsoft.Data.Sqlite")
+                "Microsoft.Data.Sqlite",
+                "ClosedXML",
+                "QuestPDF",
+                "UglyToad.PdfPig")
             .GetResult();
 
         result.IsSuccessful.Should().BeTrue(

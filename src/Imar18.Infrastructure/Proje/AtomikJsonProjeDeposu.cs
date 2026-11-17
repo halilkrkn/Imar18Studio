@@ -1,0 +1,333 @@
+using System.Globalization;
+using System.Numerics;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Imar18.Application.Cikti;
+using Imar18.Application.Proje;
+using Imar18.Domain.Diagnostics;
+using Imar18.Domain.Geometry;
+using Imar18.Domain.Mevzuat.Dop;
+using Imar18.Domain.Mevzuat.Tahsis;
+using Imar18.Domain.Mevzuat.Tecviz;
+using Imar18.Domain.Numerics;
+using Imar18.Domain.Revizyon;
+
+namespace Imar18.Infrastructure.Proje;
+
+/// <summary>
+/// Pilot yerel proje deposu (P5.1, FR-F6.10): proje durumu ve tüm denetim kayıtları tek UTF-8 JSON dosyasında tutulur ve her
+/// commit <see cref="AtomikDosyaYazici"/> ile atomik yazılır (aynı transaction). Zarf: şema adı, pilot damgası, içeriğin SHA-256
+/// özeti ve içerik. Okumada özet doğrulanır ve tüm Domain nesneleri fabrika metotlarıyla yeniden doğrulanarak kurulur; bozuk
+/// kayıt istisnasız <c>ERR-CIKTI-009</c> döner ve otomatik olarak yedekten açılmaz (karar mühendisindir).
+/// Şifreleme (SQLCipher/.imr18) Faz 11'dedir; bu dosya yalnızca sentetik/yerel pilot verisi içindir.
+/// </summary>
+public sealed class AtomikJsonProjeDeposu : IProjeDeposu
+{
+    /// <summary>Kayıt şeması.</summary>
+    public const string Sema = "imar18-pilot-proje-v1";
+
+    /// <summary>Kabul edilen en büyük dosya boyutu.</summary>
+    public const long MaxDosyaBoyutu = 256L * 1024 * 1024;
+
+    private static readonly JsonSerializerOptions Secenekler = new()
+    {
+        Converters = { new JsonStringEnumConverter() },
+        DefaultIgnoreCondition = JsonIgnoreCondition.Never,
+        WriteIndented = false,
+    };
+
+    private readonly string _yol;
+
+    public AtomikJsonProjeDeposu(string yol)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(yol);
+        _yol = Path.GetFullPath(yol);
+    }
+
+    /// <summary>Test kancası: geçici dosya yazıldıktan sonra, yer değiştirmeden önce çağrılır (çökme benzetimi).</summary>
+    internal Action? YerDegistirmeOncesi { get; set; }
+
+    public Task<bool> VarMiAsync(CancellationToken cancellationToken = default) => Task.FromResult(File.Exists(_yol));
+
+    public async Task<Result<ProjeKaydi>> YukleAsync(CancellationToken cancellationToken = default)
+    {
+        byte[] veri;
+        try
+        {
+            var bilgi = new FileInfo(_yol);
+            if (!bilgi.Exists)
+            {
+                return Hata("file not found");
+            }
+
+            if (bilgi.Length > MaxDosyaBoyutu)
+            {
+                return Hata("file too large");
+            }
+
+            veri = await File.ReadAllBytesAsync(_yol, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Hata(ex.GetType().Name);
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(veri);
+            var kok = doc.RootElement;
+            if (kok.ValueKind != JsonValueKind.Object
+                || !kok.TryGetProperty("sema", out var sema) || sema.ValueKind != JsonValueKind.String || sema.GetString() != Sema)
+            {
+                return Hata("unknown schema");
+            }
+
+            if (!kok.TryGetProperty("icerikSha256", out var ozet) || ozet.ValueKind != JsonValueKind.String
+                || !kok.TryGetProperty("icerik", out var icerik) || icerik.ValueKind != JsonValueKind.Object)
+            {
+                return Hata("missing envelope field");
+            }
+
+            var hesaplanan = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(icerik.GetRawText())));
+            if (!string.Equals(hesaplanan, ozet.GetString(), StringComparison.Ordinal))
+            {
+                return Hata("content checksum mismatch");
+            }
+
+            var dto = icerik.Deserialize<KayitDto>(Secenekler);
+            return dto is null ? Hata("empty content") : Esle(dto);
+        }
+        catch (Exception ex) when (ex is JsonException or FormatException or ArgumentException or InvalidOperationException or OverflowException)
+        {
+            return Hata("invalid content (" + ex.GetType().Name + ")");
+        }
+    }
+
+    public async Task<Result<ProjeKaydi>> KaydetAsync(ProjeKaydi kayit, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(kayit);
+        var icerik = JsonSerializer.SerializeToUtf8Bytes(Dto(kayit), Secenekler);
+        var ozet = Convert.ToHexStringLower(SHA256.HashData(icerik));
+
+        using var tampon = new MemoryStream(icerik.Length + 256);
+        tampon.Write(Encoding.UTF8.GetBytes(
+            "{\"sema\":\"" + Sema + "\",\"pilot\":" + JsonSerializer.Serialize(PilotDamgasi.Metin, new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping })
+            + ",\"icerikSha256\":\"" + ozet + "\",\"icerik\":"));
+        tampon.Write(icerik);
+        tampon.Write("}"u8);
+
+        // IOException/UnauthorizedAccessException CommandBus'ta ERR-CIKTI-009'a çevrilir (bellek durumu geri alınır).
+        await AtomikDosyaYazici.YazAsync(_yol, tampon.ToArray(), YerDegistirmeOncesi, cancellationToken).ConfigureAwait(false);
+        return Result<ProjeKaydi>.Success(kayit);
+    }
+
+    private static Result<ProjeKaydi> Hata(string neden)
+    {
+        var e = ErrorCatalog.Get(ErrorCodes.CiktiProjeKaydiHatasi);
+        return Result<ProjeKaydi>.Failure(e with { TechnicalMessage = e.TechnicalMessage.Replace("{reason}", neden, StringComparison.Ordinal) });
+    }
+
+    // ---------------- DTO eşlemesi ----------------
+
+    private static KayitDto Dto(ProjeKaydi k)
+    {
+        var b = k.Belge;
+        return new KayitDto(
+            new BelgeDto(
+                b.ProjeAdi,
+                b.Crs is { } c ? new CrsDto(c.Datum.ToString(), c.OrtaMeridyenDerece, c.Epok, c.OlcekPaydasi) : null,
+                b.Parseller.Select(p => new ParselDto(p.ParselId, p.Rol.ToString(), p.Koseler.Select(v => new[] { v.X, v.Y }).ToList())).ToList(),
+                b.Dop is { } d ? new DopDto(d.R1, d.D1, d.R2, d.D2, d.R3, d.OrtakKatilimM2) : null,
+                b.TecvizParselleri.Select(t => new TecvizDto(
+                    t.ParselId,
+                    t.TapuAlaniM2,
+                    t.HesapAlaniM2,
+                    t.Tecviz is { } g ? new TecvizGirdiDto(g.OlcekPaydaM, g.UretimYontemi, g.KoordinatKalite.ToString(), g.TecvizSiniriM2, g.KaynakNotu) : null)).ToList(),
+                b.DuzenlemeToplamTecvizSiniriM2,
+                b.HakEslestirme is { } h
+                    ? new HakDto(
+                        h.Dopo,
+                        h.KadastroParselleri.Select(kp => new KadastroDto(kp.ParselId, kp.TapuAlaniM2, kp.Malikler.Select(m => new MalikDto(
+                            m.MalikId, m.Hisse.Numerator.ToString(CultureInfo.InvariantCulture), m.Hisse.Denominator.ToString(CultureInfo.InvariantCulture), m.Muvafakatli)).ToList())).ToList(),
+                        h.ImarParselleri.Select(i => new ImarDto(i.GeciciKod, i.AlanM2)).ToList(),
+                        h.Eslestirme.Select(s => new SatirDto(s.MalikId, s.KadastroParselId, s.ImarParselKodu, s.AlanM2)).ToList())
+                    : null,
+                b.KimlikCiftleri.Select(x => new KimlikDto(x.GeciciKod, x.TescilNo)).ToList(),
+                b.Onay is { } o ? new OnayDto(o.RevizyonId.Deger, o.OnaylayanId, o.Zaman) : null,
+                b.Surum),
+            k.Denetim.ToList());
+    }
+
+    private static Result<ProjeKaydi> Esle(KayitDto dto)
+    {
+        var b = dto.Belge ?? throw new FormatException("belge missing");
+        if (string.IsNullOrWhiteSpace(b.ProjeAdi) || b.Parseller is null || b.Tecviz is null || b.Kimlikler is null || dto.Denetim is null)
+        {
+            throw new FormatException("required list missing");
+        }
+
+        ProjeCrs? crs = null;
+        if (b.Crs is { } c)
+        {
+            var r = ProjeCrs.Olustur(Enm<GeodetikDatum>(c.Datum), c.Meridyen, c.Epok, c.Olcek);
+            if (r.IsFailure)
+            {
+                return Hata("invalid CRS");
+            }
+
+            crs = r.Value;
+        }
+
+        var parseller = b.Parseller.Select(p => new ParselGeometrisi(
+            p.Id ?? throw new FormatException("parcel id"),
+            Enm<ParselRolu>(p.Rol),
+            (p.Koseler ?? throw new FormatException("vertices")).Select(v => v is { Length: 2 } ? new GeodeticPoint(v[0], v[1]) : throw new FormatException("vertex")).ToArray())).ToArray();
+
+        DopGirdisi? dop = null;
+        if (b.Dop is { } d)
+        {
+            var r = DopGirdisi.Olustur(d.R1, d.R2, d.D1, d.D2, d.R3, d.Ortak);
+            if (r.IsFailure)
+            {
+                return Hata("invalid DOP input");
+            }
+
+            dop = r.Value;
+        }
+
+        var tecviz = new List<TecvizParselGirdisi>(b.Tecviz.Count);
+        foreach (var t in b.Tecviz)
+        {
+            TecvizGirdisi? g = null;
+            if (t.Girdi is { } tg)
+            {
+                var r = TecvizGirdisi.Olustur(tg.Olcek, tg.Yontem, Enm<KoordinatKalitesi>(tg.Kalite), tg.Sinir, tg.Kaynak);
+                if (r.IsFailure)
+                {
+                    return Hata("invalid tecviz input");
+                }
+
+                g = r.Value;
+            }
+
+            tecviz.Add(new TecvizParselGirdisi(t.ParselId ?? throw new FormatException("tecviz id"), t.Tapu, t.Hesap, g));
+        }
+
+        HakEslestirmeGirdisi? hak = null;
+        if (b.Hak is { } h)
+        {
+            hak = new HakEslestirmeGirdisi(
+                h.Dopo,
+                (h.Kadastro ?? throw new FormatException("cadastre")).Select(k => new KadastroParseli(
+                    k.Id,
+                    k.Tapu,
+                    (k.Malikler ?? throw new FormatException("owners")).Select(m => new KadastroMaliki(
+                        m.Id,
+                        new Fraction(BigInteger.Parse(m.Pay, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture), BigInteger.Parse(m.Payda, NumberStyles.None, CultureInfo.InvariantCulture)),
+                        m.Muvafakat)).ToArray())).ToArray(),
+                (h.Imar ?? throw new FormatException("zoning")).Select(i => new ImarParseli(i.Kod, i.Alan)).ToArray(),
+                (h.Satirlar ?? throw new FormatException("rows")).Select(s => new HakEslestirmeSatiri(s.Malik, s.Kadastro, s.Imar, s.Alan)).ToArray());
+        }
+
+        var kimlikler = b.Kimlikler.Select(x => new ParselKimlikCifti(x.Gecici, x.Tescil)).ToArray();
+
+        MuhendisOnayi? onay = null;
+        if (b.Onay is { } o)
+        {
+            if (!RevisionId.TryParse(o.Revizyon, out var rev) || string.IsNullOrWhiteSpace(o.Onaylayan))
+            {
+                return Hata("invalid approval");
+            }
+
+            onay = MuhendisOnayi.Olustur(rev, o.Onaylayan, o.Zaman);
+        }
+
+        if (dto.Denetim.Any(a => a is null || string.IsNullOrWhiteSpace(a.Islem) || string.IsNullOrWhiteSpace(a.KullaniciId) || !Enum.IsDefined(a.Sonuc)))
+        {
+            return Hata("invalid audit record");
+        }
+
+        for (var i = 0; i < dto.Denetim.Count; i++)
+        {
+            if (dto.Denetim[i].Sira != i + 1)
+            {
+                return Hata("audit sequence gap");
+            }
+        }
+
+        var belge = new ProjeBelgesi(b.ProjeAdi, crs, parseller, dop, tecviz, b.ToplamTecviz, hak, kimlikler, onay, b.Surum);
+
+        // Komut doğrulamaları yüklemede yeniden çalışır (P5 reviewer M4): elle düzenlenip özeti yeniden hesaplanmış kayıt,
+        // CommandBus'ın kabul etmeyeceği bir durumu açamaz. Null metin alanları revizyon özetinde ArgumentException üretir.
+        var bos = ProjeBelgesi.Yeni(belge.ProjeAdi);
+        var kontroller = new List<IProjeKomutu> { new ParselGeometrileriAyarlaKomutu(parseller) };
+        if (kimlikler.Length > 0)
+        {
+            kontroller.Add(new ParselKimlikEslemesiAyarlaKomutu(kimlikler));
+        }
+        if (tecviz.Count > 0)
+        {
+            kontroller.Add(new TecvizGirdileriAyarlaKomutu(tecviz, b.ToplamTecviz));
+        }
+
+        if (hak is not null)
+        {
+            kontroller.Add(new HakEslestirmeAyarlaKomutu(hak));
+        }
+
+        // Not: Result<T> bir struct'tır; default değeri başarısız sayılır — FirstOrDefault yerine hata nesnesi aranır.
+        if (kontroller.Select(k => k.Uygula(bos)).Where(r => r.IsFailure).Select(r => r.Error).FirstOrDefault() is { } red)
+        {
+            return Hata("content rejected by command validation (" + red.Code + ")");
+        }
+
+        _ = belge.RevizyonKimligi();
+        return Result<ProjeKaydi>.Success(new ProjeKaydi(belge, dto.Denetim.ToArray()));
+    }
+
+    private static T Enm<T>(string? deger)
+        where T : struct, Enum =>
+        Enum.TryParse<T>(deger, ignoreCase: false, out var v) && Enum.IsDefined(v) && !int.TryParse(deger, out _)
+            ? v
+            : throw new FormatException("enum " + typeof(T).Name);
+
+    private sealed record KayitDto(BelgeDto Belge, List<AuditKaydi> Denetim);
+
+    private sealed record BelgeDto(
+        string ProjeAdi,
+        CrsDto? Crs,
+        List<ParselDto> Parseller,
+        DopDto? Dop,
+        List<TecvizDto> Tecviz,
+        decimal? ToplamTecviz,
+        HakDto? Hak,
+        List<KimlikDto> Kimlikler,
+        OnayDto? Onay,
+        long Surum);
+
+    private sealed record CrsDto(string Datum, int Meridyen, decimal? Epok, int Olcek);
+
+    private sealed record ParselDto(string Id, string Rol, List<decimal[]> Koseler);
+
+    private sealed record DopDto(decimal R1, decimal D1, decimal R2, decimal D2, decimal R3, decimal Ortak);
+
+    private sealed record TecvizDto(string ParselId, decimal Tapu, decimal Hesap, TecvizGirdiDto? Girdi);
+
+    private sealed record TecvizGirdiDto(int Olcek, string Yontem, string Kalite, decimal Sinir, string Kaynak);
+
+    private sealed record HakDto(decimal Dopo, List<KadastroDto> Kadastro, List<ImarDto> Imar, List<SatirDto> Satirlar);
+
+    private sealed record KadastroDto(string Id, decimal Tapu, List<MalikDto> Malikler);
+
+    private sealed record MalikDto(string Id, string Pay, string Payda, bool Muvafakat);
+
+    private sealed record ImarDto(string Kod, decimal Alan);
+
+    private sealed record SatirDto(string Malik, string Kadastro, string Imar, decimal Alan);
+
+    private sealed record KimlikDto(string Gecici, string Tescil);
+
+    private sealed record OnayDto(string Revizyon, string Onaylayan, DateTimeOffset Zaman);
+}

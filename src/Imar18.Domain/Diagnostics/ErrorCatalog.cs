@@ -16,6 +16,7 @@ public static class ErrorCodes
     public const string GirdDesteklenmeyenGeometriAtlandi = "ERR-GIRD-008";
     public const string GirdToleranslaKapatildi = "ERR-GIRD-009";
     public const string GirdEtiketPoligonEslesmedi = "ERR-GIRD-010";
+    public const string GirdProjeGirdisiGecersiz = "ERR-GIRD-011";
 
     public const string CrsEksik = "ERR-CRS-001";
     public const string CrsEpokUyumsuz = "ERR-CRS-002";
@@ -60,6 +61,12 @@ public static class ErrorCodes
     public const string CiktiParsidZorunluAlanEksik = "ERR-CIKTI-001";
     public const string CiktiFenKlasoruSablon = "ERR-CIKTI-002";
     public const string CiktiCadDisaAktarim = "ERR-CIKTI-003";
+    public const string CiktiOnayKritikHataEngeli = "ERR-CIKTI-004";
+    public const string CiktiOnayMetniKabulEdilmedi = "ERR-CIKTI-005";
+    public const string CiktiOnayIcinHesapEksik = "ERR-CIKTI-006";
+    public const string CiktiGecerliOnayYok = "ERR-CIKTI-007";
+    public const string CiktiOnayGeriAlinamaz = "ERR-CIKTI-008";
+    public const string CiktiProjeKaydiHatasi = "ERR-CIKTI-009";
 
     public const string GuvenAuditZinciriBozuk = "ERR-GUVEN-001";
     public const string GuvenYetkisizErisim = "ERR-GUVEN-002";
@@ -73,7 +80,7 @@ public static class ErrorCodes
 public static class ErrorCatalog
 {
     /// <summary>Katalog sürümü (AC-ERR-01).</summary>
-    public const string Version = "1.5.0";
+    public const string Version = "1.6.0";
 
     private static readonly AppError[] Entries =
     [
@@ -146,6 +153,13 @@ public static class ErrorCatalog
             "{unlabeled} unlabeled and {ambiguous} ambiguous polygons after label matching in {path}.",
             "Etiketsiz veya birden çok yazı içeren poligonların parsel kodunu elle atayın.",
             retryable: false, review: true),
+
+        // P5.1 (katalog 1.6.0): CommandBus komut girdisi.
+        New(ErrorCodes.GirdProjeGirdisiGecersiz, ErrorSeverity.Error, ErrorCategory.Input,
+            "Proje girdisi geçersiz; değişiklik uygulanmadı.",
+            "Project command {command} rejected: {reason}.",
+            "Girdiyi düzeltip işlemi yeniden deneyin.",
+            retryable: true, review: false),
 
         // ---- ERR-CRS: Koordinat sistemi ----
         New(ErrorCodes.CrsEksik, ErrorSeverity.Critical, ErrorCategory.Crs,
@@ -346,6 +360,38 @@ public static class ErrorCatalog
             "CAD dosyası dışa aktarılamadı.",
             "CAD export to {format} failed.",
             "Hedef biçimi ve çıktı yolunu kontrol edip yeniden deneyin.",
+            retryable: true, review: false),
+
+        // P5 (katalog 1.6.0, STATUS SORU-034): mühendis onayı (spec 11, AC-PILOT-05/06) ve atomik proje kaydı (FR-F6.10).
+        New(ErrorCodes.CiktiOnayKritikHataEngeli, ErrorSeverity.Error, ErrorCategory.Output,
+            "Kritik hata bulunduğu için onay verilemez.",
+            "Approval blocked: {count} critical finding(s) for revision {revisionId}.",
+            "Kritik hataları giderip hesabı yeniden çalıştırın; ardından onayı tekrar deneyin.",
+            retryable: false, review: true),
+        New(ErrorCodes.CiktiOnayMetniKabulEdilmedi, ErrorSeverity.Error, ErrorCategory.Output,
+            "Onay metni okunup kabul edilmeden onay verilemez.",
+            "Approval statement was not accepted for revision {revisionId}.",
+            "Onay metnini okuyup kabul ettiğinizi işaretleyin.",
+            retryable: true, review: false),
+        New(ErrorCodes.CiktiOnayIcinHesapEksik, ErrorSeverity.Error, ErrorCategory.Output,
+            "Hesap tamamlanmadığı için onay veya çıktı üretilemez.",
+            "Calculation incomplete for revision {revisionId}: {missing}.",
+            "Eksik girdileri (CRS, geometri, tecviz, DOP, hak eşleştirme) tamamlayıp hesabı yeniden çalıştırın.",
+            retryable: true, review: true),
+        New(ErrorCodes.CiktiGecerliOnayYok, ErrorSeverity.Error, ErrorCategory.Output,
+            "Güncel revizyon için geçerli mühendis onayı yok; çıktı üretilemez.",
+            "Output {output} blocked: no valid approval for revision {revisionId}.",
+            "Onay ekranından güncel revizyonu onaylayın.",
+            retryable: true, review: false),
+        New(ErrorCodes.CiktiOnayGeriAlinamaz, ErrorSeverity.Error, ErrorCategory.Output,
+            "Onay geri alınamaz.",
+            "Approval revocation rejected: {reason}.",
+            "Onay 24 saat içinde ve yalnızca mevcutken geri alınabilir; gerekirse yeni revizyon oluşturun.",
+            retryable: false, review: false),
+        New(ErrorCodes.CiktiProjeKaydiHatasi, ErrorSeverity.Error, ErrorCategory.Output,
+            "Proje kaydı veya çıktı dosyası okunamadı ya da yazılamadı; işlem uygulanmadı.",
+            "Project store or output file failure: {reason}.",
+            "Disk alanını ve dosya erişimini kontrol edin; sorun sürerse yedek kaydı kullanın.",
             retryable: true, review: false),
 
         // ---- ERR-GUVEN: Güvenlik ----
