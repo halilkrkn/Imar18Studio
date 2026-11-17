@@ -3,18 +3,192 @@
              xmlns:semi="https://irihi.tech/semi"
              x:Class="Imar18.Presentation.Avalonia.App"
              RequestedThemeVariant="Dark">
+  <!--
+    P7: UI_UX_Referans_v2_19.html renk paleti (cad-bg/panel/card/border/accent) "Koyu Stüdyo" ve "Açık Pafta" tema
+    sözlükleri olarak tanımlanır; görünüm yalnızca DynamicResource ile bağlanır (tema anahtarı anlık geçer).
+  -->
   <Application.Resources>
-    <!-- UI_UX_Referans_v2_19.html "cad" renk paleti -->
-    <SolidColorBrush x:Key="CadBg" Color="#0F1115" />
-    <SolidColorBrush x:Key="CadPanel" Color="#181B22" />
-    <SolidColorBrush x:Key="CadCard" Color="#212631" />
-    <SolidColorBrush x:Key="CadBorder" Color="#2D3443" />
-    <SolidColorBrush x:Key="CadAccent" Color="#3B82F6" />
-    <SolidColorBrush x:Key="CadText" Color="#E2E8F0" />
-    <SolidColorBrush x:Key="CadMuted" Color="#94A3B8" />
-    <SolidColorBrush x:Key="CadAmber" Color="#FBBF24" />
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="CadBg" Color="#0F1115" />
+          <SolidColorBrush x:Key="CadNav" Color="#13161C" />
+          <SolidColorBrush x:Key="CadPanel" Color="#181B22" />
+          <SolidColorBrush x:Key="CadCard" Color="#212631" />
+          <SolidColorBrush x:Key="CadCardHover" Color="#2A3140" />
+          <SolidColorBrush x:Key="CadBorder" Color="#2D3443" />
+          <SolidColorBrush x:Key="CadAccent" Color="#3B82F6" />
+          <SolidColorBrush x:Key="CadAccentSoft" Color="#1A3B82F6" />
+          <SolidColorBrush x:Key="CadText" Color="#E2E8F0" />
+          <SolidColorBrush x:Key="CadMuted" Color="#94A3B8" />
+          <SolidColorBrush x:Key="CadAmber" Color="#FBBF24" />
+          <SolidColorBrush x:Key="CadAmberSoft" Color="#26FBBF24" />
+          <SolidColorBrush x:Key="CadEmerald" Color="#34D399" />
+          <SolidColorBrush x:Key="CadRose" Color="#F87171" />
+          <SolidColorBrush x:Key="CadRoseSoft" Color="#1FF87171" />
+          <SolidColorBrush x:Key="CadBlue" Color="#60A5FA" />
+          <SolidColorBrush x:Key="CadHud" Color="#E6181B22" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="CadBg" Color="#EEF2F7" />
+          <SolidColorBrush x:Key="CadNav" Color="#E2E8F0" />
+          <SolidColorBrush x:Key="CadPanel" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="CadCard" Color="#F8FAFC" />
+          <SolidColorBrush x:Key="CadCardHover" Color="#EEF2FF" />
+          <SolidColorBrush x:Key="CadBorder" Color="#CBD5E1" />
+          <SolidColorBrush x:Key="CadAccent" Color="#2563EB" />
+          <SolidColorBrush x:Key="CadAccentSoft" Color="#1A2563EB" />
+          <SolidColorBrush x:Key="CadText" Color="#0F172A" />
+          <SolidColorBrush x:Key="CadMuted" Color="#475569" />
+          <SolidColorBrush x:Key="CadAmber" Color="#B45309" />
+          <SolidColorBrush x:Key="CadAmberSoft" Color="#1FB45309" />
+          <SolidColorBrush x:Key="CadEmerald" Color="#047857" />
+          <SolidColorBrush x:Key="CadRose" Color="#DC2626" />
+          <SolidColorBrush x:Key="CadRoseSoft" Color="#14DC2626" />
+          <SolidColorBrush x:Key="CadBlue" Color="#1D4ED8" />
+          <SolidColorBrush x:Key="CadHud" Color="#EBFFFFFF" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
   </Application.Resources>
+
   <Application.Styles>
     <semi:SemiTheme />
+
+    <!-- Kart: yuvarlatılmış kenar, ferah iç boşluk -->
+    <Style Selector="Border.kart">
+      <Setter Property="Background" Value="{DynamicResource CadCard}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CadBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="12" />
+    </Style>
+    <Style Selector="Border.kart.vurgu">
+      <Setter Property="BorderBrush" Value="{DynamicResource CadAccent}" />
+    </Style>
+    <Style Selector="Border.kart.uyari">
+      <Setter Property="Background" Value="{DynamicResource CadAmberSoft}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CadAmber}" />
+    </Style>
+    <Style Selector="Border.kart.hata">
+      <Setter Property="Background" Value="{DynamicResource CadRoseSoft}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CadRose}" />
+    </Style>
+    <Style Selector="Border.panel">
+      <Setter Property="Background" Value="{DynamicResource CadPanel}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CadBorder}" />
+    </Style>
+    <Style Selector="Border.hud">
+      <Setter Property="Background" Value="{DynamicResource CadHud}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CadBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="10,5" />
+    </Style>
+    <Style Selector="Border.rozet">
+      <Setter Property="Background" Value="{DynamicResource CadCard}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CadBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.rozet.amber">
+      <Setter Property="Background" Value="{DynamicResource CadAmberSoft}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CadAmber}" />
+    </Style>
+
+    <!-- Metin sınıfları (düz metin rengi Semi tema varyantından gelir; düğme içi metinler ezilmez) -->
+    <Style Selector="TextBlock.bolum">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="{DynamicResource CadMuted}" />
+    </Style>
+    <Style Selector="TextBlock.baslik">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.etiket">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource CadMuted}" />
+      <Setter Property="Margin" Value="0,6,0,3" />
+    </Style>
+    <Style Selector="TextBlock.aciklama">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource CadMuted}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.ozet">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource CadAmber}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.hata">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource CadRose}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.mono">
+      <Setter Property="FontFamily" Value="Consolas, Cascadia Mono, monospace" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+    <Style Selector="TextBlock.deger">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+    </Style>
+
+    <!-- Sihirbaz adım hapları -->
+    <Style Selector="Button.adim">
+      <Setter Property="Background" Value="{DynamicResource CadCard}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CadBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="12,5" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource CadMuted}" />
+    </Style>
+    <Style Selector="Button.adim.tamam">
+      <Setter Property="Foreground" Value="{DynamicResource CadEmerald}" />
+    </Style>
+    <Style Selector="Button.adim.aktif">
+      <Setter Property="Background" Value="{DynamicResource CadAccent}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CadAccent}" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- Ctrl+K arama çubuğu görünümlü düğme -->
+    <Style Selector="Button.arama">
+      <Setter Property="Background" Value="{DynamicResource CadCard}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CadBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="10,5" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+
+    <!-- Araç çubuğu ve OSNAP anahtarları -->
+    <Style Selector="ToggleButton.osnap">
+      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="Button.arac">
+      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="MinHeight" Value="24" />
+    </Style>
+
+    <!-- Bölme çubukları -->
+    <Style Selector="GridSplitter">
+      <Setter Property="Background" Value="{DynamicResource CadBorder}" />
+    </Style>
+
+    <!-- Katlanabilir bölümler -->
+    <Style Selector="Expander.bolum">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
   </Application.Styles>
 </Application>
