@@ -141,7 +141,7 @@
     <KeyBinding Gesture="Ctrl+K" Command="{Binding TogglePaletteCommand}" />
     <KeyBinding Gesture="Ctrl+O" Command="{Binding RequestOpenFileCommand}" />
     <KeyBinding Gesture="Ctrl+D0" Command="{Binding FitAllCommand}" />
-    <KeyBinding Gesture="Escape" Command="{Binding Palette.KapatCommand}" />
+    <KeyBinding Gesture="Escape" Command="{Binding EscCommand}" />
   </Window.KeyBindings>
 
   <Grid x:Name="KokIzgara" RowDefinitions="Auto,Auto,*,Auto,210,Auto">
@@ -420,18 +420,59 @@
                       <TextBlock Text="Standart Netcad katman adları otomatik eşlendi. Rol değişikliği anında uygulanır: tuval renkleri, Parseller tablosu ve proje geometrisi güncellenir." Classes="aciklama" />
                       <TextBlock Text="Henüz CAD dosyası açılmadı." Classes="aciklama"
                                  IsVisible="{Binding Wizard.LayerRoles.Count, Converter={x:Static g:Ceviriciler.Sifir}}" />
+                      <!-- P7.3-A (SAHA-005): tuvalden rol atama — çipi seç, tuvalde katmana tıkla (açık çizgiler dahil); Esc çıkar. -->
+                      <StackPanel x:Name="RolAtamaSeridi" Spacing="4" Margin="0,2,0,2"
+                                  IsVisible="{Binding Wizard.LayerRoles.Count, Converter={x:Static g:Ceviriciler.Pozitif}}">
+                        <TextBlock Text="🎯 Tuvalden ata: bir rol çipi seçin, sonra tuvalde katmanın çizgisine tıklayın (Esc: çık). Sağ tık → “Bu Katmanın Rolü ▸”."
+                                   Classes="aciklama" TextWrapping="Wrap" />
+                        <ItemsControl x:Name="RolCipListesi" ItemsSource="{Binding Canvas.RolCipleri}">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                              <WrapPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                              <ToggleButton Classes="osnap rolCipi" Margin="0,0,4,4" IsChecked="{Binding Secili, Mode=TwoWay}"
+                                            Command="{Binding SecCommand}" ToolTip.Tip="{Binding Ad, StringFormat='Tuvalde tıklanan katmanı “{0}” rolüne ata'}">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                  <Ellipse Width="8" Height="8" Fill="{Binding Rol, Converter={x:Static g:Ceviriciler.RolFircasi}}" VerticalAlignment="Center" />
+                                  <TextBlock Text="{Binding Ad}" />
+                                </StackPanel>
+                              </ToggleButton>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
                       <ItemsControl x:Name="KatmanRolListesi" ItemsSource="{Binding Wizard.LayerRoles}">
+                        <ItemsControl.Styles>
+                          <Style Selector="Border.katmanSatiri">
+                            <Setter Property="CornerRadius" Value="6" />
+                            <Setter Property="Padding" Value="4,2" />
+                            <Setter Property="BorderThickness" Value="1" />
+                            <Setter Property="BorderBrush" Value="Transparent" />
+                          </Style>
+                          <Style Selector="Border.katmanSatiri.vurgulu">
+                            <Setter Property="Background" Value="{DynamicResource CadAccentSoft}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource CadAccent}" />
+                          </Style>
+                        </ItemsControl.Styles>
                         <ItemsControl.ItemTemplate>
                           <DataTemplate>
-                            <StackPanel Margin="0,3" Spacing="2">
-                              <StackPanel Orientation="Horizontal" Spacing="6">
-                                <Ellipse Width="9" Height="9" Fill="{Binding Role, Converter={x:Static g:Ceviriciler.RolFircasi}}" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding LayerName}" Classes="mono" TextTrimming="CharacterEllipsis" />
+                            <Border Classes="katmanSatiri" Classes.vurgulu="{Binding Vurgulu}" Margin="0,1">
+                              <StackPanel Spacing="2">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                  <Ellipse Width="9" Height="9" Fill="{Binding Role, Converter={x:Static g:Ceviriciler.RolFircasi}}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                  <TextBlock Grid.Column="1" Text="{Binding LayerName}" Classes="mono" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                  <Button Grid.Column="2" Content="🎯" Classes="arac" Padding="5,1" MinHeight="22" Command="{Binding VurgulaCommand}"
+                                          AutomationProperties.Name="{Binding LayerName, StringFormat='{}{0} katmanını tuvalde vurgula'}"
+                                          ToolTip.Tip="Bu katmanı tuvalde vurgula / vurguyu kaldır" />
+                                </Grid>
+                                <!-- Rol listesi satırın kendi DataContext'inden gelir: $parent bağlaması geç çözülünce SelectedItem kayboluyordu (P7). -->
+                                <ComboBox ItemsSource="{Binding Roller}" SelectedItem="{Binding Role}"
+                                          ItemTemplate="{StaticResource TurkceAdSablonu}" HorizontalAlignment="Stretch" />
                               </StackPanel>
-                              <!-- Rol listesi satırın kendi DataContext'inden gelir: $parent bağlaması geç çözülünce SelectedItem kayboluyordu (P7). -->
-                              <ComboBox ItemsSource="{Binding Roller}" SelectedItem="{Binding Role}"
-                                        ItemTemplate="{StaticResource TurkceAdSablonu}" HorizontalAlignment="Stretch" />
-                            </StackPanel>
+                            </Border>
                           </DataTemplate>
                         </ItemsControl.ItemTemplate>
                       </ItemsControl>
@@ -715,6 +756,8 @@
                     <Setter Property="Header" Value="{Binding Title}" />
                     <Setter Property="Command" Value="{Binding Command}" />
                     <Setter Property="ToolTip.Tip" Value="{Binding DisabledReason}" />
+                    <!-- P7.3-A: "Bu Katmanın Rolü ▸" alt menüsü (yalnız alt öğesi olan menü öğesinde dolu) -->
+                    <Setter Property="ItemsSource" Value="{Binding AltOgeler}" />
                   </Style>
                 </ContextMenu.Styles>
               </ContextMenu>
@@ -747,6 +790,12 @@
               <Button x:Name="PaftaAnahtari" Classes="arac" Content="{Binding PaftaEtiketi}" Command="{Binding PaftaDegistirCommand}"
                       ToolTip.Tip="Yalnız çizim paftasını koyu / açık (beyaz kağıt) yapar; stüdyo teması değişmez" />
             </StackPanel>
+          </Border>
+
+          <!-- Üst orta: P7.3-A tuvalden rol atama modu (aktif rol, imleçteki katman → hedef rol, Esc) -->
+          <Border x:Name="RolAtamaHud" Classes="hud" Margin="12" HorizontalAlignment="Center" VerticalAlignment="Top"
+                  BorderBrush="{DynamicResource CadAmber}" IsHitTestVisible="False" IsVisible="{Binding Canvas.RolAtamaAktif}">
+            <TextBlock Text="{Binding Canvas.RolAtamaMetni}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource CadAmber}" />
           </Border>
 
           <!-- Sol alt: şeffaf Türkçe HUD (seçili parsel + jeodezik imleç) -->

@@ -14,8 +14,9 @@ namespace Imar18.Presentation.Avalonia.Controls;
 /// <summary>
 /// SkiaSharp 2B CAD tuvali (P4.3, P7). Çizim <see cref="CadSceneRenderer"/>'dadır: yollar sahne başına bir kez üretilir,
 /// her karede yalnızca ekran matrisi (Avalonia'nın kontrol ötelemesi korunarak) uygulanır (60 FPS hedefi). Sol sürükleme
-/// pan, tekerlek imleç etrafında zoom, çift tık sığdır, sol tık seçim (OSNAP yakalaması varsa nokta seçimi + panoya kopyalama),
-/// sağ tık seçim + bağlam menüsü.
+/// pan, tekerlek imleç etrafında zoom, çift tık sığdır, sol tık seçim (OSNAP yakalaması varsa nokta seçimi + panoya kopyalama;
+/// P7.3-A rol atama modunda tıklanan katmana rol ataması), sağ tık seçim + bağlam menüsü ("Bu katmanın rolü ▸"), Esc rol
+/// atama modundan çıkar.
 /// </summary>
 public sealed class CadCanvasControl : Control
 {
@@ -78,7 +79,8 @@ public sealed class CadCanvasControl : Control
         var props = e.GetCurrentPoint(this).Properties;
         if (props.IsRightButtonPressed)
         {
-            ViewModel?.SelectAt(p.X, p.Y);
+            // P7.3-A: seçim + "Bu katmanın rolü ▸" menüsü sağ tıklanan katmana göre kurulur (menü bundan sonra açılır).
+            ViewModel?.SagTikla(p.X, p.Y);
             return;
         }
 
@@ -121,14 +123,23 @@ public sealed class CadCanvasControl : Control
         if (_dragStart is not null && !_dragged)
         {
             var p = e.GetPosition(this);
-            // P7: OSNAP noktası yakalanmışsa tıklama o noktayı seçer ve koordinatı panoya kopyalatır; parsel seçimi de sürer.
-            ViewModel?.PointerMoved(p.X, p.Y);
-            ViewModel?.YakalamayiSec();
-            ViewModel?.SelectAt(p.X, p.Y);
+            // P7.3-A: rol atama modunda tıklanan katman aktif role atanır; aksi halde P7 davranışı (OSNAP noktası seçimi +
+            // panoya kopyalama, parsel seçimi).
+            ViewModel?.SolTikla(p.X, p.Y);
         }
 
         _dragStart = null;
         e.Pointer.Capture(null);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (e.Key == Key.Escape && ViewModel is { RolAtamaAktif: true } vm)
+        {
+            vm.RolAtamaModundanCik();
+            e.Handled = true;
+        }
     }
 
     protected override void OnPointerExited(PointerEventArgs e)

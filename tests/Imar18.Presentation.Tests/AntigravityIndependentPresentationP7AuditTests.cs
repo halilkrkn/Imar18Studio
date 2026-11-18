@@ -418,8 +418,10 @@ public sealed class AntigravityIndependentPresentationP7AuditTests
     {
         var vm = new CadCanvasViewModel();
 
-        // Toplam 9 menü öğesi var
-        vm.ContextMenuItems.Should().HaveCount(9);
+        // Toplam 10 menü öğesi var (P7.3-A gereksinim değişikliği, SAHA-005: eski 9 öğe + "🧩 Bu Katmanın Rolü ▸" alt menüsü;
+        // alt menü öğesi Parsel İşlemleri kartına düğme olarak girmez — aşağıdaki 4/5 öğe beklentisi değişmedi).
+        vm.ContextMenuItems.Should().HaveCount(10);
+        vm.ContextMenuItems.Should().ContainSingle(m => m.Id == "katmanRolu" && m.AltOgeler != null);
 
         // ParselIslemleri listesinde yalnızca Bagli == true olan 4 komut olmalıdır:
         // cutHandle, zoomSelection, clearSelection, fitAll
