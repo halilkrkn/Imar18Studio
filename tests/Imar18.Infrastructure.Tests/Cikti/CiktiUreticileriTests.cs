@@ -201,8 +201,10 @@ public sealed class CiktiUreticileriTests
         var okunan = new CksFileReader().Read(new MemoryStream(bytes.Value));
         okunan.IsSuccess.Should().BeTrue(okunan.IsFailure ? okunan.Error.TechnicalMessage : string.Empty);
         okunan.Value.Should().Be(CksOzetiEslemesi.Olustur(p.Dop).Value);
-        var ilkSatir = Encoding.UTF8.GetString(bytes.Value).Split("\r\n")[0];
-        ilkSatir.Should().Contain(PilotDamgasi.Metin).And.Contain(p.RevizyonId);
+
+        // SORU-039 (proje sahibi kararı, 18 Kasım 2026): Netcad 1. satıra yazılan metnin üstüne çerçeve çizdiği için CKS'e
+        // Pilot damgası yazılmaz; 1. satır gerçek Netcad dosyasındaki gibi boştur (eski beklenti: damga + RevizyonId).
+        bytes.Value.Take(2).Should().Equal((byte)0x0D, (byte)0x0A);
     }
 
     [Fact]
@@ -213,7 +215,7 @@ public sealed class CiktiUreticileriTests
         var motor = CksOzetiEslemesi.Olustur(DopOzeti.From(DopCalculator.Hesapla(DopGirdisi.Olustur(8699.44m, 7620.54m).Value).Value)).Value;
 
         motor.Should().Be(bagimsiz, "motor eşlemesi Netcad örnek dosyasındaki değerlerle aynı olmalı");
-        var yeniden = new CksFileReader().Read(new MemoryStream(CksDosyaUretici.Yaz(motor, PilotDamgasi.Metin).Value)).Value;
+        var yeniden = new CksFileReader().Read(new MemoryStream(CksDosyaUretici.Yaz(motor).Value)).Value;
         yeniden.Should().Be(bagimsiz);
     }
 
@@ -222,7 +224,7 @@ public sealed class CiktiUreticileriTests
     {
         var ornek = CksOzetiEslemesi.Olustur(DopOzeti.From(DopCalculator.Hesapla(DopGirdisi.Olustur(8699.44m, 7620.54m).Value).Value)).Value;
 
-        var sonuc = CksDosyaUretici.Yaz(ornek with { KamuyaAyrilanAlanM2 = 1078.91m }, PilotDamgasi.Metin);
+        var sonuc = CksDosyaUretici.Yaz(ornek with { KamuyaAyrilanAlanM2 = 1078.91m });
 
         sonuc.IsFailure.Should().BeTrue();
         sonuc.Error.Code.Should().Be(ErrorCodes.CiktiCadDisaAktarim);

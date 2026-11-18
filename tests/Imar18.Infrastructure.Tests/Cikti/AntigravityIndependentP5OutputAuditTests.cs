@@ -180,12 +180,11 @@ public sealed class AntigravityIndependentP5OutputAuditTests
         var cksSonuc = cksUretici.Uret(paket);
 
         cksSonuc.IsSuccess.Should().BeTrue();
-        var cksMetin = Encoding.UTF8.GetString(cksSonuc.Value);
-
-        // İlk satır pilot damgası ve RevisionId içermeli
-        var ilkSatir = cksMetin.Split("\r\n")[0];
-        ilkSatir.Should().Contain(PilotDamgasi.Metin);
-        ilkSatir.Should().Contain(paket.RevizyonId);
+        // SORU-039 (proje sahibi kararı, 18 Kasım 2026): CKS Netcad karışık kodlamasıyla (1254 harf + CP437 çerçeve) yazılır ve
+        // 1. satırı boştur; Pilot damgası CKS'e yazılmaz (eski beklenti: 1. satırda damga + RevisionId, UTF-8).
+        var cksMetin = Imar18.Infrastructure.Cikti.Cks.NetcadCksKodlayici.Coz(cksSonuc.Value);
+        cksMetin.Split("\r\n")[0].Should().BeEmpty();
+        cksMetin.Should().NotContain(PilotDamgasi.Metin);
 
         // P4.1 CksFileReader ile geri oku
         var reader = new CksFileReader();

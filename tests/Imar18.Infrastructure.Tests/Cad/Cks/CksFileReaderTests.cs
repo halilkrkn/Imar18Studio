@@ -119,7 +119,7 @@ public sealed class CksFileReaderTests
     }
 
     [Fact]
-    public void CksOkuyucu_Public_Sentetik_UTF8_Ornegi_Altin_Veriyle_Eslesmeli()
+    public void CksOkuyucu_Public_Sentetik_Netcad_Bicimli_Ornegi_Altin_Veriyle_Eslesmeli()
     {
         var bayt = File.ReadAllBytes(
             Imar18.TestDestek.TestDataLocator.Sentetik("pilot-1-concave-parcel", "DOP_Ornek.CKS"));

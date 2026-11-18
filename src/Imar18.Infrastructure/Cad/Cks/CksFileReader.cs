@@ -10,7 +10,8 @@ namespace Imar18.Infrastructure.Cad.Cks;
 /// Netcad <c>.CKS</c> DOP ozet okuyucusu (spec §25.1, ncz-netcad skill).
 /// <para>
 /// Kodlama: Netcad dosyasi Turkce harfleri Windows-1254, cerceve karakterlerini OEM (cp437) baytlariyla yazar
-/// (P4.1 gozlemi); public ornek UTF-8'dir. Okuyucu once kati UTF-8 dener, olmazsa bayt-koruyan Latin-1 ile cozer.
+/// (P4.1 gozlemi, SORU-039); yazici da ayni bicimi uretir. Okuyucu once kati UTF-8 dener (eski P5 ciktilari), olmazsa
+/// Netcad tablosuyla (<see cref="Cikti.Cks.NetcadCksKodlayici"/>) cozer.
 /// Satir etiketleri yalnizca ASCII "iskeletiyle" (ASCII disi karakterler atilmis, kucuk harf) eslenir; boylece
 /// karisik kodlama, mojibake veya dogru Turkce metin ayni sonucu verir. Sayilar ASCII'dir ve kultur bagimsiz okunur.
 /// </para>
@@ -159,7 +160,8 @@ public sealed partial class CksFileReader : ICksFileReader
         }
         catch (DecoderFallbackException)
         {
-            return Encoding.Latin1.GetString(data);
+            // Netcad karışık kodlaması (1254 harf + CP437 çerçeve, SORU-039): aynı tablo yazıcıyla ortaktır.
+            return Cikti.Cks.NetcadCksKodlayici.Coz(data);
         }
     }
 
