@@ -1,3 +1,4 @@
+using Imar18.Application.Girdi;
 using Imar18.Domain.Diagnostics;
 using Imar18.Domain.Geometry;
 using Imar18.Domain.Mevzuat.Dop;
@@ -24,6 +25,12 @@ public sealed record ProjeBelgesi(
     MuhendisOnayi? Onay,
     long Surum)
 {
+    /// <summary>
+    /// P7.3-B1: yerel Malik Rehberi (anonim kod ↔ ad/baba adı, parsel Cilt/Sayfa). Hesabı değiştirmez; bu yüzden
+    /// <see cref="RevizyonKimligi"/>'ne girmez ve değişmesi onayı düşürmez (SORU-040 c). Yalnız çıktı cetvelleri kullanır.
+    /// </summary>
+    public MalikRehberi MalikRehberi { get; init; } = MalikRehberi.Bos;
+
     /// <summary>Boş proje.</summary>
     public static ProjeBelgesi Yeni(string projeAdi)
     {

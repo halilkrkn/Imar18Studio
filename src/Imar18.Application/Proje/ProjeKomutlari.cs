@@ -74,7 +74,59 @@ public sealed record ProjeyiSifirlaKomutu : IProjeKomutu
             DuzenlemeToplamTecvizSiniriM2 = null,
             HakEslestirme = null,
             KimlikCiftleri = [],
+            MalikRehberi = Girdi.MalikRehberi.Bos,
         });
+    }
+}
+
+/// <summary>
+/// P7.3-B1 (SAHA-006): yerel Malik Rehberi'ni tümüyle değiştirir (webtapu aktarımı). Kodlar benzersiz ve TAKBİS anonim kod
+/// biçiminde (1–32 ASCII harf/rakam/-_.), adlar boş olmamalıdır. Denetime yalnız sayım yazılır; ad/kimlik yazılmaz (KVKK).
+/// Rehber RevisionId'ye girmediği için onay düşmez.
+/// </summary>
+public sealed record MalikRehberiAyarlaKomutu(Girdi.MalikRehberi Rehber) : IProjeKomutu
+{
+    public string Ad => "MalikRehberiAyarla";
+
+    public string? Ayrinti => Rehber is null
+        ? null
+        : string.Create(CultureInfo.InvariantCulture, $"malik={Rehber.Malikler?.Count ?? 0} parsel={Rehber.Parseller?.Count ?? 0}");
+
+    public Result<ProjeBelgesi> Uygula(ProjeBelgesi mevcut)
+    {
+        ArgumentNullException.ThrowIfNull(mevcut);
+        if (Rehber?.Malikler is null || Rehber.Parseller is null || Rehber.Malikler.Any(m => m is null) || Rehber.Parseller.Any(p => p is null))
+        {
+            return KomutHatasi.Gecersiz(Ad, "owner directory lists must not be null");
+        }
+
+        var kodlar = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var m in Rehber.Malikler)
+        {
+            var kod = m.MalikKodu?.Trim() ?? string.Empty;
+            if (kod.Length is 0 or > 32 || !kod.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.'))
+            {
+                return KomutHatasi.Gecersiz(Ad, "owner code must be an anonymous code (ASCII letters/digits/-/_/.)");
+            }
+
+            if (!kodlar.Add(kod))
+            {
+                return KomutHatasi.Gecersiz(Ad, "duplicate owner code");
+            }
+
+            if (string.IsNullOrWhiteSpace(m.AdSoyad))
+            {
+                return KomutHatasi.Gecersiz(Ad, "owner name must not be empty");
+            }
+        }
+
+        if (Rehber.Parseller.Any(p => string.IsNullOrWhiteSpace(p.KadastroParselId))
+            || Rehber.Parseller.GroupBy(p => p.KadastroParselId.Trim(), StringComparer.Ordinal).Any(g => g.Count() > 1))
+        {
+            return KomutHatasi.Gecersiz(Ad, "cadastral parcel ids must be non-empty and unique");
+        }
+
+        return Result<ProjeBelgesi>.Success(mevcut with { MalikRehberi = Rehber });
     }
 }
 

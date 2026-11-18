@@ -468,44 +468,9 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
             return;
         }
 
-        var tapu = _alan.Yol.Belge.TecvizParselleri.GroupBy(t => t.ParselId, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().TapuAlaniM2, StringComparer.Ordinal);
-        var kadastro = new List<KadastroParseli>();
-        foreach (var grup in Satirlar(TakbisMetni).GroupBy(s => s.Length > 0 ? s[0] : string.Empty, StringComparer.Ordinal))
+        if (TakbisOku() is not { } kadastro)
         {
-            if (grup.Any(s => s.Length != 4))
-            {
-                DurumMetni = TakbisHatasi = "TAKBİS satırı biçimi: parselId;malikKodu;pay/payda;E|H";
-                return;
-            }
-
-            if (!tapu.TryGetValue(grup.Key, out var alan))
-            {
-                DurumMetni = TakbisHatasi = $"{grup.Key}: 2. adımda tapu alanı girilmemiş kadastro parseli.";
-                return;
-            }
-
-            var hisseler = new List<TakbisHisseGirdisi>();
-            foreach (var s in grup)
-            {
-                var pay = s[2].Split('/');
-                if (pay.Length != 2 || !BigInteger.TryParse(pay[0], NumberStyles.None, CultureInfo.InvariantCulture, out var p)
-                    || !BigInteger.TryParse(pay[1], NumberStyles.None, CultureInfo.InvariantCulture, out var q) || s[3] is not ("E" or "H"))
-                {
-                    DurumMetni = TakbisHatasi = "TAKBİS hissesi pay/payda (tam sayı) ve muvafakat E/H olmalı.";
-                    return;
-                }
-
-                hisseler.Add(new TakbisHisseGirdisi(s[1], p, q, s[3] == "E"));
-            }
-
-            var k = TakbisGirdiDogrulayici.Dogrula(new TakbisParselGirdisi(grup.Key, alan, hisseler));
-            if (k.IsFailure)
-            {
-                DurumMetni = TakbisHatasi = grup.Key + ": " + k.Error.UserMessage;
-                return;
-            }
-
-            kadastro.Add(k.Value);
+            return;
         }
 
         var kroki = new List<KrokiEslesmeGirdisi>();
@@ -556,6 +521,55 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
 
         _hakYuklendi = true;
         await GonderAsync(komutlar, "Hak eşleştirmesi projeye yazıldı.").ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// TAKBİS metnini (<c>parsel;malik;pay/payda;E|H</c>) 2. adım tapu alanlarıyla doğrulanmış kadastro parsellerine çevirir;
+    /// hatada <see cref="TakbisHatasi"/> ve durum metni yazılır, null döner (hak uygulama ve Yaklaşık Yer Krokisi ortak kullanır).
+    /// </summary>
+    private List<KadastroParseli>? TakbisOku()
+    {
+        var tapu = _alan.Yol.Belge.TecvizParselleri.GroupBy(t => t.ParselId, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().TapuAlaniM2, StringComparer.Ordinal);
+        var kadastro = new List<KadastroParseli>();
+        foreach (var grup in Satirlar(TakbisMetni).GroupBy(s => s.Length > 0 ? s[0] : string.Empty, StringComparer.Ordinal))
+        {
+            if (grup.Any(s => s.Length != 4))
+            {
+                DurumMetni = TakbisHatasi = "TAKBİS satırı biçimi: parselId;malikKodu;pay/payda;E|H";
+                return null;
+            }
+
+            if (!tapu.TryGetValue(grup.Key, out var alan))
+            {
+                DurumMetni = TakbisHatasi = $"{grup.Key}: 2. adımda tapu alanı girilmemiş kadastro parseli.";
+                return null;
+            }
+
+            var hisseler = new List<TakbisHisseGirdisi>();
+            foreach (var s in grup)
+            {
+                var pay = s[2].Split('/');
+                if (pay.Length != 2 || !BigInteger.TryParse(pay[0], NumberStyles.None, CultureInfo.InvariantCulture, out var p)
+                    || !BigInteger.TryParse(pay[1], NumberStyles.None, CultureInfo.InvariantCulture, out var q) || s[3] is not ("E" or "H"))
+                {
+                    DurumMetni = TakbisHatasi = "TAKBİS hissesi pay/payda (tam sayı) ve muvafakat E/H olmalı.";
+                    return null;
+                }
+
+                hisseler.Add(new TakbisHisseGirdisi(s[1], p, q, s[3] == "E"));
+            }
+
+            var k = TakbisGirdiDogrulayici.Dogrula(new TakbisParselGirdisi(grup.Key, alan, hisseler));
+            if (k.IsFailure)
+            {
+                DurumMetni = TakbisHatasi = grup.Key + ": " + k.Error.UserMessage;
+                return null;
+            }
+
+            kadastro.Add(k.Value);
+        }
+
+        return kadastro;
     }
 
     private static IEnumerable<string[]> Satirlar(string metin) => (metin ?? string.Empty)
