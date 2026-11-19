@@ -40,6 +40,34 @@ public sealed class AtomikJsonProjeDeposuTests : IDisposable
     }
 
     [Fact]
+    public async Task AtomikKayit_Malik_Rehberi_Gidis_Donus_Korunmali_P73_B1()
+    {
+        var yol = await TamProjeyiDiskeYazAsync(new AtomikJsonProjeDeposu(Yol));
+        var rehber = new Imar18.Application.Girdi.MalikRehberi(
+            [new("M01", "AYŞE YILMAZ", "ALİ", "800000001"), new("M02", "MEHMET ÇAKIR", null, null)],
+            [new("K1", "12", "345", "ÖRNEKİL", "ÖRNEKİLÇE", "ÇAMLIK Mah.", "901", "7", 1000.00m)]);
+        (await yol.GonderAsync(new MalikRehberiAyarlaKomutu(rehber), OrnekProje.Muhendis)).IsSuccess.Should().BeTrue();
+
+        var yuklenen = (await new AtomikJsonProjeDeposu(Yol).YukleAsync()).Value;
+
+        yuklenen.Belge.MalikRehberi.Should().BeEquivalentTo(rehber);
+        yuklenen.Belge.RevizyonKimligi().Should().Be(yol.Belge.RevizyonKimligi());
+    }
+
+    [Fact]
+    public async Task AtomikKayit_Rehbersiz_Eski_Kayit_Bos_Rehberle_Acilmali_P73_B1()
+    {
+        // P7.3 öncesi kayıtlar "rehber" alanı içermez: geriye uyumlu olarak boş rehberle açılmalı.
+        await TamProjeyiDiskeYazAsync(new AtomikJsonProjeDeposu(Yol));
+        File.ReadAllText(Yol, Encoding.UTF8).Should().NotContain("\"Rehber\":{", "rehber boşken alan yazılmaz");
+
+        var yuklenen = (await new AtomikJsonProjeDeposu(Yol).YukleAsync()).Value;
+
+        yuklenen.Belge.MalikRehberi.Malikler.Should().BeEmpty();
+        yuklenen.Belge.MalikRehberi.Parseller.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task AtomikKayit_Tum_Proje_Durumu_Ve_Denetim_Gidis_Donus_Korunmali()
     {
         var yol = await TamProjeyiDiskeYazAsync(new AtomikJsonProjeDeposu(Yol));

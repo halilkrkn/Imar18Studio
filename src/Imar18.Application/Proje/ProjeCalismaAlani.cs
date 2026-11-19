@@ -7,4 +7,11 @@ namespace Imar18.Application.Proje;
 /// Sunum katmanına verilen proje çalışma alanı (P5): CommandBus, onay ve çıktı servisleri ile oturumdaki mühendis kimliği.
 /// Kompozisyon kökünde (Bootstrapper) kurulur; Presentation Infrastructure'ı bilmez (NetArchTest).
 /// </summary>
-public sealed record ProjeCalismaAlani(ProjeKomutYolu Yol, ApprovalService Onay, CiktiServisi Cikti, string KullaniciId);
+public sealed record ProjeCalismaAlani(ProjeKomutYolu Yol, ApprovalService Onay, CiktiServisi Cikti, string KullaniciId)
+{
+    /// <summary>P7.3-B1: webtapu PDF okuyucusu (Infrastructure; yoksa webtapu yükleme pasiftir).</summary>
+    public Girdi.ITapuKaydiOkuyucu? TapuOkuyucu { get; init; }
+
+    /// <summary>P7.3-B2: Yaklaşık Yer Krokisi için poligon kesişim alanı hesaplayıcısı (GeometryEngine; yoksa kroki yükleme pasiftir).</summary>
+    public Domain.Geometry.IParselKesisimHesaplayici? Kesisim { get; init; }
+}

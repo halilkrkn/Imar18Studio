@@ -8,6 +8,7 @@ using Imar18.GeometryEngine.Topoloji;
 using Imar18.Infrastructure.Cad.Acad;
 using Imar18.Infrastructure.Cad.Ncz;
 using Imar18.Infrastructure.Cikti;
+using Imar18.Infrastructure.Girdi;
 using Imar18.Infrastructure.Proje;
 using Imar18.Presentation.Avalonia;
 using Imar18.Presentation.Avalonia.ViewModels;
@@ -31,7 +32,8 @@ public static class Program
         var proje = ProjeAc();
         App.MainViewModelFactory = () => new MainWindowViewModel(
             new CadImportService([new NczFormatAdapter(), new DxfFormatAdapter(), new DwgFormatAdapter()]),
-            proje);
+            proje,
+            new CadImportService([new NczFormatAdapter(), new DxfFormatAdapter(), new DwgFormatAdapter()])); // P7.3-B2 Yaklaşık Yer Krokisi
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
@@ -56,7 +58,12 @@ public static class Program
             yol,
             new ApprovalService(yol, TimeProvider.System, Topoloji),
             new CiktiServisi(yol, [new ClosedXmlCetvelUretici(), new QuestPdfFenKlasoruUretici(), new CksDosyaUretici()], new AtomikCiktiYazici(), Topoloji),
-            kullanici.Length > 64 ? kullanici[..64] : kullanici);
+            kullanici.Length > 64 ? kullanici[..64] : kullanici)
+        {
+            // P7.3-B (SAHA-006): webtapu PDF okuyucusu (PdfPig) ve Yaklaşık Yer Krokisi kesişim alanı (NTS, GeometryEngine).
+            TapuOkuyucu = new WebtapuPdfOkuyucu(),
+            Kesisim = new NtsParselKesisimHesaplayici(),
+        };
     }
 
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()

@@ -110,7 +110,8 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
     private string _hakOzeti = string.Empty;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(TecvizUygulaCommand), nameof(DopUygulaCommand), nameof(HakUygulaCommand))]
+    [NotifyCanExecuteChangedFor(nameof(TecvizUygulaCommand), nameof(DopUygulaCommand), nameof(HakUygulaCommand), nameof(WebtapuIsteCommand),
+        nameof(KrokiNczIsteCommand), nameof(TakbiseAktarCommand), nameof(KrokiyeAktarCommand), nameof(KrokiOnizlemesiniKaldirCommand), nameof(WebtapuOnizlemesiniKaldirCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -156,7 +157,11 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
 
     partial void OnOrtakKatilimTextChanged(string value) => OrtakKatilimHatasi = null;
 
-    partial void OnTakbisMetniChanged(string value) => TakbisHatasi = null;
+    partial void OnTakbisMetniChanged(string value)
+    {
+        TakbisHatasi = null;
+        TakbisDegisti(); // P7.3-B2: TAKBİS değişince eski hisselerle üretilmiş kroki önizlemesi bayatlar (reviewer M1, L2)
+    }
 
     partial void OnKrokiMetniChanged(string value) => KrokiHatasi = null;
 
@@ -181,6 +186,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         KrokiMetni = string.Empty;
         KimlikMetni = string.Empty;
         DurumMetni = string.Empty;
+        IceAktarimiSifirla();
         foreach (var h in new Action[] { () => ToplamTecvizSiniriHatasi = null, () => R2Hatasi = null, () => D1Hatasi = null, () => D2Hatasi = null,
                      () => R3Hatasi = null, () => OrtakKatilimHatasi = null, () => TakbisHatasi = null, () => KrokiHatasi = null, () => KimlikHatasi = null })
         {
@@ -188,12 +194,16 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         }
     }
 
-    public HesapAdimlariViewModel(ProjeCalismaAlani alan, Func<TecvizGirdisi?> tecvizGirdisi)
+    /// <param name="alan">Proje çalışma alanı (webtapu okuyucusu ve kesişim hesaplayıcısı isteğe bağlıdır).</param>
+    /// <param name="tecvizGirdisi">1. adımdaki doğrulanmış tecviz girdisi.</param>
+    /// <param name="krokiIthal">P7.3-B2: Yaklaşık Yer Krokisi okuması için CAD içe aktarma servisi (yoksa kroki yükleme pasif).</param>
+    public HesapAdimlariViewModel(ProjeCalismaAlani alan, Func<TecvizGirdisi?> tecvizGirdisi, Imar18.Application.Cad.CadImportService? krokiIthal = null)
     {
         ArgumentNullException.ThrowIfNull(alan);
         ArgumentNullException.ThrowIfNull(tecvizGirdisi);
         _alan = alan;
         _tecvizGirdisi = tecvizGirdisi;
+        _krokiIthal = krokiIthal;
     }
 
     /// <summary>Bir adım projeye başarıyla yazıldığında (ana pencere onay ekranını yeniler).</summary>
@@ -468,44 +478,9 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
             return;
         }
 
-        var tapu = _alan.Yol.Belge.TecvizParselleri.GroupBy(t => t.ParselId, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().TapuAlaniM2, StringComparer.Ordinal);
-        var kadastro = new List<KadastroParseli>();
-        foreach (var grup in Satirlar(TakbisMetni).GroupBy(s => s.Length > 0 ? s[0] : string.Empty, StringComparer.Ordinal))
+        if (TakbisOku() is not { } kadastro)
         {
-            if (grup.Any(s => s.Length != 4))
-            {
-                DurumMetni = TakbisHatasi = "TAKBİS satırı biçimi: parselId;malikKodu;pay/payda;E|H";
-                return;
-            }
-
-            if (!tapu.TryGetValue(grup.Key, out var alan))
-            {
-                DurumMetni = TakbisHatasi = $"{grup.Key}: 2. adımda tapu alanı girilmemiş kadastro parseli.";
-                return;
-            }
-
-            var hisseler = new List<TakbisHisseGirdisi>();
-            foreach (var s in grup)
-            {
-                var pay = s[2].Split('/');
-                if (pay.Length != 2 || !BigInteger.TryParse(pay[0], NumberStyles.None, CultureInfo.InvariantCulture, out var p)
-                    || !BigInteger.TryParse(pay[1], NumberStyles.None, CultureInfo.InvariantCulture, out var q) || s[3] is not ("E" or "H"))
-                {
-                    DurumMetni = TakbisHatasi = "TAKBİS hissesi pay/payda (tam sayı) ve muvafakat E/H olmalı.";
-                    return;
-                }
-
-                hisseler.Add(new TakbisHisseGirdisi(s[1], p, q, s[3] == "E"));
-            }
-
-            var k = TakbisGirdiDogrulayici.Dogrula(new TakbisParselGirdisi(grup.Key, alan, hisseler));
-            if (k.IsFailure)
-            {
-                DurumMetni = TakbisHatasi = grup.Key + ": " + k.Error.UserMessage;
-                return;
-            }
-
-            kadastro.Add(k.Value);
+            return;
         }
 
         var kroki = new List<KrokiEslesmeGirdisi>();
@@ -558,16 +533,66 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         await GonderAsync(komutlar, "Hak eşleştirmesi projeye yazıldı.").ConfigureAwait(true);
     }
 
+    /// <summary>
+    /// TAKBİS metnini (<c>parsel;malik;pay/payda;E|H</c>) 2. adım tapu alanlarıyla doğrulanmış kadastro parsellerine çevirir;
+    /// hatada <see cref="TakbisHatasi"/> ve durum metni yazılır, null döner (hak uygulama ve Yaklaşık Yer Krokisi ortak kullanır).
+    /// </summary>
+    private List<KadastroParseli>? TakbisOku()
+    {
+        var tapu = _alan.Yol.Belge.TecvizParselleri.GroupBy(t => t.ParselId, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().TapuAlaniM2, StringComparer.Ordinal);
+        var kadastro = new List<KadastroParseli>();
+        foreach (var grup in Satirlar(TakbisMetni).GroupBy(s => s.Length > 0 ? s[0] : string.Empty, StringComparer.Ordinal))
+        {
+            if (grup.Any(s => s.Length != 4))
+            {
+                DurumMetni = TakbisHatasi = "TAKBİS satırı biçimi: parselId;malikKodu;pay/payda;E|H";
+                return null;
+            }
+
+            if (!tapu.TryGetValue(grup.Key, out var alan))
+            {
+                DurumMetni = TakbisHatasi = $"{grup.Key}: 2. adımda tapu alanı girilmemiş kadastro parseli.";
+                return null;
+            }
+
+            var hisseler = new List<TakbisHisseGirdisi>();
+            foreach (var s in grup)
+            {
+                var pay = s[2].Split('/');
+                if (pay.Length != 2 || !BigInteger.TryParse(pay[0], NumberStyles.None, CultureInfo.InvariantCulture, out var p)
+                    || !BigInteger.TryParse(pay[1], NumberStyles.None, CultureInfo.InvariantCulture, out var q) || s[3] is not ("E" or "H"))
+                {
+                    DurumMetni = TakbisHatasi = "TAKBİS hissesi pay/payda (tam sayı) ve muvafakat E/H olmalı.";
+                    return null;
+                }
+
+                hisseler.Add(new TakbisHisseGirdisi(s[1], p, q, s[3] == "E"));
+            }
+
+            var k = TakbisGirdiDogrulayici.Dogrula(new TakbisParselGirdisi(grup.Key, alan, hisseler));
+            if (k.IsFailure)
+            {
+                DurumMetni = TakbisHatasi = grup.Key + ": " + k.Error.UserMessage;
+                return null;
+            }
+
+            kadastro.Add(k.Value);
+        }
+
+        return kadastro;
+    }
+
     private static IEnumerable<string[]> Satirlar(string metin) => (metin ?? string.Empty)
         .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         .Where(s => !s.StartsWith('#'))
         .Select(s => s.Split(';').Select(p => p.Trim()).ToArray());
 
-    /// <summary>Komutları sırayla CommandBus'a gönderir; ilk retçe durur (Türkçe mesaj). Sonra adımları yeniler.</summary>
-    private async Task GonderAsync(IReadOnlyList<IProjeKomutu> komutlar, string basariMetni)
+    /// <summary>Komutları sırayla CommandBus'a gönderir; ilk retçe durur (Türkçe mesaj). Sonra adımları yeniler; tümü yazıldıysa true.</summary>
+    private async Task<bool> GonderAsync(IReadOnlyList<IProjeKomutu> komutlar, string basariMetni)
     {
         IsBusy = true;
         var durum = basariMetni;
+        var basarili = true;
         try
         {
             foreach (var k in komutlar)
@@ -576,6 +601,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
                 if (sonuc.IsFailure)
                 {
                     durum = "Projeye yazılamadı: " + sonuc.Error.UserMessage;
+                    basarili = false;
                     break;
                 }
             }
@@ -589,5 +615,6 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         await YenileAsync().ConfigureAwait(true);
         DurumMetni = durum;
         Uygulandi?.Invoke(this, EventArgs.Empty);
+        return basarili;
     }
 }

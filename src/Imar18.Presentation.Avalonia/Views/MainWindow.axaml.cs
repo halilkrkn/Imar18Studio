@@ -45,6 +45,12 @@ public sealed partial class MainWindow : Window
                 eski.KayitYoluIstendi -= OnKayitYoluIstendi;
                 eski.PanoyaKopyalaIstendi -= OnPanoyaKopyalaIstendi;
             }
+
+            if (_vm.Hesap is { } eskiHesap)
+            {
+                eskiHesap.WebtapuDosyasiIstendi -= OnWebtapuDosyasiIstendi;
+                eskiHesap.KrokiDosyasiIstendi -= OnKrokiDosyasiIstendi;
+            }
         }
 
         _vm = DataContext as MainWindowViewModel;
@@ -58,6 +64,12 @@ public sealed partial class MainWindow : Window
             {
                 yeni.KayitYoluIstendi += OnKayitYoluIstendi;
                 yeni.PanoyaKopyalaIstendi += OnPanoyaKopyalaIstendi;
+            }
+
+            if (_vm.Hesap is { } hesap)
+            {
+                hesap.WebtapuDosyasiIstendi += OnWebtapuDosyasiIstendi;
+                hesap.KrokiDosyasiIstendi += OnKrokiDosyasiIstendi;
             }
 
             TemayiUygula(_vm.AcikStudyo);
@@ -264,6 +276,92 @@ public sealed partial class MainWindow : Window
         catch (UnauthorizedAccessException)
         {
             _vm.StatusText = "Dosyaya erişim izni yok.";
+        }
+    }
+
+    /// <summary>P7.3-B1: webtapu PDF'leri (çoklu seçim); okuma ve önizleme ViewModel/Application katmanındadır.</summary>
+    private async void OnWebtapuDosyasiIstendi(object? sender, EventArgs e)
+    {
+        if (_vm?.Hesap is not { } hesap)
+        {
+            return;
+        }
+
+        var dosyalar = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "webtapu Tapu Kaydı PDF'lerini seçin",
+            AllowMultiple = true,
+            FileTypeFilter = [new FilePickerFileType("webtapu PDF") { Patterns = ["*.pdf", "*.PDF"] }],
+        });
+        if (dosyalar.Count == 0)
+        {
+            return;
+        }
+
+        var akislar = new List<Stream>(dosyalar.Count);
+        try
+        {
+            foreach (var d in dosyalar)
+            {
+                akislar.Add(await d.OpenReadAsync());
+            }
+
+            await hesap.WebtapuYukleAsync(akislar);
+        }
+        catch (IOException)
+        {
+            hesap.DurumMetni = "Dosya okunamadı (erişim veya disk hatası).";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            hesap.DurumMetni = "Dosyaya erişim izni yok.";
+        }
+        finally
+        {
+            foreach (var a in akislar)
+            {
+                await a.DisposeAsync();
+            }
+
+            foreach (var d in dosyalar)
+            {
+                d.Dispose();
+            }
+        }
+    }
+
+    /// <summary>P7.3-B2: Yaklaşık Yer Krokisi (.NCZ; yedek .DXF/.DWG); okuma ve eşleştirme ViewModel/Application katmanındadır.</summary>
+    private async void OnKrokiDosyasiIstendi(object? sender, EventArgs e)
+    {
+        if (_vm?.Hesap is not { } hesap)
+        {
+            return;
+        }
+
+        var dosyalar = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Yaklaşık Yer Krokisi seçin",
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("Netcad / AutoCAD") { Patterns = ["*.ncz", "*.NCZ", "*.dxf", "*.DXF", "*.dwg", "*.DWG"] }],
+        });
+        if (dosyalar.Count == 0)
+        {
+            return;
+        }
+
+        using var dosya = dosyalar[0];
+        try
+        {
+            await using var akis = await dosya.OpenReadAsync();
+            await hesap.YaklasikYerKrokisiYukleAsync(akis, Path.GetExtension(dosya.Name));
+        }
+        catch (IOException)
+        {
+            hesap.DurumMetni = "Dosya okunamadı (erişim veya disk hatası).";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            hesap.DurumMetni = "Dosyaya erişim izni yok.";
         }
     }
 

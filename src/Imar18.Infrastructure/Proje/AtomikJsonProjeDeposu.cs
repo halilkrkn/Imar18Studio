@@ -156,7 +156,12 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
                     : null,
                 b.KimlikCiftleri.Select(x => new KimlikDto(x.GeciciKod, x.TescilNo)).ToList(),
                 b.Onay is { } o ? new OnayDto(o.RevizyonId.Deger, o.OnaylayanId, o.Zaman) : null,
-                b.Surum),
+                b.Surum,
+                b.MalikRehberi.Malikler.Count == 0 && b.MalikRehberi.Parseller.Count == 0
+                    ? null
+                    : new RehberDto(
+                        b.MalikRehberi.Malikler.Select(m => new RehberMalikDto(m.MalikKodu, m.AdSoyad, m.BabaAdi, m.KisiSistemNo)).ToList(),
+                        b.MalikRehberi.Parseller.Select(x => new RehberParselDto(x.KadastroParselId, x.Cilt, x.Sayfa, x.Il, x.Ilce, x.Mahalle, x.Ada, x.Parsel, x.AtYuzolcumM2)).ToList())),
             k.Denetim.ToList());
     }
 
@@ -258,6 +263,15 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
         }
 
         var belge = new ProjeBelgesi(b.ProjeAdi, crs, parseller, dop, tecviz, b.ToplamTecviz, hak, kimlikler, onay, b.Surum);
+        if (b.Rehber is { } rehberDto)
+        {
+            belge = belge with
+            {
+                MalikRehberi = new Application.Girdi.MalikRehberi(
+                    (rehberDto.Malikler ?? []).Select(m => new Application.Girdi.MalikRehberKaydi(m.Kod, m.AdSoyad, m.Baba, m.KisiNo)).ToList().AsReadOnly(),
+                    (rehberDto.Parseller ?? []).Select(x => new Application.Girdi.KadastroTapuKaydi(x.Id, x.Cilt, x.Sayfa, x.Il, x.Ilce, x.Mahalle, x.Ada, x.Parsel, x.At)).ToList().AsReadOnly()),
+            };
+        }
 
         // Komut doğrulamaları yüklemede yeniden çalışır (P5 reviewer M4): elle düzenlenip özeti yeniden hesaplanmış kayıt,
         // CommandBus'ın kabul etmeyeceği bir durumu açamaz. Null metin alanları revizyon özetinde ArgumentException üretir.
@@ -305,7 +319,15 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
         HakDto? Hak,
         List<KimlikDto> Kimlikler,
         OnayDto? Onay,
-        long Surum);
+        long Surum,
+        RehberDto? Rehber = null);
+
+    /// <summary>P7.3-B1: yerel Malik Rehberi (P7.3 öncesi kayıtlarda yoktur → boş rehber).</summary>
+    private sealed record RehberDto(List<RehberMalikDto>? Malikler, List<RehberParselDto>? Parseller);
+
+    private sealed record RehberMalikDto(string Kod, string AdSoyad, string? Baba, string? KisiNo);
+
+    private sealed record RehberParselDto(string Id, string? Cilt, string? Sayfa, string? Il, string? Ilce, string? Mahalle, string? Ada, string? Parsel, decimal? At);
 
     private sealed record CrsDto(string Datum, int Meridyen, decimal? Epok, int Olcek);
 
