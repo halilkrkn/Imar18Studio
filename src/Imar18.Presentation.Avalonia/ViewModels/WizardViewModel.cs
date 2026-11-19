@@ -426,7 +426,7 @@ public sealed partial class WizardViewModel : ObservableObject
             else
             {
                 epokOkundu = false;
-                EpokHatasi = "Epok geçerli bir sayı olmalı (örnek 2005.00).";
+                EpokHatasi = SayiGirdisi.Hata(EpokText, "Epok geçerli bir sayı olmalı (örnek 2005.00).");
                 Errors.Add(EpokHatasi);
             }
         }
@@ -462,7 +462,7 @@ public sealed partial class WizardViewModel : ObservableObject
 
         if (!TryParseDecimal(TecvizSiniriText, out var sinir))
         {
-            TecvizSiniriHatasi = "Tecviz sınırı (m²) geçerli bir sayı olmalı.";
+            TecvizSiniriHatasi = SayiGirdisi.Hata(TecvizSiniriText, "Tecviz sınırı (m²) geçerli bir sayı olmalı.");
             Errors.Add(TecvizSiniriHatasi);
             TecvizAlanlariniIsaretle(null);
         }

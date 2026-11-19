@@ -247,6 +247,7 @@ public sealed partial class HesapAdimlariViewModel
         WebtapuDurumunuBildir();
         DurumMetni = string.Create(CultureInfo.InvariantCulture,
             $"TAKBİS'e aktarıldı: {aktarimlar.Count} parsel, {aktarimlar.Sum(a => a.Hisseler.Count)} hisse (muvafakat varsayılan H). Kroki satırlarını yeni malik kodlarıyla güncelleyip \"Hak Eşleştirmeyi Uygula\" deyin.");
+        TakbiseAktarildi?.Invoke(this, EventArgs.Empty); // P7 UX: 1. adım boş İl / İlçe / Mahalle webtapu'dan doldurulur
     }
 
     [RelayCommand(CanExecute = nameof(HazirMi))]

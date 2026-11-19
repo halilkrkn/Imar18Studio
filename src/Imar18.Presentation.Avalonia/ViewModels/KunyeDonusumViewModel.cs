@@ -3,10 +3,13 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Imar18.Application.Cikti;
+using Imar18.Application.Girdi;
 using Imar18.Application.KoordinatDonusumu;
 using Imar18.Application.Proje;
 using Imar18.Domain.Geometry;
+using Imar18.Domain.Diagnostics;
 using Imar18.Domain.Revizyon;
+using Imar18.Presentation.Avalonia.Gorunum;
 
 namespace Imar18.Presentation.Avalonia.ViewModels;
 
@@ -15,6 +18,10 @@ namespace Imar18.Presentation.Avalonia.ViewModels;
 /// Kadastro ID, Datum/Projeksiyon) ve ortak noktalar (<c>NoktaNo;Y1;X1;Y2;X2</c>, model Helmert2B / Afin2B, MK) CommandBus
 /// üzerinden projeye yazılır (RevisionId'ye dahil; değişince onay düşer). webtapu yüklendiyse İl/İlçe/Mahalle boş alanlara
 /// otomatik önerilir. Proje noktaları deprem sonrası kabul edilir; deprem öncesi koordinatlar ters dönüşümle hesaplanır.
+/// P7 UX: ortak noktalar varsayılan olarak kutucuklu tabloda (<see cref="OrtakNoktaSatirlari"/>) düzenlenir; tablo
+/// <see cref="OrtakNoktaMetni"/> ile iki yönlü senkrondur (metin "Metin / Toplu Yapıştır" alanındadır) ve hücre düzenlendikçe
+/// parametre önizlemesi canlı güncellenir. "📄 WebTapu PDF'ten Künye Oku" seçilen PDF'ten yalnız İl / İlçe / Mahalle'yi
+/// künye kutularına yazar (kişi adları künyeye yazılmaz — KVKK).
 /// </summary>
 public sealed partial class KunyeDonusumViewModel : ObservableObject
 {
@@ -60,18 +67,33 @@ public sealed partial class KunyeDonusumViewModel : ObservableObject
     private string _donusumHatasi = string.Empty;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(KunyeyiKaydetCommand), nameof(DonusumuUygulaCommand), nameof(DonusumuOnizleCommand))]
+    [NotifyCanExecuteChangedFor(nameof(KunyeyiKaydetCommand), nameof(DonusumuUygulaCommand), nameof(DonusumuOnizleCommand), nameof(WebtapuKunyeIsteCommand))]
     private bool _isBusy;
+
+    private readonly TabloMetinSenkronu<OrtakNoktaSatirVm> _ortakSenkron;
+    private bool _yenileniyor;
 
     public KunyeDonusumViewModel(ProjeCalismaAlani alan)
     {
         ArgumentNullException.ThrowIfNull(alan);
         _alan = alan;
+        _ortakSenkron = new TabloMetinSenkronu<OrtakNoktaSatirVm>(OrtakNoktaSatirlari, OrtakNoktaSatirVm.Metinden, m => OrtakNoktaMetni = m, CanliOnizle);
         Yenile();
     }
 
     /// <summary>Künye veya dönüşüm projeye yazıldı (onay ekranı yenilenir).</summary>
     public event EventHandler? Uygulandi;
+
+    /// <summary>Görünüm tek webtapu PDF'i için dosya seçicisini açar ve <see cref="WebtapudanKunyeOkuAsync"/> çağırır.</summary>
+    public event EventHandler? WebtapuKunyeDosyasiIstendi;
+
+    /// <summary>P7 UX: ortak nokta kutucuklu tablosu (<see cref="OrtakNoktaMetni"/> ile iki yönlü senkron).</summary>
+    public ObservableCollection<OrtakNoktaSatirVm> OrtakNoktaSatirlari { get; } = [];
+
+    /// <summary>webtapu PDF okuyucusu bağlı mı (değilse "WebTapu PDF'ten Künye Oku" pasif).</summary>
+    public bool WebtapuOkuyucuVar => _alan.TapuOkuyucu is not null;
+
+    partial void OnOrtakNoktaMetniChanged(string value) => _ortakSenkron?.MetindenYukle(value);
 
     public IReadOnlyList<DonusumModeli> Modeller { get; } = Enum.GetValues<DonusumModeli>();
 
@@ -103,17 +125,25 @@ public sealed partial class KunyeDonusumViewModel : ObservableObject
             WebtapuOnerisiniUygula(yalnizBos: true);
         }
 
-        if (b.Donusum is { } d)
+        _yenileniyor = true;
+        try
         {
-            OrtakNoktaMetni = DonusumMetni.Yaz(d.OrtakNoktalar);
-            Model = d.Model;
-            MkMetni = d.Mk.ToString("0.00###", CultureInfo.InvariantCulture);
+            if (b.Donusum is { } d)
+            {
+                OrtakNoktaMetni = DonusumMetni.Yaz(d.OrtakNoktalar);
+                Model = d.Model;
+                MkMetni = d.Mk.ToString("0.00###", CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                OrtakNoktaMetni = string.Empty;
+                Model = DonusumModeli.Helmert2B;
+                MkMetni = DonusumGirdisi.VarsayilanMk.ToString("0.00", CultureInfo.InvariantCulture);
+            }
         }
-        else
+        finally
         {
-            OrtakNoktaMetni = string.Empty;
-            Model = DonusumModeli.Helmert2B;
-            MkMetni = DonusumGirdisi.VarsayilanMk.ToString("0.00", CultureInfo.InvariantCulture);
+            _yenileniyor = false;
         }
 
         ParametreSatirlari.Clear();
@@ -159,22 +189,112 @@ public sealed partial class KunyeDonusumViewModel : ObservableObject
             return false;
         }
 
-        if (!yalnizBos || Il.Length == 0)
-        {
-            Il = o.Il;
-        }
-
-        if (!yalnizBos || Ilce.Length == 0)
-        {
-            Ilce = o.Ilce;
-        }
-
-        if (!yalnizBos || KoyMahalle.Length == 0)
-        {
-            KoyMahalle = o.Mahalle;
-        }
-
+        KonumuYaz(o.Il, o.Ilce, o.Mahalle, yalnizBos);
         return true;
+    }
+
+    /// <summary>
+    /// İl / İlçe / Köy-Mahalle kutularına yazar (boş kaynak değer yazılmaz); <paramref name="yalnizBos"/> ise yalnız boş kutular
+    /// doldurulur. Değişen kutu sayısını döner.
+    /// </summary>
+    private int KonumuYaz(string? il, string? ilce, string? mahalle, bool yalnizBos)
+    {
+        var n = 0;
+        if (Yeni(Il, il) is { } a)
+        {
+            Il = a;
+            n++;
+        }
+
+        if (Yeni(Ilce, ilce) is { } b)
+        {
+            Ilce = b;
+            n++;
+        }
+
+        if (Yeni(KoyMahalle, mahalle) is { } c)
+        {
+            KoyMahalle = c;
+            n++;
+        }
+
+        return n;
+
+        string? Yeni(string mevcut, string? kaynak)
+        {
+            var y = kaynak?.Trim() ?? string.Empty;
+            return y.Length == 0 || (yalnizBos && mevcut.Trim().Length > 0) || string.Equals(mevcut, y, StringComparison.Ordinal) ? null : y;
+        }
+    }
+
+    /// <summary>
+    /// P7 UX: 4. adımda webtapu TAKBİS'e aktarıldığında 1. adımdaki boş İl / İlçe / Köy-Mahalle kutuları webtapu kaydıyla
+    /// doldurulur (dolu kutulara dokunulmaz; kaydetmek için "Künyeyi Kaydet").
+    /// </summary>
+    public void WebtapuAktarildi()
+    {
+        if (WebtapuOnerisi() is { } o && KonumuYaz(o.Il, o.Ilce, o.Mahalle, yalnizBos: true) > 0)
+        {
+            KunyeDurumu = "Boş İl / İlçe / Mahalle webtapu kaydından dolduruldu; kaydetmek için \"Künyeyi Kaydet\".";
+        }
+
+        OnPropertyChanged(nameof(WebtapuOnerisiVar));
+    }
+
+    private bool WebtapuKunyeOkunabilir() => WebtapuOkuyucuVar && !IsBusy;
+
+    [RelayCommand(CanExecute = nameof(WebtapuKunyeOkunabilir))]
+    private void WebtapuKunyeIste() => WebtapuKunyeDosyasiIstendi?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// P7 UX: webtapu PDF'ini arka planda okur ve yalnız İl / İlçe / Mahalle'yi künye kutularına yazar (kişi adları, hisseler ve
+    /// Malik Rehberi'ne dokunulmaz — KVKK). Okunamayan belgenin Türkçe mesajı <see cref="KunyeDurumu"/>'na yazılır; okuyucunun
+    /// beklenmeyen istisnası ERR-GIRD-003 sayılır. Projeye yazmak için "Künyeyi Kaydet" gerekir.
+    /// </summary>
+    public async Task WebtapudanKunyeOkuAsync(Stream akis, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(akis);
+        if (_alan.TapuOkuyucu is not { } okuyucu || IsBusy)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        Result<TapuKaydi> sonuc;
+        try
+        {
+            sonuc = await Task.Run(() => okuyucu.Oku(akis, cancellationToken), cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+#pragma warning disable CA1031 // async void dosya seçici işleyicisine istisna sızarsa uygulama çöker; katalog hatasına çevrilir.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            sonuc = Result<TapuKaydi>.Failure(ErrorCatalog.Get(ErrorCodes.GirdPdfBozuk));
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        if (sonuc.IsFailure)
+        {
+            KunyeDurumu = sonuc.Error.UserMessage;
+            return;
+        }
+
+        var k = sonuc.Value;
+        if (string.IsNullOrWhiteSpace(k.Il) && string.IsNullOrWhiteSpace(k.Ilce) && string.IsNullOrWhiteSpace(k.Mahalle))
+        {
+            KunyeDurumu = "webtapu PDF'inde İl / İlçe / Mahalle bulunamadı.";
+            return;
+        }
+
+        KonumuYaz(k.Il, k.Ilce, k.Mahalle, yalnizBos: false);
+        KunyeDurumu = "İl / İlçe / Mahalle webtapu PDF'inden okundu (kişi adları künyeye yazılmaz); kaydetmek için \"Künyeyi Kaydet\".";
     }
 
     [RelayCommand]
@@ -225,9 +345,11 @@ public sealed partial class KunyeDonusumViewModel : ObservableObject
             return (true, null);
         }
 
-        if (!decimal.TryParse(MkMetni.Trim(), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var mk) || mk <= 0m || mk > DonusumGirdisi.MaxMk)
+        if (!SayiGirdiAyristirici.TryParseDecimal(MkMetni, out var mk, out var mkHatasi) || mk <= 0m || mk > DonusumGirdisi.MaxMk)
         {
-            DonusumHatasi = "MK değeri 0'dan büyük, en çok 10 olmalı ve ondalık ayracı '.' olmalı (ör. 0.09).";
+            DonusumHatasi = mkHatasi == SayiGirdiAyristirici.BinlikAyiriciUyarisi
+                ? "MK: " + mkHatasi
+                : "MK değeri 0'dan büyük ve en çok 10 olmalı; ondalık ayırıcı '.' veya ',' olabilir (ör. 0.09).";
             return (false, null);
         }
 
@@ -289,6 +411,82 @@ public sealed partial class KunyeDonusumViewModel : ObservableObject
         if (Onizle(girdi))
         {
             DonusumDurumu = OnizlemeVar ? "Önizleme hazır (henüz kaydedilmedi)." : "Dönüşüm servisi bağlı değil; önizleme yapılamadı.";
+        }
+    }
+
+    /// <summary>
+    /// P7 UX: tabloda hücre düzenlenince / satır eklenip silinince parametre önizlemesi canlı güncellenir (projeye yazılmaz).
+    /// Eksik satır veya model için yetersiz nokta hata sayılmaz, yalnız durum metninde belirtilir.
+    /// </summary>
+    private void CanliOnizle()
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        ParametreSatirlari.Clear();
+        DonusumHatasi = string.Empty;
+        var dolu = OrtakNoktaSatirlari.Where(s => !s.Bos).ToList();
+        var enAz = DonusumGirdisi.EnAzNokta(Model);
+        if (dolu.Count == 0)
+        {
+            DonusumDurumu = "Ortak nokta girilmedi.";
+        }
+        else if (dolu.FirstOrDefault(s => s.Hata is not null) is { } hatali)
+        {
+            DonusumHatasi = "Ortak nokta " + (hatali.NoktaNo.Trim().Length > 0 ? hatali.NoktaNo.Trim() : "(numarasız)") + " — " + hatali.Hata;
+            DonusumDurumu = "Canlı önizleme: hatalı hücreyi düzeltin.";
+        }
+        else if (dolu.Any(s => !s.Tamam))
+        {
+            DonusumDurumu = "Canlı önizleme: satırları tamamlayın (Nokta No, Y1, X1, Y2, X2).";
+        }
+        else if (dolu.Count < enAz)
+        {
+            DonusumDurumu = $"Canlı önizleme: {ModelAdi(Model)} için en az {enAz} ortak nokta gerekir.";
+        }
+        else if (GirdiOku() is (true, { } girdi) && Onizle(girdi))
+        {
+            DonusumDurumu = OnizlemeVar ? "Canlı önizleme (henüz kaydedilmedi)." : "Dönüşüm servisi bağlı değil; önizleme yapılamadı.";
+        }
+    }
+
+    /// <summary>Model değişince (Helmert ↔ Afin) tablodaki noktalarla canlı önizleme yenilenir (Yenile sırasında değil).</summary>
+    partial void OnModelChanged(DonusumModeli value)
+    {
+        if (!_yenileniyor && OrtakNoktaSatirlari.Any(s => !s.Bos))
+        {
+            CanliOnizle();
+        }
+    }
+
+    /// <summary>
+    /// "Metin / Toplu Yapıştır" alanından çıkınca: virgüllü ondalık içeren metin tablodan <c>.</c> biçiminde yeniden yazılır
+    /// (metin ayrıştırıcısı yalnız '.' kabul eder) ve canlı önizleme yapılır. Virgül yoksa metne dokunulmaz.
+    /// </summary>
+    [RelayCommand]
+    private void OrtakNoktaMetniniNormalizeEt()
+    {
+        if (OrtakNoktaMetni.Contains(',', StringComparison.Ordinal))
+        {
+            _ortakSenkron.NormalizeEt(); // TablodanYaz → CanliOnizle
+        }
+        else if (OrtakNoktaSatirlari.Any(s => !s.Bos))
+        {
+            CanliOnizle();
+        }
+    }
+
+    [RelayCommand]
+    private void OrtakNoktaEkle() => OrtakNoktaSatirlari.Add(new OrtakNoktaSatirVm());
+
+    [RelayCommand]
+    private void OrtakNoktaSil(OrtakNoktaSatirVm? satir)
+    {
+        if (satir is not null)
+        {
+            OrtakNoktaSatirlari.Remove(satir);
         }
     }
 

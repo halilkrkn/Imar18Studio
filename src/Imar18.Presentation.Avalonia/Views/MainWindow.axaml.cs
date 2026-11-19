@@ -51,6 +51,11 @@ public sealed partial class MainWindow : Window
                 eskiHesap.WebtapuDosyasiIstendi -= OnWebtapuDosyasiIstendi;
                 eskiHesap.KrokiDosyasiIstendi -= OnKrokiDosyasiIstendi;
             }
+
+            if (_vm.Kunye is { } eskiKunye)
+            {
+                eskiKunye.WebtapuKunyeDosyasiIstendi -= OnWebtapuKunyeDosyasiIstendi;
+            }
         }
 
         _vm = DataContext as MainWindowViewModel;
@@ -70,6 +75,11 @@ public sealed partial class MainWindow : Window
             {
                 hesap.WebtapuDosyasiIstendi += OnWebtapuDosyasiIstendi;
                 hesap.KrokiDosyasiIstendi += OnKrokiDosyasiIstendi;
+            }
+
+            if (_vm.Kunye is { } kunye)
+            {
+                kunye.WebtapuKunyeDosyasiIstendi += OnWebtapuKunyeDosyasiIstendi;
             }
 
             TemayiUygula(_vm.AcikStudyo);
@@ -327,6 +337,41 @@ public sealed partial class MainWindow : Window
             {
                 d.Dispose();
             }
+        }
+    }
+
+    /// <summary>P7 UX: 1. adım "WebTapu PDF'ten Künye Oku" — tek PDF; okuma ViewModel/Application katmanındadır (yalnız İl/İlçe/Mahalle).</summary>
+    private async void OnWebtapuKunyeDosyasiIstendi(object? sender, EventArgs e)
+    {
+        if (_vm?.Kunye is not { } kunye)
+        {
+            return;
+        }
+
+        var dosyalar = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "webtapu Tapu Kaydı PDF'ini seçin (künye)",
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("webtapu PDF") { Patterns = ["*.pdf", "*.PDF"] }],
+        });
+        if (dosyalar.Count == 0)
+        {
+            return;
+        }
+
+        using var dosya = dosyalar[0];
+        try
+        {
+            await using var akis = await dosya.OpenReadAsync();
+            await kunye.WebtapudanKunyeOkuAsync(akis);
+        }
+        catch (IOException)
+        {
+            kunye.KunyeDurumu = "Dosya okunamadı (erişim veya disk hatası).";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            kunye.KunyeDurumu = "Dosyaya erişim izni yok.";
         }
     }
 

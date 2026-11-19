@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:c="clr-namespace:Imar18.Presentation.Avalonia.Controls"
         xmlns:g="clr-namespace:Imar18.Presentation.Avalonia.Gorunum"
+        xmlns:vm="clr-namespace:Imar18.Presentation.Avalonia.ViewModels"
         x:Class="Imar18.Presentation.Avalonia.Views.MainWindow"
         Title="Imar18Studio — PİLOT (Resmî işlemde kullanılamaz)"
         Width="1440" Height="900" MinWidth="1024" MinHeight="640"
@@ -335,7 +336,7 @@
                         <TextBlock Text="Epok (ITRF96 için 2005.00)" Classes="etiket" />
                         <Border Classes="zorunlu"><TextBlock Text="Zorunlu" /></Border>
                       </StackPanel>
-                      <TextBox x:Name="EpokKutusu" Text="{Binding Wizard.EpokText}" Watermark="2005.00"
+                      <TextBox x:Name="EpokKutusu" Text="{Binding Wizard.EpokText}" g:SayiKutusu.Normalize="True" Watermark="2005.00"
                                Classes.hatali="{Binding Wizard.EpokHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                       <Grid x:Name="EpokHataSatiri" Classes="alanHatasi" ColumnDefinitions="Auto,*" IsVisible="{Binding Wizard.EpokHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
 <TextBlock Text="⛔" FontSize="10" Margin="0,1,5,0" />
@@ -389,7 +390,7 @@
                         <TextBlock Text="Tecviz sınırı (m²)" Classes="etiket" />
                         <Border Classes="zorunlu"><TextBlock Text="Zorunlu" /></Border>
                       </StackPanel>
-                      <TextBox x:Name="TecvizSiniriKutusu" Text="{Binding Wizard.TecvizSiniriText}" Watermark="ör. 3.97"
+                      <TextBox x:Name="TecvizSiniriKutusu" Text="{Binding Wizard.TecvizSiniriText}" g:SayiKutusu.Normalize="True" Watermark="ör. 3.97"
                                Classes.hatali="{Binding Wizard.TecvizSiniriHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                       <Grid Classes="alanHatasi" ColumnDefinitions="Auto,*" IsVisible="{Binding Wizard.TecvizSiniriHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
 <TextBlock Text="⛔" FontSize="10" Margin="0,1,5,0" />
@@ -492,7 +493,12 @@
                         IsVisible="{Binding Converter={x:Static ObjectConverters.IsNotNull}}">
                   <Expander Classes="bolum" IsExpanded="False" Header="🏷️ Proje Künyesi &amp; Dönüşüm">
                     <StackPanel Spacing="4">
-                      <TextBlock Text="PROJE KÜNYESİ" Classes="etiket" FontWeight="SemiBold" />
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="PROJE KÜNYESİ" Classes="etiket" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        <Button Grid.Column="1" x:Name="WebtapuKunyeOkuDugmesi" Content="📄 WebTapu PDF'ten Künye Oku" Command="{Binding WebtapuKunyeIsteCommand}"
+                                Padding="6,2" FontSize="11" Margin="6,0,0,0"
+                                ToolTip.Tip="Seçilen webtapu PDF'inden yalnız İl / İlçe / Mahalle künye kutularına yazılır (kişi adları yazılmaz — KVKK)." />
+                      </Grid>
                       <TextBlock Text="Fen Klasörü başlıklarına basılır; değişirse onay düşer." Classes="aciklama" TextWrapping="Wrap" />
                       <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
                         <TextBlock Grid.Row="0" Text="İl" Classes="etiket" VerticalAlignment="Center" Margin="0,2,8,2" />
@@ -521,16 +527,57 @@
                                  IsVisible="{Binding KunyeDurumu, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
                       <TextBlock Text="ORTAK NOKTALAR (DÖNÜŞÜM)" Classes="etiket" FontWeight="SemiBold" Margin="0,8,0,0" />
-                      <TextBlock Text="Satır biçimi: NoktaNo;Y1;X1;Y2;X2 (I = deprem öncesi, II = deprem sonrası; ondalık '.'). Proje noktaları deprem sonrası kabul edilir; deprem öncesi koordinatlar ters dönüşümle hesaplanır."
+                      <TextBlock Text="I = deprem öncesi, II = deprem sonrası; ondalık ayırıcı '.' veya ',' olabilir. Proje noktaları deprem sonrası kabul edilir; deprem öncesi koordinatlar ters dönüşümle hesaplanır."
                                  Classes="aciklama" TextWrapping="Wrap" />
-                      <TextBox x:Name="OrtakNoktaKutusu" Text="{Binding OrtakNoktaMetni}" AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="90" MaxHeight="200"
-                               FontFamily="Consolas, Menlo, monospace" FontSize="11" Watermark="P1;500000.00;4000000.00;500000.10;4000000.05" />
+                      <!-- P7 UX: kutucuklu ortak nokta tablosu (OrtakNoktaMetni ile iki yönlü senkron; hücre düzenlendikçe canlı önizleme) -->
+                      <ScrollViewer x:Name="OrtakNoktaTablosu" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="1">
+                          <Grid MinWidth="380" ColumnDefinitions="52,4,*,4,*,4,*,4,*,4,26">
+                            <TextBlock Text="Nokta No" Classes="tabloBaslik" />
+                            <TextBlock Grid.Column="2" Text="Y1" Classes="tabloBaslik" />
+                            <TextBlock Grid.Column="4" Text="X1" Classes="tabloBaslik" />
+                            <TextBlock Grid.Column="6" Text="Y2" Classes="tabloBaslik" />
+                            <TextBlock Grid.Column="8" Text="X2" Classes="tabloBaslik" />
+                            <TextBlock Grid.Column="10" Text="Sil" Classes="tabloBaslik" HorizontalAlignment="Center" />
+                          </Grid>
+                          <ItemsControl x:Name="OrtakNoktaSatirlari" ItemsSource="{Binding OrtakNoktaSatirlari}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <StackPanel Margin="0,1">
+                                  <Grid MinWidth="380" ColumnDefinitions="52,4,*,4,*,4,*,4,*,4,26">
+                                    <TextBox Classes="hucre" Text="{Binding NoktaNo}" Watermark="N1" />
+                                    <TextBox Grid.Column="2" Classes="hucre" Classes.hatali="{Binding Y1Hatali}" Text="{Binding Y1}" g:SayiKutusu.Normalize="True" />
+                                    <TextBox Grid.Column="4" Classes="hucre" Classes.hatali="{Binding X1Hatali}" Text="{Binding X1}" g:SayiKutusu.Normalize="True" />
+                                    <TextBox Grid.Column="6" Classes="hucre" Classes.hatali="{Binding Y2Hatali}" Text="{Binding Y2}" g:SayiKutusu.Normalize="True" />
+                                    <TextBox Grid.Column="8" Classes="hucre" Classes.hatali="{Binding X2Hatali}" Text="{Binding X2}" g:SayiKutusu.Normalize="True" />
+                                    <Button Grid.Column="10" Classes="satirSil" Content="✕" ToolTip.Tip="Satırı sil"
+                                            Command="{Binding $parent[ItemsControl].DataContext.OrtakNoktaSilCommand}" CommandParameter="{Binding}" />
+                                  </Grid>
+                                  <SelectableTextBlock Text="{Binding Hata}" Classes="hata" MaxWidth="260" HorizontalAlignment="Left"
+                                                       IsVisible="{Binding Hata, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                </StackPanel>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </StackPanel>
+                      </ScrollViewer>
+                      <Button x:Name="OrtakNoktaEkleDugmesi" Content="+ Ortak Nokta Ekle" Command="{Binding OrtakNoktaEkleCommand}"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                      <Expander x:Name="OrtakNoktaMetinAlani" Classes="bolum" IsExpanded="False" Header="📋 Metin / Toplu Yapıştır">
+                        <StackPanel Spacing="4">
+                          <TextBlock Text="Toplu kopyala-yapıştır için satır biçimi: NoktaNo;Y1;X1;Y2;X2. Tabloyla eşzamanlıdır; alandan çıkınca ',' ondalıklar '.' biçimine çevrilir."
+                                     Classes="aciklama" TextWrapping="Wrap" />
+                          <TextBox x:Name="OrtakNoktaKutusu" Text="{Binding OrtakNoktaMetni}" AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="90" MaxHeight="200"
+                                   g:OdakKaybi.Komut="{Binding OrtakNoktaMetniniNormalizeEtCommand}"
+                                   FontFamily="Consolas, Menlo, monospace" FontSize="11" Watermark="P1;500000.00;4000000.00;500000.10;4000000.05" />
+                        </StackPanel>
+                      </Expander>
                       <Grid ColumnDefinitions="Auto,*,Auto,90">
                         <TextBlock Text="Model" Classes="etiket" VerticalAlignment="Center" Margin="0,2,8,2" />
                         <ComboBox Margin="0,0,8,0" Grid.Column="1" x:Name="DonusumModeliSecimi" ItemsSource="{Binding Modeller}" SelectedItem="{Binding Model}"
                                   ItemTemplate="{StaticResource TurkceAdSablonu}" HorizontalAlignment="Stretch" />
                         <TextBlock Grid.Column="2" Text="MK" Classes="etiket" VerticalAlignment="Center" Margin="0,2,8,2" />
-                        <TextBox Grid.Column="3" x:Name="MkKutusu" Text="{Binding MkMetni}" ToolTip.Tip="Koordine özetteki MK değeri (varsayılan 0.09)" />
+                        <TextBox Grid.Column="3" x:Name="MkKutusu" Text="{Binding MkMetni}" g:SayiKutusu.Normalize="True" ToolTip.Tip="Koordine özetteki MK değeri (varsayılan 0.09; ',' de kabul edilir)" />
                       </Grid>
                       <Grid ColumnDefinitions="*,*">
                         <Button Margin="0,0,3,0" x:Name="DonusumOnizleDugmesi" Content="🔍 Parametreleri Hesapla" Command="{Binding DonusumuOnizleCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
@@ -588,6 +635,16 @@
                     <StackPanel Spacing="4">
                       <Border Classes="kartBaslik"><TextBlock Text="📐 PARSEL BAZLI TAPU ALANI" Classes="bolum" /></Border>
                       <TextBlock Text="Hesap alanı Decimal Gauss ile bulunur; tapu alanını mühendis girer." Classes="aciklama" />
+                      <!-- P7 UX: projede Kadastro Parseli rolünde poligon yoksa sarı uyarı + net yönlendirme -->
+                      <Border x:Name="KadastroYonlendirmeKarti" Classes="kart uyari" Padding="8,6" Margin="0,4,0,0" IsVisible="{Binding KadastroParseliYok}">
+                        <Grid ColumnDefinitions="Auto,*">
+                          <TextBlock Text="⚠️" FontSize="12" Margin="0,0,6,0" />
+                          <StackPanel Grid.Column="1" Spacing="2">
+                            <SelectableTextBlock Text="Projede henüz 'Kadastro Parseli' rolünde poligon yok; tapu alanı tablosu boş." Classes="ozet" />
+                            <SelectableTextBlock x:Name="KadastroYonlendirmeMetni" Text="{x:Static vm:HesapAdimlariViewModel.KadastroYonlendirmesi}" Classes="ozet" FontWeight="SemiBold" />
+                          </StackPanel>
+                        </Grid>
+                      </Border>
                       <Grid ColumnDefinitions="*,84,100" Margin="0,6,0,2">
                         <TextBlock Text="Kadastro parseli" Classes="etiket" />
                         <TextBlock Grid.Column="1" Text="Hesap (m²)" Classes="etiket" />
@@ -604,7 +661,7 @@
                                 <SelectableTextBlock Text="{Binding ParselId}" Classes="mono" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                 <SelectableTextBlock Grid.Column="1" Text="{Binding HesapAlaniM2, Converter={x:Static g:Ceviriciler.Sayi}, ConverterParameter=0.00}" Classes="mono"
                                                      Foreground="{DynamicResource CadMuted}" VerticalAlignment="Center" />
-                                <TextBox Grid.Column="2" Text="{Binding TapuAlaniText}" Watermark="tapu m²"
+                                <TextBox Grid.Column="2" Text="{Binding TapuAlaniText}" Watermark="tapu m²" g:SayiKutusu.Normalize="True"
                                          Classes.hatali="{Binding Hata, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                               </Grid>
                               <Grid Classes="alanHatasi" ColumnDefinitions="Auto,*" HorizontalAlignment="Right" IsVisible="{Binding Hata, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
@@ -623,7 +680,7 @@
                         <TextBlock Text="Düzenleme toplam tecviz sınırı (m²)" Classes="etiket" />
                         <Border Classes="istege"><TextBlock Text="İsteğe bağlı" /></Border>
                       </StackPanel>
-                      <TextBox Text="{Binding ToplamTecvizSiniriText}" Watermark="boş bırakılabilir"
+                      <TextBox Text="{Binding ToplamTecvizSiniriText}" Watermark="boş bırakılabilir" g:SayiKutusu.Normalize="True"
                                Classes.hatali="{Binding ToplamTecvizSiniriHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                       <Grid Classes="alanHatasi" ColumnDefinitions="Auto,*" IsVisible="{Binding ToplamTecvizSiniriHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
 <TextBlock Text="⛔" FontSize="10" Margin="0,1,5,0" />
@@ -656,7 +713,7 @@
                         <TextBlock Text="R2 (boş: otomatik · Netcad DOP sayfası)" Classes="etiket" />
                         <Border Classes="istege"><TextBlock Text="İsteğe bağlı" /></Border>
                       </StackPanel>
-                      <TextBox Text="{Binding R2Text}" Watermark="otomatik"
+                      <TextBox x:Name="R2Kutusu" Text="{Binding R2Text}" Watermark="otomatik" g:SayiKutusu.Normalize="True"
                                Classes.hatali="{Binding R2Hatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                       <Grid Classes="alanHatasi" ColumnDefinitions="Auto,*" IsVisible="{Binding R2Hatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
 <TextBlock Text="⛔" FontSize="10" Margin="0,1,5,0" />
@@ -668,7 +725,7 @@
                             <TextBlock Text="D1 (m²)" Classes="etiket" />
                             <Border Classes="istege"><TextBlock Text="İsteğe bağlı" /></Border>
                           </StackPanel>
-                          <TextBox Text="{Binding D1Text}" Classes.hatali="{Binding D1Hatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                          <TextBox x:Name="D1Kutusu" Text="{Binding D1Text}" g:SayiKutusu.Normalize="True" Classes.hatali="{Binding D1Hatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                           <Grid Classes="alanHatasi" ColumnDefinitions="Auto,*" IsVisible="{Binding D1Hatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
 <TextBlock Text="⛔" FontSize="10" Margin="0,1,5,0" />
 <SelectableTextBlock Grid.Column="1" Text="{Binding D1Hatasi}" Classes="hata" />
@@ -679,7 +736,7 @@
                             <TextBlock Text="D2 (m²)" Classes="etiket" />
                             <Border Classes="istege"><TextBlock Text="İsteğe bağlı" /></Border>
                           </StackPanel>
-                          <TextBox Text="{Binding D2Text}" Classes.hatali="{Binding D2Hatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                          <TextBox x:Name="D2Kutusu" Text="{Binding D2Text}" g:SayiKutusu.Normalize="True" Classes.hatali="{Binding D2Hatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                           <Grid Classes="alanHatasi" ColumnDefinitions="Auto,*" IsVisible="{Binding D2Hatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
 <TextBlock Text="⛔" FontSize="10" Margin="0,1,5,0" />
 <SelectableTextBlock Grid.Column="1" Text="{Binding D2Hatasi}" Classes="hata" />
@@ -692,7 +749,7 @@
                             <TextBlock Text="R3 (m²)" Classes="etiket" />
                             <Border Classes="istege"><TextBlock Text="İsteğe bağlı" /></Border>
                           </StackPanel>
-                          <TextBox Text="{Binding R3Text}" Classes.hatali="{Binding R3Hatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                          <TextBox x:Name="R3Kutusu" Text="{Binding R3Text}" g:SayiKutusu.Normalize="True" Classes.hatali="{Binding R3Hatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                           <Grid Classes="alanHatasi" ColumnDefinitions="Auto,*" IsVisible="{Binding R3Hatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
 <TextBlock Text="⛔" FontSize="10" Margin="0,1,5,0" />
 <SelectableTextBlock Grid.Column="1" Text="{Binding R3Hatasi}" Classes="hata" />
@@ -703,7 +760,7 @@
                             <TextBlock Text="Ortak katılım (m²)" Classes="etiket" />
                             <Border Classes="istege"><TextBlock Text="İsteğe bağlı" /></Border>
                           </StackPanel>
-                          <TextBox Text="{Binding OrtakKatilimText}" Classes.hatali="{Binding OrtakKatilimHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                          <TextBox x:Name="OrtakKatilimKutusu" Text="{Binding OrtakKatilimText}" g:SayiKutusu.Normalize="True" Classes.hatali="{Binding OrtakKatilimHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                           <Grid Classes="alanHatasi" ColumnDefinitions="Auto,*" IsVisible="{Binding OrtakKatilimHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
 <TextBlock Text="⛔" FontSize="10" Margin="0,1,5,0" />
 <SelectableTextBlock Grid.Column="1" Text="{Binding OrtakKatilimHatasi}" Classes="hata" />
@@ -793,21 +850,100 @@
                       <Border Classes="kartBaslik"><TextBlock Text="🧾 HAK EŞLEŞTİRME" Classes="bolum" /></Border>
                       <TextBlock Text="Malik kodları anonim olmalıdır (KVKK). Satır başına bir kayıt." Classes="aciklama" />
                       <StackPanel Classes="alanBaslik">
-                        <TextBlock Text="TAKBİS hisseleri: parsel;malikKodu;pay/payda;E|H" Classes="etiket" TextWrapping="Wrap" />
+                        <TextBlock Text="TAKBİS hisseleri" Classes="etiket" TextWrapping="Wrap" />
                         <Border Classes="zorunlu"><TextBlock Text="Zorunlu" /></Border>
                       </StackPanel>
-                      <TextBox Text="{Binding TakbisMetni}" AcceptsReturn="True" Height="90" FontFamily="Consolas"
-                               Classes.hatali="{Binding TakbisHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                      <!-- P7 UX: TAKBİS kutucuklu tablosu (TakbisMetni ile iki yönlü senkron) -->
+                      <Border x:Name="TakbisTablosu">
+                        <StackPanel Spacing="1">
+                          <Grid ColumnDefinitions="*,3,*,3,54,3,46,3,24">
+                            <TextBlock Text="Kadastro Parseli" Classes="tabloBaslik" />
+                            <TextBlock Grid.Column="2" Text="Malik Kodu" Classes="tabloBaslik" />
+                            <TextBlock Grid.Column="4" Text="Hisse (Pay/Payda)" Classes="tabloBaslik" />
+                            <TextBlock Grid.Column="6" Text="Muvafakat" Classes="tabloBaslik" ToolTip.Tip="E: muvafakatli · H: muvafakatsiz" />
+                            <TextBlock Grid.Column="8" Text="Sil" Classes="tabloBaslik" HorizontalAlignment="Center" />
+                          </Grid>
+                          <ItemsControl x:Name="TakbisSatirlari" ItemsSource="{Binding TakbisSatirlari}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <StackPanel Margin="0,1">
+                                  <Grid ColumnDefinitions="*,3,*,3,54,3,46,3,24">
+                                    <AutoCompleteBox Classes="hucre" ItemsSource="{Binding $parent[ItemsControl].DataContext.KadastroParselOnerileri}"
+                                                     Text="{Binding KadastroParseli, Mode=TwoWay}" FilterMode="Contains" MinimumPrefixLength="0" Watermark="parsel" />
+                                    <TextBox Grid.Column="2" Classes="hucre" Text="{Binding MalikKodu}" Watermark="M01" />
+                                    <TextBox Grid.Column="4" Classes="hucre" Classes.hatali="{Binding HisseHatali}" Text="{Binding Hisse}" Watermark="1/2" />
+                                    <ComboBox Grid.Column="6" Classes="hucre" Classes.hatali="{Binding MuvafakatHatali}" ItemsSource="{x:Static vm:TakbisSatirVm.MuvafakatSecenekleri}"
+                                              SelectedItem="{Binding Muvafakat, Mode=TwoWay}" HorizontalAlignment="Stretch" ToolTip.Tip="E: muvafakatli · H: muvafakatsiz" />
+                                    <Button Grid.Column="8" Classes="satirSil" Content="✕" ToolTip.Tip="Satırı sil"
+                                            Command="{Binding $parent[ItemsControl].DataContext.TakbisSatiriSilCommand}" CommandParameter="{Binding}" />
+                                  </Grid>
+                                  <SelectableTextBlock Text="{Binding Hata}" Classes="hata"
+                                                       IsVisible="{Binding Hata, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                </StackPanel>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </StackPanel>
+                      </Border>
+                      <Button x:Name="TakbisSatiriEkleDugmesi" Content="+ Hisse Satırı Ekle" Command="{Binding TakbisSatiriEkleCommand}"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,2,0,0" />
                       <Grid Classes="alanHatasi" ColumnDefinitions="Auto,*" IsVisible="{Binding TakbisHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
 <TextBlock Text="⛔" FontSize="10" Margin="0,1,5,0" />
 <SelectableTextBlock Grid.Column="1" Text="{Binding TakbisHatasi}" Classes="hata" />
 </Grid>
+                      <Expander x:Name="TakbisMetinAlani" Classes="bolum" IsExpanded="False" Header="📋 Metin / Toplu Yapıştır" Margin="0,2,0,0">
+                        <StackPanel Spacing="4">
+                          <TextBlock Text="Satır biçimi: kadastroParseli;malikKodu;pay/payda;E|H. Tabloyla eşzamanlıdır." Classes="aciklama" TextWrapping="Wrap" />
+                          <TextBox x:Name="TakbisMetinKutusu" Text="{Binding TakbisMetni}" AcceptsReturn="True" Height="90" FontFamily="Consolas"
+                                   Classes.hatali="{Binding TakbisHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        </StackPanel>
+                      </Expander>
                       <StackPanel Classes="alanBaslik">
-                        <TextBlock Text="Kroki: malikKodu;kadastroParsel;imarParselKodu;alan" Classes="etiket" TextWrapping="Wrap" />
+                        <TextBlock Text="Kroki (tahsis)" Classes="etiket" TextWrapping="Wrap" />
                         <Border Classes="zorunlu"><TextBlock Text="Zorunlu" /></Border>
                       </StackPanel>
-                      <TextBox Text="{Binding KrokiMetni}" AcceptsReturn="True" Height="110" FontFamily="Consolas"
-                               Classes.hatali="{Binding KrokiHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                      <!-- P7 UX: Kroki kutucuklu tablosu (KrokiMetni ile iki yönlü senkron) -->
+                      <Border x:Name="KrokiTablosu">
+                        <StackPanel Spacing="1">
+                          <Grid ColumnDefinitions="*,3,*,3,*,3,62,3,24">
+                            <TextBlock Text="Malik Kodu" Classes="tabloBaslik" />
+                            <TextBlock Grid.Column="2" Text="Kadastro Parseli" Classes="tabloBaslik" />
+                            <TextBlock Grid.Column="4" Text="İmar Parseli" Classes="tabloBaslik" />
+                            <TextBlock Grid.Column="6" Text="Alan (m²)" Classes="tabloBaslik" />
+                            <TextBlock Grid.Column="8" Text="Sil" Classes="tabloBaslik" HorizontalAlignment="Center" />
+                          </Grid>
+                          <ItemsControl x:Name="KrokiSatirlari" ItemsSource="{Binding KrokiSatirlari}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <StackPanel Margin="0,1">
+                                  <Grid ColumnDefinitions="*,3,*,3,*,3,62,3,24">
+                                    <TextBox Classes="hucre" Text="{Binding MalikKodu}" Watermark="M01" />
+                                    <AutoCompleteBox Grid.Column="2" Classes="hucre" ItemsSource="{Binding $parent[ItemsControl].DataContext.KadastroParselOnerileri}"
+                                                     Text="{Binding KadastroParseli, Mode=TwoWay}" FilterMode="Contains" MinimumPrefixLength="0" Watermark="parsel" />
+                                    <AutoCompleteBox Grid.Column="4" Classes="hucre" ItemsSource="{Binding $parent[ItemsControl].DataContext.ImarParselOnerileri}"
+                                                     Text="{Binding ImarParseli, Mode=TwoWay}" FilterMode="Contains" MinimumPrefixLength="0" Watermark="imar" />
+                                    <TextBox Grid.Column="6" Classes="hucre" Classes.hatali="{Binding AlanHatali}" Text="{Binding Alan}" Watermark="m²"
+                                             g:SayiKutusu.Normalize="True" />
+                                    <Button Grid.Column="8" Classes="satirSil" Content="✕" ToolTip.Tip="Satırı sil"
+                                            Command="{Binding $parent[ItemsControl].DataContext.KrokiSatiriSilCommand}" CommandParameter="{Binding}" />
+                                  </Grid>
+                                  <SelectableTextBlock Text="{Binding Hata}" Classes="hata"
+                                                       IsVisible="{Binding Hata, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                </StackPanel>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </StackPanel>
+                      </Border>
+                      <Button x:Name="KrokiSatiriEkleDugmesi" Content="+ Tahsis Satırı Ekle" Command="{Binding KrokiSatiriEkleCommand}"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,2,0,0" />
+                      <Expander x:Name="KrokiMetinAlani" Classes="bolum" IsExpanded="False" Header="📋 Metin / Toplu Yapıştır" Margin="0,2,0,0">
+                        <StackPanel Spacing="4">
+                          <TextBlock Text="Satır biçimi: malikKodu;kadastroParseli;imarParseli;alan. Tabloyla eşzamanlıdır." Classes="aciklama" TextWrapping="Wrap" />
+                          <TextBox x:Name="KrokiMetinKutusu" Text="{Binding KrokiMetni}" AcceptsReturn="True" Height="110" FontFamily="Consolas"
+                                   Classes.hatali="{Binding KrokiHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        </StackPanel>
+                      </Expander>
                       <Grid Classes="alanHatasi" ColumnDefinitions="Auto,*" IsVisible="{Binding KrokiHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
 <TextBlock Text="⛔" FontSize="10" Margin="0,1,5,0" />
 <SelectableTextBlock Grid.Column="1" Text="{Binding KrokiHatasi}" Classes="hata" />
