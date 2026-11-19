@@ -1,0 +1,3 @@
+# Netcad .CKS: Windows-1254 + CP437 bayt düzeni ve CRLF birebir korunmalı (SORU-039); satır sonu dönüşümü yapılmaz.
+*.cks binary
+*.CKS binary

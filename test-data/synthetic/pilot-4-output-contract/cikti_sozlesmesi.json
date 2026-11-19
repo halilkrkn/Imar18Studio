@@ -1,7 +1,7 @@
 {
   "projectCode": "PILOT-4 (Çıktı Sözleşmesi ve Revizyon — Sentetik)",
   "aciklama": "AC-PILOT-04..06 ve AC-PILOT-09 için bağlayıcı pilot çıktı sözleşmesi. Değerler uygulama sabitleriyle birebir eşleşmelidir; değişiklik sözleşme sürümü artırılarak ve proje sahibi onayıyla yapılır. Gerçek veri içermez.",
-  "sozlesmeSurumu": "p6-1",
+  "sozlesmeSurumu": "p7-3d",
   "pilotDamgasi": "PİLOT — RESMÎ İŞLEMDE KULLANILAMAZ",
   "fenKlasoruSablonSurumu": "TKGM_2023_4_v1-PILOT-TASLAK",
   "parsidDurumu": "Deneysel iç format (doğrulanmış PARSİD şeması yok)",
@@ -18,7 +18,7 @@
   "ciktilar": [
     { "tur": "Cetveller", "uzanti": ".xlsx", "damgaYeri": "her sayfa 1. satır ve yazdırma üst bilgisi" },
     { "tur": "FenKlasoru", "uzanti": ".pdf", "damgaYeri": "her sayfa üst bilgi + filigran + alt bilgi", "enAzSayfa": 5 },
-    { "tur": "CksDopOzeti", "uzanti": ".CKS", "damgaYeri": "çerçevenin üstünde ayrı satır" }
+    { "tur": "CksDopOzeti", "uzanti": ".CKS", "damgaYeri": "yok — Netcad bayt düzeni (1. satır boş); taslak niteliği UI damgası, dosya adındaki PILOT ibaresi ve audit ile izlenir (SORU-039)", "netcadSatirBayt": 87 }
   ],
   "onay": {
     "metin": "Bu çıktıyı nihai olarak onaylıyorum. Tecviz, DOP, tahsis ve geometri kontrollerini inceledim. Kritik hata bulunmadığını teyit ediyorum.",

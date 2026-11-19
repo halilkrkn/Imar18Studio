@@ -116,7 +116,12 @@ public sealed class Pilot4CiktiSozlesmesiTests
 
                 break;
             default:
-                Encoding.UTF8.GetString(bayt).Split("\r\n")[0].Should().Contain(damga, "CKS damga satırı çerçevenin üstündedir");
+                // SORU-039 (proje sahibi kararı, sözleşme p7-3d): CKS Netcad bayt düzeninde yazılır — 1. satır boş, damga yok,
+                // çerçeve satırları sözleşmedeki bayt genişliğinde; taslak niteliği UI, dosya adı (PILOT) ve audit ile izlenir.
+                bayt.Take(2).Should().Equal((byte)0x0D, (byte)0x0A);
+                var satirBayt = sozlesme.GetProperty("netcadSatirBayt").GetInt32();
+                bayt.Length.Should().Be(2 + (21 * (satirBayt + 2)));
+                Imar18.Infrastructure.Cikti.Cks.NetcadCksKodlayici.Coz(bayt).Should().NotContain(damga);
                 break;
         }
     }

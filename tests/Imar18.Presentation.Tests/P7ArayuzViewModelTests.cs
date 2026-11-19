@@ -209,6 +209,7 @@ public sealed class P7ArayuzViewModelTests
         (await vm.UretAsync(CiktiTuru.FenKlasoru, "fen.bin")).Should().BeTrue(vm.DurumMetni);
 
         vm.DurumMetni.Should().StartWith("Fen Klasörü üretildi").And.NotContain("FenKlasoru");
-        vm.OnerilenDosyaAdi(CiktiTuru.CksDopOzeti).Should().Be("Imar18_CKS_DOP_Ozeti.bin");
+        // SORU-039: CKS Netcad bayt düzeninde damgasız yazıldığından taslak niteliği önerilen dosya adında taşınır.
+        vm.OnerilenDosyaAdi(CiktiTuru.CksDopOzeti).Should().Be("Imar18_PILOT_CKS_DOP_Ozeti.bin");
     }
 }

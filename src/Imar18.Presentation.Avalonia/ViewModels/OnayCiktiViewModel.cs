@@ -96,7 +96,7 @@ public sealed partial class OnayCiktiViewModel : ObservableObject
     {
         CiktiTuru.Cetveller => "Imar18_Cetveller",
         CiktiTuru.FenKlasoru => "Imar18_Fen_Klasoru",
-        CiktiTuru.CksDopOzeti => "Imar18_CKS_DOP_Ozeti",
+        CiktiTuru.CksDopOzeti => "Imar18_PILOT_CKS_DOP_Ozeti", // SORU-039: CKS içinde damga yok; taslak niteliği dosya adında
         _ => "Imar18_Cikti",
     }) + (Uzanti(tur) ?? string.Empty);
 
