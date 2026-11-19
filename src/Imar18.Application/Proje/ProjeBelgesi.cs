@@ -26,8 +26,9 @@ public sealed record ProjeBelgesi(
     long Surum)
 {
     /// <summary>
-    /// P7.3-B1: yerel Malik Rehberi (anonim kod ↔ ad/baba adı, parsel Cilt/Sayfa). Hesabı değiştirmez; bu yüzden
-    /// <see cref="RevizyonKimligi"/>'ne girmez ve değişmesi onayı düşürmez (SORU-040 c). Yalnız çıktı cetvelleri kullanır.
+    /// P7.3-B1: yerel Malik Rehberi (anonim kod ↔ ad/baba adı, parsel Cilt/Sayfa). Hesabı değiştirmez ama Fen Klasörü
+    /// belgelerine basılır: doluysa SHA-256 özeti <see cref="RevizyonKimligi"/>'ne girer ve değişmesi onayı düşürür (SORU-046,
+    /// SORU-040 c'nin yerine). Ad/baba adı denetim kaydına yazılmaz.
     /// </summary>
     public MalikRehberi MalikRehberi { get; init; } = MalikRehberi.Bos;
 
@@ -50,6 +51,7 @@ public sealed record ProjeBelgesi(
     {
         Donusum = Donusum,
         Kunye = Kunye,
+        MalikRehberiOzeti = MalikRehberi.Ozet(),
     });
 
     /// <summary>Onay var ve güncel içerik revizyonuna bağlıysa true.</summary>

@@ -101,6 +101,12 @@ public sealed record ProjeRevizyonGirdisi(
 
     /// <summary>P7.3-C2: proje künyesi (resmî çıktı başlıkları). Yalnız girilmişse özete yazılır.</summary>
     public ProjeKunyesi? Kunye { get; init; }
+
+    /// <summary>
+    /// SORU-046: Malik Rehberi içeriğinin SHA-256 özeti (Application hesaplar; ad/baba adı Domain'e ve denetime girmez). Yalnız
+    /// rehber doluysa verilir → rehbersiz projelerin RevisionId'si değişmez.
+    /// </summary>
+    public string? MalikRehberiOzeti { get; init; }
 }
 
 /// <summary>
@@ -190,6 +196,11 @@ public static class ProjeRevizyonu
             {
                 o.Ekle("dn.no", n.NoktaNo).Ekle("dn.y1", n.Y1).Ekle("dn.x1", n.X1).Ekle("dn.y2", n.Y2).Ekle("dn.x2", n.X2);
             }
+        }
+
+        if (girdi.MalikRehberiOzeti is { } rehber)
+        {
+            o.Ekle("rehber.sha256", rehber);
         }
 
         if (girdi.Kunye is { } kunye)
