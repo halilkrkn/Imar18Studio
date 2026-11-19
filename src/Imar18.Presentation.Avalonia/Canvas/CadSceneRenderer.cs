@@ -24,12 +24,13 @@ internal sealed record CadRenderState(
     bool IzgaraGoster,
     bool EtiketGoster,
     OsnapSonucu? Yakalama,
-    OsnapSonucu? SecilenNokta = null)
+    OsnapSonucu? SecilenNokta = null,
+    string? VurguluKatman = null)
 {
     public static CadRenderState From(CadCanvasViewModel vm, double width, double height) => new(
         vm.Scene, vm.Camera.Origin, vm.Camera.Scale, vm.Camera.OffsetX, vm.Camera.OffsetY, vm.SwipePercent,
         vm.Selected, vm.CutHandle.IsVisible, vm.CutHandle.AngleDeg, vm.CutHandle.PositionRatio, width, height,
-        vm.AcikPafta, vm.IzgaraGoster, vm.EtiketGoster, vm.Yakalama, vm.SecilenNokta);
+        vm.AcikPafta, vm.IzgaraGoster, vm.EtiketGoster, vm.Yakalama, vm.SecilenNokta, vm.VurguluKatman);
 
     /// <summary>İmar perdesinin (swipe) sağ kenarı (yerel piksel).</summary>
     public double PerdeX => Width * SwipePercent / 100d;
@@ -262,6 +263,11 @@ internal static class CadSceneRenderer
             canvas.Restore();
         }
 
+        if (s.VurguluKatman is { } katman)
+        {
+            DrawKatmanVurgusu(canvas, paths, matrix, katman, palet, unit);
+        }
+
         DrawLabels(canvas, s, palet);
         if (selected is not null && s.CutHandleVisible)
         {
@@ -279,6 +285,25 @@ internal static class CadSceneRenderer
             DrawSnap(canvas, p, y.Kip, palet);
             DrawEtiketKutusu(canvas, p, CadCanvasViewModel.OsnapEtiketi(y), s, palet);
         }
+    }
+
+    /// <summary>
+    /// P7.3-A: vurgulu katmanın (imleç altındaki veya listeden 🎯 ile işaretlenen) tüm çizgileri, perdeden bağımsız olarak geniş
+    /// yarı saydam hale + parlak çizgiyle çizilir; böylece katmanın tuvaldeki tüm elemanları tek bakışta görünür.
+    /// </summary>
+    private static void DrawKatmanVurgusu(SKCanvas canvas, ScenePaths paths, SKMatrix matrix, string katman, Palet palet, float unit)
+    {
+        using var hale = new SKPaint { Color = palet.Yakalama.WithAlpha(70), IsStroke = true, StrokeWidth = 7 * unit, IsAntialias = true, StrokeJoin = SKStrokeJoin.Round };
+        using var cizgi = new SKPaint { Color = palet.Yakalama, IsStroke = true, StrokeWidth = 2.5f * unit, IsAntialias = true };
+        canvas.Save();
+        canvas.Concat(ref matrix);
+        foreach (var e in paths.Entries.Where(e => string.Equals(e.Source.LayerName, katman, StringComparison.Ordinal)))
+        {
+            canvas.DrawPath(e.Path, hale);
+            canvas.DrawPath(e.Path, cizgi);
+        }
+
+        canvas.Restore();
     }
 
     /// <summary>Seçilen OSNAP noktası: dolgu baklava + artı (imleç ayrılsa da işaretli kalır).</summary>

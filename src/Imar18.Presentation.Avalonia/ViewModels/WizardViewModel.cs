@@ -12,11 +12,19 @@ namespace Imar18.Presentation.Avalonia.ViewModels;
 /// <summary>Sihirbazdaki tek katman–rol satiri (muhendis secimi, STATUS SORU-032 b).</summary>
 public sealed partial class LayerRoleRow : ObservableObject
 {
-    public LayerRoleRow(string layerName, CadLayerRole role)
+    public LayerRoleRow(string layerName, CadLayerRole role, Action<LayerRoleRow>? vurgulaIstendi = null)
     {
         LayerName = layerName;
         _role = role;
+        VurgulaCommand = new RelayCommand(() => vurgulaIstendi?.Invoke(this), () => vurgulaIstendi is not null);
     }
+
+    /// <summary>P7.3-A: satırdaki 🎯 düğmesi — katmanı tuvalde vurgular / vurguyu kaldırır.</summary>
+    public IRelayCommand VurgulaCommand { get; }
+
+    /// <summary>P7.3-A: satır tuvalde vurgulu katmana karşılık geliyor (listeden 🎯 veya tuvalden rol ataması).</summary>
+    [ObservableProperty]
+    private bool _vurgulu;
 
     /// <summary>Tüm roller (her satır ComboBox'ı kendi DataContext'inden bağlar; P7 seçili rol görünürlüğü düzeltmesi).</summary>
     internal static readonly IReadOnlyList<CadLayerRole> TumRoller = Enum.GetValues<CadLayerRole>();
@@ -119,6 +127,10 @@ public sealed partial class WizardViewModel : ObservableObject
 
     [ObservableProperty]
     private string? _katmanRolHatasi;
+
+    /// <summary>P7.3-A: tuvalde vurgulanan katman (liste ↔ tuval senkronu; null: vurgu yok).</summary>
+    [ObservableProperty]
+    private string? _vurguluKatmanAdi;
 
     public WizardViewModel()
     {
@@ -237,7 +249,7 @@ public sealed partial class WizardViewModel : ObservableObject
         KatmanlariTemizle();
         foreach (var l in layers)
         {
-            var row = new LayerRoleRow(l.Name, CadLayerRoleMap.Standard.Resolve(l.Name));
+            var row = new LayerRoleRow(l.Name, CadLayerRoleMap.Standard.Resolve(l.Name), SatiriVurgula);
             row.PropertyChanged += OnRowChanged;
             LayerRoles.Add(row);
         }
@@ -269,8 +281,39 @@ public sealed partial class WizardViewModel : ObservableObject
         CurrentIndex = 0;
     }
 
+    /// <summary>
+    /// P7.3-A: tuvalden (tıkla-ata veya sağ tık menüsü) gelen katman → rol ataması. Satırın rolü değişirse mevcut
+    /// <see cref="LayerRolesChanged"/> zinciri (tuval, Parseller tablosu, <c>ParselGeometrileriAyarlaKomutu</c>) çalışır; aynı rol
+    /// yeniden uygulama tetiklemez. Katman satırı vurgulanır. Listede olmayan katman için false.
+    /// </summary>
+    public bool RolAta(string katmanAdi, CadLayerRole rol)
+    {
+        ArgumentNullException.ThrowIfNull(katmanAdi);
+        var satir = LayerRoles.FirstOrDefault(r => string.Equals(r.LayerName, katmanAdi, StringComparison.Ordinal));
+        if (satir is null)
+        {
+            return false;
+        }
+
+        VurguluKatmanAdi = satir.LayerName;
+        satir.Role = rol;
+        return true;
+    }
+
+    private void SatiriVurgula(LayerRoleRow satir) =>
+        VurguluKatmanAdi = string.Equals(VurguluKatmanAdi, satir.LayerName, StringComparison.Ordinal) ? null : satir.LayerName;
+
+    partial void OnVurguluKatmanAdiChanged(string? value)
+    {
+        foreach (var r in LayerRoles)
+        {
+            r.Vurgulu = string.Equals(r.LayerName, value, StringComparison.Ordinal);
+        }
+    }
+
     private void KatmanlariTemizle()
     {
+        VurguluKatmanAdi = null;
         foreach (var r in LayerRoles)
         {
             r.PropertyChanged -= OnRowChanged;

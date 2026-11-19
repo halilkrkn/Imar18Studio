@@ -132,6 +132,28 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Warnings.CollectionChanged += (_, _) => OnPropertyChanged(nameof(DenetimUyariSayisi));
         Canvas.NoktaSecildi += (_, metin) => PanoyaKopyala(metin, "📍 OSNAP noktası seçildi ve panoya kopyalandı: " + metin);
 
+        // P7.3-A (SAHA-005): tuvalden katman → rol ataması sihirbaz satırına yazılır; mevcut LayerRolesChanged → ReapplyAsync →
+        // ParselGeometrileriAyarlaKomutu zinciri (CommandBus + audit) aynen çalışır. Liste 🎯 ↔ tuval vurgusu senkron.
+        Canvas.KatmanRolAtamaIstendi += (_, a) =>
+        {
+            if (!Wizard.RolAta(a.KatmanAdi, a.Rol))
+            {
+                StatusText = $"'{a.KatmanAdi}' katmanı eşleme listesinde yok; rol atanmadı.";
+            }
+        };
+        Wizard.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(WizardViewModel.VurguluKatmanAdi))
+            {
+                Canvas.IsaretliKatman = Wizard.VurguluKatmanAdi;
+            }
+            else if (e.PropertyName == nameof(WizardViewModel.CurrentIndex))
+            {
+                RolAtamaEtkinliginiYenile();
+            }
+        };
+        Wizard.LayerRoles.CollectionChanged += (_, _) => RolAtamaEtkinliginiYenile();
+
         if (proje is not null)
         {
             OnayCikti = new OnayCiktiViewModel(proje);
@@ -270,6 +292,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private void FitAll() => Canvas.FitAll();
 
     /// <summary>
+    /// P7.3-A: pencere Esc kısayolu — komut çubuğu açıksa kapatır, değilse tuvalden rol atama modundan çıkar. Odak tuvaldeyse
+    /// Esc önce tuvalin OnKeyDown'ında işlenir (rol modundan çıkar, Handled); odak başka denetimdeyse bu pencere KeyBinding'i
+    /// devreye girer. Komut çubuğu açıkken odak arama kutusundadır, bu yüzden Esc yalnız çubuğu kapatır.
+    /// </summary>
+    [RelayCommand]
+    private void Esc()
+    {
+        if (Palette.IsOpen)
+        {
+            Palette.Close();
+        }
+        else
+        {
+            Canvas.RolAtamaModundanCik();
+        }
+    }
+
+    /// <summary>
     /// P7: Katman → Rol eşlemesini açıkça uygular (rol değişikliği zaten anında uygulanır; düğme yeniden hesaplamayı ve projeye
     /// yazımı garanti eder): tuval renkleri, Parseller tablosu ve proje geometrisi güncellenir.
     /// </summary>
@@ -333,19 +373,32 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         if (_lastDocument is { } d && !IsBusy)
         {
-            await ApplyAsync(d).ConfigureAwait(true);
+            await ApplyAsync(d, kameraKoru: true).ConfigureAwait(true);
         }
     }
+
+    private int _uygulamaNesli;
+
+    /// <summary>P7.3-A: tuvalden rol atama yalnız 1. adımda ve katmanlar yüklüyken açıktır.</summary>
+    private void RolAtamaEtkinliginiYenile() => Canvas.RolAtamaEtkin = Wizard.IsStep1 && Wizard.LayerRoles.Count > 0;
 
     /// <summary>
     /// Etiket eslestirmesi ve Gauss alanlari (O(poligon·yazi·kose)) arka planda hesaplanir; yalnizca sonuc arayuze
     /// aktarilir (50 ms kurali). Eslestirme rol bazlidir: once imar, sonra kadastro (ust uste binen katmanlar
     /// birbirinin yazisini "paylasilan" saymaz).
     /// </summary>
-    private async Task ApplyAsync(CadLayerDocument document)
+    private async Task ApplyAsync(CadLayerDocument document, bool kameraKoru = false)
     {
+        // P7.3-A (reviewer H1): art arda rol atamasında arka plan hesapları ters sırada bitebilir; yalnız en son başlatılan
+        // eşleme sahneye ve projeye (ParselGeometrileriAyarlaKomutu) yazılır, eskimiş sonuç sessizce atılır.
+        var nesil = ++_uygulamaNesli;
         var roles = Wizard.RoleMap;
         var (scene, notlar, format, layerCount, matched) = await Task.Run(() => Compute(document, roles)).ConfigureAwait(true);
+        if (nesil != _uygulamaNesli)
+        {
+            return;
+        }
+
         Warnings.Clear();
         BilgiNotlari.Clear();
         foreach (var n in notlar)
@@ -353,7 +406,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             (RutinIceAktarmaKodlari.Contains(n.Code) || n.Severity == ErrorSeverity.Info ? BilgiNotlari : Warnings).Add(n.UserMessage);
         }
 
-        Canvas.LoadScene(scene);
+        Canvas.LoadScene(scene, kameraKoru);
         Parcels.Clear();
         foreach (var p in scene.Polylines.Where(p => p.IsClosed))
         {

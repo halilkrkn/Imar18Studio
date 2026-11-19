@@ -513,6 +513,9 @@ public sealed class P7SahaUiCilasiTests
         vm.Wizard.TecvizSiniriText = "10";
         vm.Wizard.TecvizKaynakNotu = "Sentetik";
         vm.Wizard.Validate();
+        // P7.3-A kararsızlık düzeltmesi: Validate() CRS'i arka planda projeye yazar ve bitince Hesap.YenileAsync tecviz satırlarını
+        // yeniden kurar; beklenmezse yük altında satır, hata işaretlendikten sonra yenilenip "Hata" kayboluyordu (beklenti aynı).
+        await vm.LastProjeTask;
         var h = vm.Hesap!;
         await h.YenileAsync();
         h.TecvizSatirlari.Should().ContainSingle();
