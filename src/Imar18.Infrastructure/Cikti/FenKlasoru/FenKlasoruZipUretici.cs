@@ -18,16 +18,20 @@ internal sealed record FenKlasoruDosyasi(string Ad, Func<byte[]> Uret);
 /// başına), <c>KOORDİNE-ALAN</c> (birleşik), <c>DOP</c>, <c>ÖZET CETVELİ</c>, <c>MAL SAHİPLERİ ARAŞTIRMA VE ÖZET FORMU</c>,
 /// <c>TESCİLE ESAS DAĞITIM CETVELİ</c>, <c>TESCİL SAYFASI-1..n</c> + <c>TESCİL-1-2-…</c> (imar adası başına), <c>RÖLÖVE ÖLÇÜ
 /// KROKİSİ</c>, <c>RÖLÖVE-1..n</c> + <c>RÖLÖVE-1-2-…</c> (birleşik dosyalar yalnız 2+ imar adasında; tek adada
-/// <c>RÖLÖVE-1</c> adı çakışırdı), <c>PARSELASYON HARİTASI</c> ve CKS eşlemesi mümkünse <c>DOP_PILOT.CKS</c> + <c>.sha256</c>.
-/// Dosya adları UTF-8 ad bayrağıyla yazılır; giriş zamanları onay zamanıdır (aynı revizyon → aynı bayt). <c>PARSELASYON
-/// HARİTASI.NCZ</c> P7.3-C3'te eklenecektir (ZIP açıklaması ve Özet Cetveli notu). Onay/RevisionId/.sha256/audit kapıları
+/// <c>RÖLÖVE-1</c> adı çakışırdı), <c>PARSELASYON HARİTASI</c>, <c>PARSELASYON HARİTASI.NCZ</c> + <c>.sha256</c> (P7.3-C3, <see cref="Cad.Ncz.NczParselasyonYazici"/>;
+/// deneysel, SORU-042) ve CKS eşlemesi mümkünse <c>DOP_PILOT.CKS</c> + <c>.sha256</c>.
+/// Dosya adları UTF-8 ad bayrağıyla yazılır; giriş zamanları onay zamanıdır (aynı revizyon → aynı bayt). NCZ üretilemezse (ör. şablon
+/// ayrıştırılamaz) PDF/CKS paketi engellenmez: NCZ girişi çıkarılır ve neden ZIP açıklamasına yazılır (reviewer H1). Onay/RevisionId/.sha256/audit kapıları
 /// <see cref="CiktiServisi"/>'ndedir.
 /// </summary>
 public sealed class FenKlasoruZipUretici : ICiktiUretici
 {
     /// <summary>NCZ bilgi notu (ZIP açıklaması ve Özet Cetveli dipnotu).</summary>
     public const string NczNotu =
-        "Not: PARSELASYON HARİTASI.NCZ bu pakette yoktur; Netcad NCZ yazıcısı sonraki sürümde (P7.3-C3) eklenecektir.";
+        "Not: PARSELASYON HARİTASI.NCZ deneysel Netcad çıktısıdır; Netcad 8.5'te manuel açılış teyidi bekleniyor (SORU-042).";
+
+    /// <summary>NCZ yazıcısı hata döndürdüğünde (ör. 14 baytı aşan etiket, şablonda proje kadastrosu yok) ZIP açıklamasına yazılır.</summary>
+    public const string NczUretilemediNotu = "Not: PARSELASYON HARİTASI.NCZ üretilemedi; paket NCZ olmadan oluşturuldu";
 
     /// <summary>ZIP içindeki CKS adı: SORU-039 istisnası gereği taslak izi adda (<c>PILOT</c>) ve <c>.sha256</c> yan girişindedir.</summary>
     public const string CksDosyaAdi = "DOP_PILOT.CKS";
@@ -49,11 +53,14 @@ public sealed class FenKlasoruZipUretici : ICiktiUretici
 
         try
         {
-            var dosyalar = Dosyalar(paket);
+            // Reviewer H1: deneysel NCZ üretilemezse 19 PDF + CKS paketi engellenmez; giriş çıkarılır, neden açıklamaya yazılır.
+            var ncz = Cad.Ncz.NczParselasyonYazici.Yaz(paket, cancellationToken);
+            var dosyalar = Dosyalar(paket, ncz.IsSuccess ? ncz.Value : null);
             using var ms = new MemoryStream();
             using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true, entryNameEncoding: Encoding.UTF8))
             {
-                zip.Comment = PilotDamgasi.Metin + " · RevisionId " + paket.RevizyonId + " · Şablon " + paket.SablonSurumu + " · " + NczNotu;
+                zip.Comment = PilotDamgasi.Metin + " · RevisionId " + paket.RevizyonId + " · Şablon " + paket.SablonSurumu + " · "
+                    + (ncz.IsSuccess ? NczNotu : NczUretilemediNotu + " (" + ncz.Error.Code + ": " + ncz.Error.TechnicalMessage + ")");
                 var zaman = ZipZamani(paket.OnayZamani);
                 foreach (var d in dosyalar)
                 {
@@ -75,7 +82,7 @@ public sealed class FenKlasoruZipUretici : ICiktiUretici
     }
 
     /// <summary>ZIP girişleri (sıra ve adlar sözleşmedir; içerik tembel üretilir).</summary>
-    internal static IReadOnlyList<FenKlasoruDosyasi> Dosyalar(CiktiPaketi p)
+    internal static IReadOnlyList<FenKlasoruDosyasi> Dosyalar(CiktiPaketi p, byte[]? parselasyonNcz)
     {
         var liste = new List<FenKlasoruDosyasi>();
         void Ekle(string ad, Action<IDocumentContainer> bilesen) => liste.Add(new FenKlasoruDosyasi(ad + ".pdf", () => Pdf(p, ad, bilesen)));
@@ -143,6 +150,15 @@ public sealed class FenKlasoruZipUretici : ICiktiUretici
         }
 
         Ekle("PARSELASYON HARİTASI", c => FenKlasoruBelgeleri.ParselasyonHaritasi(c, p));
+
+        // P7.3-C3: hesap motorundan üretilen Netcad çizimi; içerik damgası çizimdeki yazıdadır (SORU-050), bütünlük .sha256'dadır.
+        if (parselasyonNcz is not null)
+        {
+            var nczAdi = Cad.Ncz.NczParselasyonYazici.DosyaAdi;
+            var nczSha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(parselasyonNcz));
+            liste.Add(new FenKlasoruDosyasi(nczAdi, () => parselasyonNcz));
+            liste.Add(new FenKlasoruDosyasi(nczAdi + ".sha256", () => Encoding.UTF8.GetBytes(nczSha + "  " + nczAdi + "\n")));
+        }
 
         // CKS yalnız Netcad alanlarıyla eşlenebiliyorsa (D1 = D2 = R3 = 0; SORU-033/034). İçeride damga yok (SORU-039);
         // istisna koşulu gereği taslak izi dosya adındaki PILOT ibaresi ve yanındaki .sha256 girişiyle taşınır (reviewer H1).

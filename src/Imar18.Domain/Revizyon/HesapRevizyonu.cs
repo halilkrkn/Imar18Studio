@@ -107,6 +107,12 @@ public sealed record ProjeRevizyonGirdisi(
     /// rehber doluysa verilir → rehbersiz projelerin RevisionId'si değişmez.
     /// </summary>
     public string? MalikRehberiOzeti { get; init; }
+
+    /// <summary>
+    /// P7.3-C3: kaynak <c>.NCZ</c> şablonunun SHA-256 özeti (Application hesaplar). Şablon <c>PARSELASYON HARİTASI.NCZ</c> baytlarını
+    /// belirler; yalnız varsa özete yazılır → şablonsuz projelerin RevisionId'si değişmez.
+    /// </summary>
+    public string? NczSablonuOzeti { get; init; }
 }
 
 /// <summary>
@@ -201,6 +207,11 @@ public static class ProjeRevizyonu
         if (girdi.MalikRehberiOzeti is { } rehber)
         {
             o.Ekle("rehber.sha256", rehber);
+        }
+
+        if (girdi.NczSablonuOzeti is { } ncz)
+        {
+            o.Ekle("ncz.sha256", ncz);
         }
 
         if (girdi.Kunye is { } kunye)

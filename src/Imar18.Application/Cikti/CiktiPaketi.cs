@@ -146,6 +146,9 @@ public sealed record CiktiPaketi(
 
     /// <summary>P7.3-C1: kadastro parselleri ve malik hisseleri (kadastro parseline sıralı).</summary>
     public IReadOnlyList<KadastroParselOzeti> KadastroParselleri { get; init; } = [];
+
+    /// <summary>P7.3-C3: kaynak <c>.NCZ</c> şablonu (yoksa <c>PARSELASYON HARİTASI.NCZ</c> iskelet modunda üretilir).</summary>
+    public NczSablonu? NczSablonu { get; init; }
 }
 
 /// <summary>Taslak çıktı üreticisi (Infrastructure: ClosedXML, QuestPDF, CKS). Hata durumunda istisna yerine Result döner.</summary>

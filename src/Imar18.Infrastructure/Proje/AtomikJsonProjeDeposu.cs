@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Imar18.Application.Cad;
 using Imar18.Application.Cikti;
 using Imar18.Application.Proje;
 using Imar18.Domain.Diagnostics;
@@ -165,7 +166,8 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
                 b.Kunye is { } ku ? new KunyeDto(ku.Il, ku.Ilce, ku.KoyMahalle, ku.Belediye, ku.PaftaNolari, ku.KadastroId, ku.DatumProjeksiyon) : null,
                 b.Donusum is { } dn
                     ? new DonusumDto(dn.Model.ToString(), dn.Mk, dn.OrtakNoktalar.Select(n => new OrtakNoktaDto(n.NoktaNo, n.Y1, n.X1, n.Y2, n.X2)).ToList())
-                    : null),
+                    : null,
+                b.NczSablonu is { } ns ? new NczSablonuDto(ns.Sha256, Convert.ToBase64String(ns.Icerik.Span)) : null),
             k.Denetim.ToList());
     }
 
@@ -291,6 +293,17 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
             };
         }
 
+        if (b.Ncz is { } nd)
+        {
+            var sablon = NczSablonu.Yukle(Convert.FromBase64String(nd.Base64 ?? throw new FormatException("ncz template missing")), nd.Sha256 ?? string.Empty);
+            if (sablon.IsFailure)
+            {
+                return Hata("ncz template rejected (" + sablon.Error.Code + ")");
+            }
+
+            belge = belge with { NczSablonu = sablon.Value };
+        }
+
         // Komut doğrulamaları yüklemede yeniden çalışır (P5 reviewer M4): elle düzenlenip özeti yeniden hesaplanmış kayıt,
         // CommandBus'ın kabul etmeyeceği bir durumu açamaz. Null metin alanları revizyon özetinde ArgumentException üretir.
         var bos = ProjeBelgesi.Yeni(belge.ProjeAdi);
@@ -317,6 +330,11 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
         if (belge.Kunye is not null)
         {
             kontroller.Add(new ProjeKunyesiAyarlaKomutu(belge.Kunye));
+        }
+
+        if (belge.NczSablonu is not null)
+        {
+            kontroller.Add(new NczSablonuAyarlaKomutu(belge.NczSablonu.Icerik.ToArray()));
         }
 
         // Not: Result<T> bir struct'tır; default değeri başarısız sayılır — FirstOrDefault yerine hata nesnesi aranır.
@@ -350,7 +368,11 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
         long Surum,
         RehberDto? Rehber = null,
         KunyeDto? Kunye = null,
-        DonusumDto? Donusum = null);
+        DonusumDto? Donusum = null,
+        NczSablonuDto? Ncz = null);
+
+    /// <summary>P7.3-C3: kaynak NCZ şablonu (base64) ve SHA-256 özeti; yüklemede özet yeniden doğrulanır (P7.3-C3 öncesi kayıtlarda yoktur).</summary>
+    private sealed record NczSablonuDto(string Sha256, string Base64);
 
     /// <summary>P7.3-C2: proje künyesi (P7.3-C öncesi kayıtlarda yoktur).</summary>
     private sealed record KunyeDto(string Il, string Ilce, string Mahalle, string Belediye, string Pafta, string KadastroId, string Datum);

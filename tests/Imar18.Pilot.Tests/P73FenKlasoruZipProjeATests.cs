@@ -56,7 +56,8 @@ public sealed class P73FenKlasoruZipProjeATests
             "DÖNÜŞÜM PARAMETRELERİ.pdf", "KOORDİNE ÖZET.pdf", "ALAN HESABI.pdf", "ALAN HESABI-1.pdf", "KOORDİNE-ALAN.pdf", "DOP.pdf",
             "ÖZET CETVELİ.pdf", "MAL SAHİPLERİ ARAŞTIRMA VE ÖZET FORMU.pdf", "TESCİLE ESAS DAĞITIM CETVELİ.pdf",
             "TESCİL SAYFASI-1.pdf", "TESCİL SAYFASI-2.pdf", "TESCİL SAYFASI-3.pdf", "TESCİL-1-2-3.pdf",
-            "RÖLÖVE ÖLÇÜ KROKİSİ.pdf", "RÖLÖVE-1.pdf", "RÖLÖVE-2.pdf", "RÖLÖVE-3.pdf", "RÖLÖVE-1-2-3.pdf", "PARSELASYON HARİTASI.pdf", "DOP_PILOT.CKS", "DOP_PILOT.CKS.sha256");
+            "RÖLÖVE ÖLÇÜ KROKİSİ.pdf", "RÖLÖVE-1.pdf", "RÖLÖVE-2.pdf", "RÖLÖVE-3.pdf", "RÖLÖVE-1-2-3.pdf", "PARSELASYON HARİTASI.pdf", "PARSELASYON HARİTASI.NCZ", "PARSELASYON HARİTASI.NCZ.sha256",
+            "DOP_PILOT.CKS", "DOP_PILOT.CKS.sha256");
         adlar.Count(a => a.EndsWith(".pdf", StringComparison.Ordinal)).Should().BeGreaterThanOrEqualTo(19, "örnek paket 19 PDF'tir");
         (await File.ReadAllTextAsync(sonuc.ChecksumDosyasi, Encoding.UTF8)).Should().Be(sonuc.Sha256 + "  Imar18_PILOT_Fen_Klasoru.zip\n");
         alan.Yol.Denetim[^1].Should().Match<AuditKaydi>(k => k.Islem == "Cikti:FenKlasoruZip" && k.Sonuc == AuditSonucu.Basarili

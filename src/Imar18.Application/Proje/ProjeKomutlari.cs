@@ -78,6 +78,7 @@ public sealed record ProjeyiSifirlaKomutu : IProjeKomutu
             MalikRehberi = Girdi.MalikRehberi.Bos,
             Donusum = null,
             Kunye = null,
+            NczSablonu = null,
         });
     }
 }
@@ -349,5 +350,36 @@ public sealed record ProjeKunyesiAyarlaKomutu(ProjeKunyesi? Kunye) : IProjeKomut
         var k = new ProjeKunyesi(Kunye.Il.Trim(), Kunye.Ilce.Trim(), Kunye.KoyMahalle.Trim(), Kunye.Belediye.Trim(),
             Kunye.PaftaNolari.Trim(), Kunye.KadastroId.Trim(), Kunye.DatumProjeksiyon.Trim());
         return Result<ProjeBelgesi>.Success(mevcut with { Kunye = k });
+    }
+}
+
+/// <summary>
+/// P7.3-C3 (SAHA-007): 1. adımda yüklenen kaynak <c>.NCZ</c>'nin şablon baytlarını saklar (<c>null</c> = temizle; <c>.DXF</c>/<c>.DWG</c>
+/// içe aktarımında şablonsuz iskelet moduna dönülür). Şablon <c>PARSELASYON HARİTASI.NCZ</c> içeriğini belirlediği için
+/// RevisionId'ye girer: değişirse onay düşer (AC-PILOT-06). Denetime yalnız bayt sayısı ve SHA-256'nın ilk 12 hanesi yazılır;
+/// dosyadaki kullanıcı adı/XML değerleri yazılmaz (KVKK).
+/// </summary>
+public sealed record NczSablonuAyarlaKomutu(byte[]? Icerik) : IProjeKomutu
+{
+    public string Ad => "NczSablonuAyarla";
+
+    public string? Ayrinti => Icerik is null
+        ? "temizlendi"
+        : Cad.NczSablonu.Olustur(Icerik) is { IsSuccess: true } s
+            ? "bayt=" + KomutHatasi.Sayi(s.Value.Uzunluk) + " sha256=" + s.Value.Sha256[..12]
+            : "bayt=" + KomutHatasi.Sayi(Icerik.Length);
+
+    public Result<ProjeBelgesi> Uygula(ProjeBelgesi mevcut)
+    {
+        ArgumentNullException.ThrowIfNull(mevcut);
+        if (Icerik is null)
+        {
+            return Result<ProjeBelgesi>.Success(mevcut with { NczSablonu = null });
+        }
+
+        var sablon = Cad.NczSablonu.Olustur(Icerik);
+        return sablon.IsFailure
+            ? Result<ProjeBelgesi>.Failure(sablon.Error)
+            : Result<ProjeBelgesi>.Success(mevcut with { NczSablonu = sablon.Value });
     }
 }

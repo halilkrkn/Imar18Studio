@@ -79,7 +79,8 @@ public static class NczAnonimlestirici
     public const decimal EnBuyukOfsetM = 5_000_000m;
 
     private const byte SectionMarker = 0x17;
-    private const int HeaderConst9 = 562; // P4.0: 6 gercek dosyada sabit (yapisal)
+    private const byte BosBolumIsaretcisi = 0x0D; // P7.3-C3 spike: h[10]'da [0x0D][int32 0] (7/7 dosya)
+    internal const int HeaderConst9 = 562; // P4.0: 6 gercek dosyada sabit (yapisal); P7.3-C3: PNG uzunluk isaretcisinin ofseti
 
     /// <summary>PNG dosya imzası (89 50 4E 47 0D 0A 1A 0A).</summary>
     private static ReadOnlySpan<byte> PngImzasi => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
@@ -368,38 +369,61 @@ public static class NczAnonimlestirici
         return alan;
     }
 
-    private static byte[] Yaz(List<string> katmanlar, byte[] xml, List<(bool Genisletilmis, byte[] Yuk)> poligonlar)
+    private static byte[] Yaz(List<string> katmanlar, byte[] xml, List<(bool Genisletilmis, byte[] Yuk)> poligonlar) =>
+        Iskelet(katmanlar, xml, poligonlar.Select(p => (p.Genisletilmis ? NczParser.ExtendedEntityRecord : NczParser.EntityRecord, p.Yuk)));
+
+    /// <summary>
+    /// Beyaz liste NCZ iskeleti: başlık + (isteğe bağlı) başlık bölgesi + katman tablosu + XML + <c>[0x17]</c> ile başlayan kayıt
+    /// akışı. P6.0 anonimleştiricisi varsayılanlarla çağırır (çıktısı değişmez); P7.3-C3 parselasyon yazıcısı spike düzenindeki
+    /// başlık bölgesini (<paramref name="baslikBolgesi"/>, <paramref name="h4"/>), katman özniteliğini ve <c>h[10]</c>'daki
+    /// <c>[0x0D][0]</c> boş bölüm işaretçisini (<paramref name="bolumIsaretcisi"/>) ekler.
+    /// </summary>
+    internal static byte[] Iskelet(
+        IReadOnlyList<string> katmanlar,
+        byte[] xml,
+        IEnumerable<(byte Bayrak, byte[] Yuk)> kayitlar,
+        byte[]? baslikBolgesi = null,
+        int h4 = 0,
+        byte[]? katmanOzniteligi = null,
+        bool bolumIsaretcisi = false)
     {
         var d = new List<byte> { NczParser.Signature };
         d.AddRange(new byte[4 * NczParser.HeaderIntCount]);
+        d.AddRange(baslikBolgesi ?? []);
 
         var katmanOfseti = d.Count;
         var tabloBasligi = new byte[NczParser.LayerTableHeaderSize];
         BinaryPrimitives.WriteInt16LittleEndian(tabloBasligi.AsSpan(NczParser.LayerCountOffset), (short)katmanlar.Count);
         d.AddRange(tabloBasligi);
+        var oznitelik = katmanOzniteligi ?? new byte[NczParser.LayerRecordSize - 1 - NczParser.LayerNameCapacity];
         foreach (var ad in katmanlar)
         {
             d.AddRange(Pascal(ad, 1 + NczParser.LayerNameCapacity));
-            d.AddRange(new byte[NczParser.LayerRecordSize - 1 - NczParser.LayerNameCapacity]); // öznitelik sıfırlanır
+            d.AddRange(oznitelik); // anonimleştiricide sıfırlanır
         }
 
         var katmanSonu = d.Count - NczParser.LayerTableEndBias;
         d.AddRange(xml);
+        if (bolumIsaretcisi)
+        {
+            d.Add(BosBolumIsaretcisi);
+            d.AddRange(new byte[4]);
+        }
 
         var varlikOfseti = d.Count;
         d.Add(SectionMarker);
         d.AddRange(new byte[4]);
         var boyut = new byte[4];
-        foreach (var (genis, p) in poligonlar)
+        foreach (var (bayrak, p) in kayitlar)
         {
-            d.Add(genis ? NczParser.ExtendedEntityRecord : NczParser.EntityRecord);
+            d.Add(bayrak);
             BinaryPrimitives.WriteInt32LittleEndian(boyut, p.Length);
             d.AddRange(boyut);
             d.AddRange(p);
         }
 
         var bayt = d.ToArray();
-        int[] baslik = [NczParser.HeaderConst0, bayt.Length, NczParser.HeaderConst2, katmanOfseti, 0, 0, 0, katmanSonu, 0, HeaderConst9, varlikOfseti - 5, varlikOfseti];
+        int[] baslik = [NczParser.HeaderConst0, bayt.Length, NczParser.HeaderConst2, katmanOfseti, h4, 0, 0, katmanSonu, 0, HeaderConst9, varlikOfseti - 5, varlikOfseti];
         for (var i = 0; i < baslik.Length; i++)
         {
             BinaryPrimitives.WriteInt32LittleEndian(bayt.AsSpan(1 + (4 * i)), baslik[i]);

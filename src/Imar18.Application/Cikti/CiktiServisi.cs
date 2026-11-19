@@ -186,6 +186,7 @@ public static class CiktiPaketiOlusturucu
             DonusumHatasi = donusumHatasi,
             Rehber = belge.MalikRehberi,
             KadastroParselleri = kadastroOzeti,
+            NczSablonu = belge.NczSablonu,
         });
     }
 

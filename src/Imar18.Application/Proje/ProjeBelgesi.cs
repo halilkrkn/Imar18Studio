@@ -38,6 +38,12 @@ public sealed record ProjeBelgesi(
     /// <summary>P7.3-C2: proje künyesi (İl, İlçe, Mahalle, Belediye, Pafta, Kadastro ID, Datum). RevisionId'ye dahildir.</summary>
     public ProjeKunyesi? Kunye { get; init; }
 
+    /// <summary>
+    /// P7.3-C3: 1. adımda yüklenen kaynak <c>.NCZ</c> şablonu (yoksa <c>PARSELASYON HARİTASI.NCZ</c> iskelet modunda üretilir).
+    /// Yalnız varsa SHA-256 özeti RevisionId'ye girer (şablonsuz projelerin kimliği değişmez).
+    /// </summary>
+    public Cad.NczSablonu? NczSablonu { get; init; }
+
     /// <summary>Boş proje.</summary>
     public static ProjeBelgesi Yeni(string projeAdi)
     {
@@ -52,6 +58,7 @@ public sealed record ProjeBelgesi(
         Donusum = Donusum,
         Kunye = Kunye,
         MalikRehberiOzeti = MalikRehberi.Ozet(),
+        NczSablonuOzeti = NczSablonu?.Sha256,
     });
 
     /// <summary>Onay var ve güncel içerik revizyonuna bağlıysa true.</summary>
