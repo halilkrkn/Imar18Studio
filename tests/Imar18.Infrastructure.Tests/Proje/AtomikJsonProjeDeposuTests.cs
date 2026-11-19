@@ -165,6 +165,40 @@ public sealed class AtomikJsonProjeDeposuTests : IDisposable
         sonuc.Error.TechnicalMessage.Should().Contain("checksum");
     }
 
+    [Fact]
+    public async Task AtomikKayit_NCZ_Sablonu_Gidis_Donus_Korunmali_RevisionId_Ayni_Kalmali_P73_C3()
+    {
+        var yol = await TamProjeyiDiskeYazAsync(new AtomikJsonProjeDeposu(Yol));
+        var (sablon, _) = Cad.Ncz.NczParselasyonYaziciTests.SentetikSablon();
+        (await yol.GonderAsync(new NczSablonuAyarlaKomutu(sablon), OrnekProje.Muhendis)).IsSuccess.Should().BeTrue();
+
+        var yuklenen = (await new AtomikJsonProjeDeposu(Yol).YukleAsync()).Value;
+
+        yuklenen.Belge.NczSablonu!.Icerik.ToArray().Should().Equal(sablon);
+        yuklenen.Belge.NczSablonu.Sha256.Should().Be(yol.Belge.NczSablonu!.Sha256);
+        yuklenen.Belge.RevizyonKimligi().Should().Be(yol.Belge.RevizyonKimligi());
+    }
+
+    [Fact]
+    public async Task AtomikKayit_NCZ_Sablon_Ozeti_Uyusmazsa_Zarf_Gecerli_Olsa_Da_Reddedilmeli_P73_C3()
+    {
+        var yol = await TamProjeyiDiskeYazAsync(new AtomikJsonProjeDeposu(Yol));
+        var (sablon, _) = Cad.Ncz.NczParselasyonYaziciTests.SentetikSablon();
+        (await yol.GonderAsync(new NczSablonuAyarlaKomutu(sablon), OrnekProje.Muhendis)).IsSuccess.Should().BeTrue();
+        var metin = await File.ReadAllTextAsync(Yol, Encoding.UTF8);
+        var bas = metin.IndexOf("\"icerik\":", StringComparison.Ordinal) + "\"icerik\":".Length;
+        var icerik = metin[bas..^1].Replace(yol.Belge.NczSablonu!.Sha256, new string('0', 64), StringComparison.Ordinal);
+        var zarf = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(icerik)));
+        var eskiZarf = System.Text.RegularExpressions.Regex.Match(metin, "\"icerikSha256\":\"([0-9a-f]{64})\"").Groups[1].Value;
+        await File.WriteAllTextAsync(Yol, metin[..bas].Replace(eskiZarf, zarf, StringComparison.Ordinal) + icerik + "}", new UTF8Encoding(false));
+
+        var sonuc = await new AtomikJsonProjeDeposu(Yol).YukleAsync();
+
+        sonuc.IsFailure.Should().BeTrue("şablon baytları saklanan SHA-256 ile doğrulanır");
+        sonuc.Error.Code.Should().Be(ErrorCodes.CiktiProjeKaydiHatasi);
+        sonuc.Error.TechnicalMessage.Should().Contain("ncz template");
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("{")]

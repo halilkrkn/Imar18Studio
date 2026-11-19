@@ -273,16 +273,40 @@ public sealed partial class MainWindowViewModel : ObservableObject
         });
         try
         {
+            // P7.3-C3: .NCZ baytları PARSELASYON HARİTASI.NCZ şablonu olarak saklanacağı için önce belleğe alınır.
+            // Reviewer M2: yalnız boyutu bilinen ve şablon sınırı içindeki akış belleğe alınır (sınırsız kopyalama yok).
+            byte[]? ncz = null;
+            var sablonSiniriAsildi = false;
+            if (_proje is not null && NczMi(extension) && source.CanSeek)
+            {
+                if (source.Length - source.Position > NczSablonu.EnBuyukBoyut)
+                {
+                    sablonSiniriAsildi = true;
+                }
+                else
+                {
+                    using var tampon = new MemoryStream();
+                    await source.CopyToAsync(tampon, _importCts.Token).ConfigureAwait(true);
+                    ncz = tampon.ToArray();
+                    source = new MemoryStream(ncz, writable: false);
+                }
+            }
+
             var result = await _importService.ImportAsync(source, extension, progress, _importCts.Token).ConfigureAwait(true);
             if (result.IsFailure)
             {
                 StatusText = "İçe aktarılamadı: " + result.Error.UserMessage;
-                return;
+                return; // başarısız içe aktarma şablonu değiştirmez
             }
 
             Wizard.LoadLayers(result.Value.Layers);
             _lastDocument = result.Value;
+            var sablonNotu = await NczSablonunuGuncelleAsync(ncz, sablonSiniriAsildi).ConfigureAwait(true);
             await ApplyAsync(result.Value).ConfigureAwait(true);
+            if (sablonNotu is not null)
+            {
+                Warnings.Add(sablonNotu);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -454,8 +478,61 @@ public sealed partial class MainWindowViewModel : ObservableObject
         $"{TurkceAdlar.Ad(format)}: {scene.Polylines.Count} poligon, {layerCount} katman, {Warnings.Count} uyarı")
         + (BilgiNotlari.Count > 0 ? string.Create(CultureInfo.InvariantCulture, $", {BilgiNotlari.Count} bilgi notu.") : ".");
 
+    private static bool NczMi(string uzanti) =>
+        string.Equals(uzanti.Trim().TrimStart('.'), "ncz", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// P7.3-C3: başarılı 1. adım içe aktarımından sonra PARSELASYON HARİTASI.NCZ şablonunu günceller: geçerli .NCZ ise baytlar
+    /// <see cref="NczSablonuAyarlaKomutu"/> ile saklanır (değişmediyse komut gönderilmez); .DXF/.DWG veya saklanamayan .NCZ'de
+    /// eski şablon temizlenir (iskelet moduna dönülür). Yaklaşık Yer Krokisi içe aktarımı bu yoldan geçmez. Uyarı metni döner.
+    /// </summary>
+    private async Task<string?> NczSablonunuGuncelleAsync(byte[]? ncz, bool sinirAsildi)
+    {
+        if (_proje is null)
+        {
+            return null;
+        }
+
+        var mevcut = _proje.Yol.Belge.NczSablonu;
+        string? not = null;
+        if (ncz is not null)
+        {
+            var sablon = NczSablonu.Olustur(ncz);
+            if (sablon.IsSuccess)
+            {
+                if (sablon.Value.Equals(mevcut))
+                {
+                    return null;
+                }
+
+                var ayarla = ProjeyeGonderAsync(new NczSablonuAyarlaKomutu(ncz));
+                LastProjeTask = ayarla;
+                if (await ayarla.ConfigureAwait(true))
+                {
+                    return null;
+                }
+
+                // Reviewer H2: yeni şablon yazılamadıysa eski kaynağın şablonu yeni geometriyle eşleşmesin diye temizlenir.
+                not = "Kaynak NCZ şablon olarak kaydedilemedi; PARSELASYON HARİTASI.NCZ şablonsuz (iskelet) üretilecek.";
+                mevcut = _proje.Yol.Belge.NczSablonu;
+            }
+        }
+        else if (sinirAsildi)
+        {
+            not = "Kaynak NCZ şablon olarak saklanamadı (boyut sınırı aşıldı); PARSELASYON HARİTASI.NCZ şablonsuz (iskelet) üretilecek.";
+        }
+
+        if (mevcut is not null)
+        {
+            LastProjeTask = ProjeyeGonderAsync(new NczSablonuAyarlaKomutu(null));
+            await LastProjeTask.ConfigureAwait(true);
+        }
+
+        return not;
+    }
+
     /// <summary>Komutu CommandBus'a gonderir; reddedilirse kullaniciya Turkce mesaj gosterilir. Onay ekrani yenilenir.</summary>
-    private async Task ProjeyeGonderAsync(IProjeKomutu komut)
+    private async Task<bool> ProjeyeGonderAsync(IProjeKomutu komut)
     {
         var sonuc = await _proje!.Yol.GonderAsync(komut, _proje.KullaniciId).ConfigureAwait(true);
         if (sonuc.IsFailure)
@@ -472,6 +549,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             await Hesap.YenileAsync().ConfigureAwait(true);
         }
+
+        return sonuc.IsSuccess;
     }
 
     private static (CanvasScene Scene, List<AppError> Notlar, CadFormat Format, int LayerCount, CadLayerDocument Matched) Compute(CadLayerDocument document, CadLayerRoleMap roles)

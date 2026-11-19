@@ -33,7 +33,8 @@ public sealed class FenKlasoruZipTests
     [
         "DÖNÜŞÜM PARAMETRELERİ.pdf", "KOORDİNE ÖZET.pdf", "ALAN HESABI.pdf", "ALAN HESABI-1.pdf", "KOORDİNE-ALAN.pdf", "DOP.pdf",
         "ÖZET CETVELİ.pdf", "MAL SAHİPLERİ ARAŞTIRMA VE ÖZET FORMU.pdf", "TESCİLE ESAS DAĞITIM CETVELİ.pdf", "TESCİL SAYFASI-1.pdf",
-        "RÖLÖVE ÖLÇÜ KROKİSİ.pdf", "RÖLÖVE-1.pdf", "PARSELASYON HARİTASI.pdf", "DOP_PILOT.CKS", "DOP_PILOT.CKS.sha256",
+        "RÖLÖVE ÖLÇÜ KROKİSİ.pdf", "RÖLÖVE-1.pdf", "PARSELASYON HARİTASI.pdf", "PARSELASYON HARİTASI.NCZ", "PARSELASYON HARİTASI.NCZ.sha256",
+        "DOP_PILOT.CKS", "DOP_PILOT.CKS.sha256",
     ];
 
     /// <summary>Bilinen Helmert (I → II): Y2 = A·Y1 + B·X1 + Ty, X2 = −B·Y1 + A·X1 + Tx (bağımsız referans).</summary>
@@ -145,6 +146,45 @@ public sealed class FenKlasoruZipTests
 
         Bosluksuz(Metin(dosyalar["TESCİL SAYFASI-2.pdf"])).Should().Contain("ADANO:102");
         Bosluksuz(Metin(dosyalar["RÖLÖVE-1-2.pdf"])).Should().Contain("ADA101").And.Contain("ADA102");
+    }
+
+    [Fact]
+    public async Task FenKlasoruZip_PARSELASYON_HARITASI_NCZ_Girisi_Bos_Olmamali_Geri_Okunmali_Ve_Ozeti_Tutmali_P73_C3()
+    {
+        var p = await PaketAsync();
+        var zip = Uret(p);
+        var d = Ac(zip);
+
+        d.Should().ContainKey("PARSELASYON HARİTASI.NCZ");
+        var ncz = d["PARSELASYON HARİTASI.NCZ"];
+        ncz.Should().NotBeEmpty();
+        ncz.Should().Equal(Imar18.Infrastructure.Cad.Ncz.NczParselasyonYazici.Yaz(p).Value, "ZIP girişi yazıcının çıktısıdır");
+        using (var s = new MemoryStream(ncz, writable: false))
+        {
+            var belge = new Imar18.Infrastructure.Cad.Ncz.NczFormatAdapter().Read(s);
+            belge.IsSuccess.Should().BeTrue();
+            belge.Value.Polylines.Should().Contain(x => x.LayerName == "TK_PARSEL_OLUŞAN" && x.Label == "101/1");
+        }
+
+        var sha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(ncz));
+        Encoding.UTF8.GetString(d["PARSELASYON HARİTASI.NCZ.sha256"]).Should().Be(sha + "  PARSELASYON HARİTASI.NCZ\n");
+        using var arsiv = new ZipArchive(new MemoryStream(zip), ZipArchiveMode.Read);
+        arsiv.Comment.Should().NotContain("bu pakette yoktur").And.Contain("SORU-042");
+        FenKlasoruZipUretici.NczNotu.Should().Contain("PARSELASYON HARİTASI.NCZ").And.Contain("SORU-042").And.NotContain("yoktur");
+    }
+
+    [Fact]
+    public async Task FenKlasoruZip_NCZ_Uretilemezse_PDF_Paketi_Engellenmemeli_NCZ_Girisi_Cikarilip_Aciklamaya_Yazilmali_P73_C3()
+    {
+        var p = await PaketAsync();
+        p = p with { Parseller = p.Parseller.Select(x => x.GeciciKod == "A1" ? x with { TescilNo = "101/1234567890123" } : x).ToArray() };
+
+        var zip = Uret(p);
+
+        Adlar(zip).Should().NotContain(a => a.StartsWith("PARSELASYON HARİTASI.NCZ", StringComparison.Ordinal))
+            .And.Contain("PARSELASYON HARİTASI.pdf").And.Contain("DOP_PILOT.CKS");
+        using var arsiv = new ZipArchive(new MemoryStream(zip), ZipArchiveMode.Read);
+        arsiv.Comment.Should().Contain(FenKlasoruZipUretici.NczUretilemediNotu).And.Contain("ERR-CIKTI-003");
     }
 
     [Fact]
