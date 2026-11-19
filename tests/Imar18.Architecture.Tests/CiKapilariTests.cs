@@ -57,6 +57,7 @@ public sealed class CiKapilariTests
 
         surum.Should().NotBeNullOrWhiteSpace("Fen Klasörü şablon sürümü tanımsızsa resmî ihracat engellenir (AC-CI-05)");
         surum.Should().MatchRegex(@"^[A-Z0-9_]+_v\d+-PILOT-TASLAK$", "pilot şablonu sürümlü ve taslak olarak işaretli olmalı");
+        surum.Should().Be("TKGM_2023_4_v2-PILOT-TASLAK", "P7.3-C1: Fen Klasörü .zip (ayrı PDF'ler, tek satır alt damga) şablon sürümü v2");
         PilotDamgasi.Metin.Should().Be("PİLOT — RESMÎ İŞLEMDE KULLANILAMAZ", "pilot çıktıları damgalıdır (AC-PILOT-04)");
     }
 

@@ -24,6 +24,37 @@ public sealed record MalikRehberi(IReadOnlyList<MalikRehberKaydi> Malikler, IRea
 
     public KadastroTapuKaydi? Parsel(string kadastroParselId) =>
         Parseller.FirstOrDefault(p => string.Equals(p.KadastroParselId, kadastroParselId, StringComparison.Ordinal));
+
+    /// <summary>
+    /// SORU-046 (proje sahibi kararı, 19 Kasım 2026): rehber doluysa içeriğinin SHA-256 özeti (64 küçük hex), boşsa <c>null</c>.
+    /// RevisionId'nin girdisidir (rehber Fen Klasörü belgelerine basılır); denetim kaydına yazılmaz. Kanonik biçim:
+    /// <c>imar18-malik-rehberi-v1</c> satırı, malikler kod sırasıyla <c>m</c>, parseller kimlik sırasıyla <c>p</c> satırları; her alan
+    /// uzunluk önekli (<c>&lt;uzunluk&gt;:&lt;değer&gt;</c>, null → <c>-</c>) — ayırıcı enjeksiyonu alan sınırını kaydıramaz; ondalık
+    /// sadeleştirilmiş kesir (200.0 ≡ 200.00). Kayıt sırasından bağımsızdır.
+    /// </summary>
+    public string? Ozet()
+    {
+        if (Malikler.Count == 0 && Parseller.Count == 0)
+        {
+            return null;
+        }
+
+        static string A(string? v) => v is null ? "-" : v.Length.ToString(CultureInfo.InvariantCulture) + ":" + v;
+        var sb = new StringBuilder("imar18-malik-rehberi-v1\n");
+        foreach (var m in Malikler.OrderBy(m => m.MalikKodu, StringComparer.Ordinal).ThenBy(m => m.AdSoyad, StringComparer.Ordinal))
+        {
+            sb.Append('m').Append(A(m.MalikKodu)).Append(A(m.AdSoyad)).Append(A(m.BabaAdi)).Append(A(m.KisiSistemNo)).Append('\n');
+        }
+
+        foreach (var p in Parseller.OrderBy(p => p.KadastroParselId, StringComparer.Ordinal))
+        {
+            sb.Append('p').Append(A(p.KadastroParselId)).Append(A(p.Cilt)).Append(A(p.Sayfa)).Append(A(p.Il)).Append(A(p.Ilce))
+                .Append(A(p.Mahalle)).Append(A(p.Ada)).Append(A(p.Parsel))
+                .Append(A(p.AtYuzolcumM2 is { } at ? Fraction.FromDecimal(at).ToString() : null)).Append('\n');
+        }
+
+        return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())));
+    }
 }
 
 /// <summary>webtapu aktarımı sonucu: TAKBİS hisse satırları ve güncellenmiş Malik Rehberi.</summary>

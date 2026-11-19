@@ -92,7 +92,22 @@ public sealed record ProjeRevizyonGirdisi(
     IReadOnlyList<TecvizParselGirdisi> TecvizParselleri,
     decimal? DuzenlemeToplamTecvizSiniriM2,
     HakEslestirmeGirdisi? HakEslestirme,
-    IReadOnlyList<ParselKimlikCifti> KimlikEslemesi);
+    IReadOnlyList<ParselKimlikCifti> KimlikEslemesi)
+{
+    /// <summary>
+    /// P7.3-C2: ortak noktalı dönüşüm girdisi. Yalnız girilmişse özete yazılır (P7.3 öncesi projelerin RevisionId'si değişmez).
+    /// </summary>
+    public DonusumGirdisi? Donusum { get; init; }
+
+    /// <summary>P7.3-C2: proje künyesi (resmî çıktı başlıkları). Yalnız girilmişse özete yazılır.</summary>
+    public ProjeKunyesi? Kunye { get; init; }
+
+    /// <summary>
+    /// SORU-046: Malik Rehberi içeriğinin SHA-256 özeti (Application hesaplar; ad/baba adı Domain'e ve denetime girmez). Yalnız
+    /// rehber doluysa verilir → rehbersiz projelerin RevisionId'si değişmez.
+    /// </summary>
+    public string? MalikRehberiOzeti { get; init; }
+}
 
 /// <summary>
 /// Proje revizyon kimliği (SHA-256, şema <c>p5-proje</c>). Parsel listesi kimliğe göre sıralanır (girdi sırasından bağımsız);
@@ -165,6 +180,35 @@ public static class ProjeRevizyonu
         foreach (var k in kimlik)
         {
             o.Ekle("k.gecici", k.GeciciKod).Ekle("k.tescil", k.TescilNo);
+        }
+
+        // P7.3-C2: girilmemiş bileşen özete hiç yazılmaz → mevcut projelerin RevisionId'si korunur.
+        if (girdi.Donusum is { } d)
+        {
+            if (d.OrtakNoktalar is null || d.OrtakNoktalar.Any(n => n?.NoktaNo is null))
+            {
+                throw new ArgumentException("Dönüşüm ortak nokta listesi veya nokta no null olamaz.", nameof(girdi));
+            }
+
+            // Reviewer L10: enum adı yerine sabit kod (enum yeniden adlandırılırsa kimlikler değişmesin).
+            o.Ekle("donusum.model", d.Model == DonusumModeli.Helmert2B ? "H2B" : d.Model == DonusumModeli.Afin2B ? "A2B" : "?" + ((int)d.Model).ToString(System.Globalization.CultureInfo.InvariantCulture)).Ekle("donusum.mk", d.Mk).Ekle("donusum.noktaSayisi", d.OrtakNoktalar.Count);
+            foreach (var n in d.OrtakNoktalar.OrderBy(n => n.NoktaNo, StringComparer.Ordinal))
+            {
+                o.Ekle("dn.no", n.NoktaNo).Ekle("dn.y1", n.Y1).Ekle("dn.x1", n.X1).Ekle("dn.y2", n.Y2).Ekle("dn.x2", n.X2);
+            }
+        }
+
+        if (girdi.MalikRehberiOzeti is { } rehber)
+        {
+            o.Ekle("rehber.sha256", rehber);
+        }
+
+        if (girdi.Kunye is { } kunye)
+        {
+            foreach (var (ad, deger) in kunye.Alanlar())
+            {
+                o.Ekle("kunye." + ad, deger ?? throw new ArgumentException("Künye alanı null olamaz.", nameof(girdi)));
+            }
         }
 
         return o.Olustur();

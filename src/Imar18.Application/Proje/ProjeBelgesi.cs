@@ -26,10 +26,17 @@ public sealed record ProjeBelgesi(
     long Surum)
 {
     /// <summary>
-    /// P7.3-B1: yerel Malik Rehberi (anonim kod ↔ ad/baba adı, parsel Cilt/Sayfa). Hesabı değiştirmez; bu yüzden
-    /// <see cref="RevizyonKimligi"/>'ne girmez ve değişmesi onayı düşürmez (SORU-040 c). Yalnız çıktı cetvelleri kullanır.
+    /// P7.3-B1: yerel Malik Rehberi (anonim kod ↔ ad/baba adı, parsel Cilt/Sayfa). Hesabı değiştirmez ama Fen Klasörü
+    /// belgelerine basılır: doluysa SHA-256 özeti <see cref="RevizyonKimligi"/>'ne girer ve değişmesi onayı düşürür (SORU-046,
+    /// SORU-040 c'nin yerine). Ad/baba adı denetim kaydına yazılmaz.
     /// </summary>
     public MalikRehberi MalikRehberi { get; init; } = MalikRehberi.Bos;
+
+    /// <summary>P7.3-C2: ortak noktalı dönüşüm girdisi (deprem öncesi ↔ sonrası). RevisionId'ye dahildir.</summary>
+    public DonusumGirdisi? Donusum { get; init; }
+
+    /// <summary>P7.3-C2: proje künyesi (İl, İlçe, Mahalle, Belediye, Pafta, Kadastro ID, Datum). RevisionId'ye dahildir.</summary>
+    public ProjeKunyesi? Kunye { get; init; }
 
     /// <summary>Boş proje.</summary>
     public static ProjeBelgesi Yeni(string projeAdi)
@@ -40,7 +47,12 @@ public sealed record ProjeBelgesi(
 
     /// <summary>Geometri ve CRS dahil içerik revizyonu (AC-PILOT-06).</summary>
     public RevisionId RevizyonKimligi() => ProjeRevizyonu.Hesapla(new ProjeRevizyonGirdisi(
-        ProjeAdi, Crs, Parseller, Dop, TecvizParselleri, DuzenlemeToplamTecvizSiniriM2, HakEslestirme, KimlikCiftleri));
+        ProjeAdi, Crs, Parseller, Dop, TecvizParselleri, DuzenlemeToplamTecvizSiniriM2, HakEslestirme, KimlikCiftleri)
+    {
+        Donusum = Donusum,
+        Kunye = Kunye,
+        MalikRehberiOzeti = MalikRehberi.Ozet(),
+    });
 
     /// <summary>Onay var ve güncel içerik revizyonuna bağlıysa true.</summary>
     public bool GecerliOnayVar(RevisionId guncelRevizyon) => Onay?.GecerliMi(guncelRevizyon) == true;

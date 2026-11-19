@@ -78,7 +78,7 @@ internal sealed class PilotCalismaAlani : IDisposable
         {
             Yol = acilis.Value;
             Onay = new ApprovalService(Yol, Zaman, Topoloji);
-            Cikti = new CiktiServisi(Yol, [new ClosedXmlCetvelUretici(), new QuestPdfFenKlasoruUretici(), new CksDosyaUretici()], new AtomikCiktiYazici(), Topoloji);
+            Cikti = new CiktiServisi(Yol, [new ClosedXmlCetvelUretici(), new QuestPdfFenKlasoruUretici(), new CksDosyaUretici(), new Imar18.Infrastructure.Cikti.FenKlasoru.FenKlasoruZipUretici()], new AtomikCiktiYazici(), Topoloji, new Imar18.GeometryEngine.Crs.HelmertAfinDonusumHesaplayici());
         }
 
         return acilis;

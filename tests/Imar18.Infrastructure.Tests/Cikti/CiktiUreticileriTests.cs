@@ -124,7 +124,7 @@ public sealed class CiktiUreticileriTests
     // ---------------- QuestPDF ----------------
 
     [Fact]
-    public async Task FenKlasoru_Pdf_Her_Sayfada_Pilot_Filigrani_Ve_RevisionId_Tasimali()
+    public async Task FenKlasoru_Pdf_Her_Sayfada_Pilot_Damgasi_Ve_RevisionId_Tasimali()
     {
         var p = await PaketAsync();
 

@@ -115,6 +115,30 @@ public sealed class Pilot4CiktiSozlesmesiTests
                 }
 
                 break;
+            case CiktiTuru.FenKlasoruZip:
+                // P7.3-C1 (sözleşme p7-3e): ZIP içindeki her PDF sayfasının en altında "damga · RevisionId <ilk 16 hex>";
+                // büyük çapraz filigran yok; DOP_PILOT.CKS damgasızdır (SORU-039).
+                using (var zip = new System.IO.Compression.ZipArchive(new MemoryStream(bayt)))
+                {
+                    var pdfler = zip.Entries.Where(e => e.FullName.EndsWith(".pdf", StringComparison.Ordinal)).ToList();
+                    pdfler.Count.Should().BeGreaterThanOrEqualTo(sozlesme.GetProperty("enAzPdf").GetInt32());
+                    foreach (var giris in pdfler)
+                    {
+                        using var akis = new MemoryStream();
+                        using (var s = giris.Open())
+                        {
+                            s.CopyTo(akis);
+                        }
+
+                        using var pdf = PdfDocument.Open(akis.ToArray());
+                        foreach (var sayfa in pdf.GetPages())
+                        {
+                            Bosluksuz(sayfa.Text).Should().Contain(Bosluksuz(damga + " · RevisionId " + rev[..16]), giris.FullName);
+                        }
+                    }
+                }
+
+                break;
             default:
                 // SORU-039 (proje sahibi kararı, sözleşme p7-3d): CKS Netcad bayt düzeninde yazılır — 1. satır boş, damga yok,
                 // çerçeve satırları sözleşmedeki bayt genişliğinde; taslak niteliği UI, dosya adı (PILOT) ve audit ile izlenir.

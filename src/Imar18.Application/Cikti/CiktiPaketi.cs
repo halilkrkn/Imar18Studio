@@ -3,6 +3,7 @@ using Imar18.Domain.Diagnostics;
 using Imar18.Domain.Geometry;
 using Imar18.Domain.Mevzuat.Dop;
 using Imar18.Domain.Numerics;
+using Imar18.Domain.Revizyon;
 
 namespace Imar18.Application.Cikti;
 
@@ -17,7 +18,20 @@ public enum CiktiTuru
 
     /// <summary>Netcad uyumlu .CKS DOP özeti (spec 25.1, SORU-033 b).</summary>
     CksDopOzeti,
+
+    /// <summary>
+    /// P7.3-C1 (SAHA-007): Fen Klasörü .zip paketi — mühendisin örnek paketiyle aynı adlı ayrı PDF'ler (Dönüşüm Parametreleri,
+    /// Koordine Özet, Alan Hesabı, Cepheli Alan, DOP, Özet Cetveli, Mal Sahipleri, Tescile Esas Dağıtım, Tescil Sayfaları,
+    /// Rölöve Krokileri, Parselasyon Haritası) ve varsa DOP.CKS.
+    /// </summary>
+    FenKlasoruZip,
 }
+
+/// <summary>P7.3-C1: kadastro parselindeki malik özeti (hisse "TAM" veya "pay/payda"; anonim malik kodu).</summary>
+public sealed record KadastroMalikOzeti(string MalikKodu, string Hisse, decimal GirenM2, decimal DopKesintisiM2, decimal NetHakM2);
+
+/// <summary>P7.3-C1: kadastro parseli özeti (tapu alanı ve malikler; Özet Cetveli ve Mal Sahipleri formu için).</summary>
+public sealed record KadastroParselOzeti(string ParselId, decimal TapuAlaniM2, IReadOnlyList<KadastroMalikOzeti> Malikler);
 
 /// <summary>Koordine özet satırı (ITRF-96 / proje CRS): Y Sağa (Doğu), X Yukarı (Kuzey).</summary>
 public sealed record KoordinatSatiri(int NoktaNo, decimal Y, decimal X);
@@ -111,7 +125,28 @@ public sealed record CiktiPaketi(
     DopOzeti Dop,
     IReadOnlyList<MalikDagitimSatiri> MalikSirali,
     IReadOnlyList<TescilDagitimSatiri> ImarSirali,
-    IReadOnlyList<string> Uyarilar);
+    IReadOnlyList<string> Uyarilar)
+{
+    /// <summary>P7.3-C2: proje künyesi (yoksa başlıklar boş basılır).</summary>
+    public ProjeKunyesi? Kunye { get; init; }
+
+    /// <summary>P7.3-C2: dönüşüm özeti (dönüşüm girdisi yoksa null; Fen Klasörü bilgi notu basar).</summary>
+    public KoordinatDonusumu.DonusumOzeti? Donusum { get; init; }
+
+    /// <summary>
+    /// P7.3-C2 (reviewer M1): dönüşüm girdisi var ama hesaplanamadıysa hata (ERR-CRS-004). Yalnız dönüşüme bağlı Fen Klasörü
+    /// .zip üretimini engeller; Excel ve CKS etkilenmez.
+    /// </summary>
+    public AppError? DonusumHatasi { get; init; }
+
+    /// <summary>
+    /// P7.3-B1/C1: yerel Malik Rehberi (ad/baba adı, Cilt/Sayfa). Yalnız çıktı belgelerine basılır; denetim kaydına asla yazılmaz.
+    /// </summary>
+    public Girdi.MalikRehberi Rehber { get; init; } = Girdi.MalikRehberi.Bos;
+
+    /// <summary>P7.3-C1: kadastro parselleri ve malik hisseleri (kadastro parseline sıralı).</summary>
+    public IReadOnlyList<KadastroParselOzeti> KadastroParselleri { get; init; } = [];
+}
 
 /// <summary>Taslak çıktı üreticisi (Infrastructure: ClosedXML, QuestPDF, CKS). Hata durumunda istisna yerine Result döner.</summary>
 public interface ICiktiUretici

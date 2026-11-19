@@ -139,7 +139,7 @@ public sealed class WebtapuAktarimiTests
     // ---------------- Malik Rehberi komutu (CommandBus) ----------------
 
     [Fact]
-    public async Task MalikRehberiAyarla_Rehberi_Yazmali_RevisionId_Ve_Onayi_Degistirmemeli_Denetime_Ad_Yazmamali()
+    public async Task MalikRehberiAyarla_Rehberi_Yazmali_RevisionId_Degismeli_Onay_Dusmeli_Denetime_Ad_Yazmamali_SORU_046()
     {
         var (yol, _, zaman) = await OrnekProje.TamProjeAsync();
         (await new ApprovalService(yol, zaman, OrnekProje.Topoloji).OnaylaAsync(OrnekProje.Muhendis, ApprovalService.OnayMetni)).IsSuccess.Should().BeTrue();
@@ -150,9 +150,12 @@ public sealed class WebtapuAktarimiTests
 
         sonuc.IsSuccess.Should().BeTrue();
         yol.Belge.MalikRehberi.Should().BeEquivalentTo(rehber);
-        yol.Belge.RevizyonKimligi().Should().Be(rev, "ad/baba adı hesabı değiştirmez (SORU-040 c)");
-        yol.Belge.GecerliOnayVar(rev).Should().BeTrue("rehber değişikliği onayı düşürmez");
-        var kayit = yol.Denetim[^1];
+        // SORU-046 (proje sahibi kararı, 19 Kasım 2026): rehber Fen Klasörü belgelerine basıldığı için SHA-256 özeti
+        // RevisionId'ye girer; eski beklenti (SORU-040 c: rehber RevisionId dışında) bu kararla değişti.
+        yol.Belge.RevizyonKimligi().Should().NotBe(rev, "dolu rehberin özeti RevisionId'ye dahildir");
+        yol.Belge.GecerliOnayVar(yol.Revizyon).Should().BeFalse("rehber değişikliği onayı düşürür");
+        yol.Denetim.Should().Contain(k => k.Sonuc == AuditSonucu.OnayDustu);
+        var kayit = yol.Denetim.Last(k => k.Islem == "MalikRehberiAyarla" && k.Sonuc == AuditSonucu.Basarili);
         kayit.Islem.Should().Be("MalikRehberiAyarla");
         kayit.Ayrinti.Should().Be("malik=3 parsel=1");
         string.Join("|", yol.Denetim.Select(d => d.Ayrinti)).Should().NotContain("AYŞE").And.NotContain("800000001");
