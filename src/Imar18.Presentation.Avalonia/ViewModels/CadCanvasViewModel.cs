@@ -263,7 +263,7 @@ public sealed partial class CadCanvasViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(komut);
         var i = ContextMenuItems.ToList().FindIndex(m => m.Id == "fenPreview");
-        ContextMenuItems[i] = new CanvasMenuItem("fenPreview", "📗 Fen Klasörü (He/M2/Dm2) Üret", "Güncel revizyon için mühendis onayı gerekli", komut);
+        ContextMenuItems[i] = new CanvasMenuItem("fenPreview", "📦 Fen Klasörü (.zip) Üret", "Güncel revizyon için mühendis onayı gerekli", komut);
         ParselIslemleriniYenile();
     }
 

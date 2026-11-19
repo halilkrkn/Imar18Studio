@@ -57,12 +57,13 @@ public static class Program
         return new ProjeCalismaAlani(
             yol,
             new ApprovalService(yol, TimeProvider.System, Topoloji),
-            new CiktiServisi(yol, [new ClosedXmlCetvelUretici(), new QuestPdfFenKlasoruUretici(), new CksDosyaUretici()], new AtomikCiktiYazici(), Topoloji),
+            new CiktiServisi(yol, [new ClosedXmlCetvelUretici(), new QuestPdfFenKlasoruUretici(), new CksDosyaUretici(), new Imar18.Infrastructure.Cikti.FenKlasoru.FenKlasoruZipUretici()], new AtomikCiktiYazici(), Topoloji, new Imar18.GeometryEngine.Crs.HelmertAfinDonusumHesaplayici()),
             kullanici.Length > 64 ? kullanici[..64] : kullanici)
         {
             // P7.3-B (SAHA-006): webtapu PDF okuyucusu (PdfPig) ve Yaklaşık Yer Krokisi kesişim alanı (NTS, GeometryEngine).
             TapuOkuyucu = new WebtapuPdfOkuyucu(),
             Kesisim = new NtsParselKesisimHesaplayici(),
+            Donusum = new Imar18.Application.KoordinatDonusumu.DonusumServisi(new Imar18.GeometryEngine.Crs.HelmertAfinDonusumHesaplayici()),
         };
     }
 

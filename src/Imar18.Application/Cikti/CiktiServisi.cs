@@ -20,7 +20,7 @@ public sealed record CiktiSonucu(CiktiTuru Tur, string DosyaYolu, string Checksu
 /// </summary>
 public static class CiktiPaketiOlusturucu
 {
-    public static Result<CiktiPaketi> Olustur(ProjeBelgesi belge, ProjeDegerlendirmesi degerlendirme)
+    public static Result<CiktiPaketi> Olustur(ProjeBelgesi belge, ProjeDegerlendirmesi degerlendirme, IDonusumHesaplayici? donusumHesaplayici = null)
     {
         ArgumentNullException.ThrowIfNull(belge);
         ArgumentNullException.ThrowIfNull(degerlendirme);
@@ -119,6 +119,49 @@ public static class CiktiPaketiOlusturucu
                 Tescil(p.GeciciKod), p.GeciciKod, p.AlanM2, HeM2Dm2.Ayir(p.AlanM2), s.MalikId, string.Join(", ", s.KadastroParselleri), s.AlanM2, s.Hisse.ToString())))
             .ToArray();
 
+        // Reviewer M7: "ada/parsel" biçiminde olmayan imar parseli tescil sayfasına alınamaz — sessiz atlama yerine uyarı.
+        foreach (var ip in parseller.Where(x => x.Rol == ParselRolu.Imar && x.TescilNo != "-" && !x.TescilNo.Contains('/', StringComparison.Ordinal)))
+        {
+            uyarilar.Add("Tescil no ada/parsel biçiminde değil, tescil sayfasına alınmadı: " + ip.TescilNo);
+        }
+
+        // ---- P7.3-C1: kadastro parselleri ve malik hisseleri ----
+        var kadastroOzeti = belge.HakEslestirme.KadastroParselleri
+            .OrderBy(k => k.ParselId, ParselNoKarsilastirici.Instance)
+            .Select(k => new KadastroParselOzeti(k.ParselId, k.TapuAlaniM2, k.Malikler
+                .OrderBy(m => m.MalikId, StringComparer.Ordinal)
+                .Select(m =>
+                {
+                    var h = haklar.TryGetValue((k.ParselId, m.MalikId), out var hk) ? hk : null;
+                    return new KadastroMalikOzeti(m.MalikId, HisseMetni(m.Hisse), h?.GirenAlanM2 ?? 0m, h?.DopKesintisiM2 ?? 0m, h?.NetHakM2 ?? 0m);
+                })
+                .ToArray()))
+            .ToArray();
+
+        // ---- P7.3-C2: ortak noktalı dönüşüm (proje noktaları deprem sonrası; deprem öncesi ters dönüşümle) ----
+        KoordinatDonusumu.DonusumOzeti? donusum = null;
+        AppError? donusumHatasi = null;
+        if (belge.Donusum is { } dg)
+        {
+            if (donusumHesaplayici is null)
+            {
+                uyarilar.Add("Dönüşüm hesaplayıcısı bağlı değil; deprem öncesi koordinatlar üretilmedi.");
+            }
+            else
+            {
+                var ds = new KoordinatDonusumu.DonusumServisi(donusumHesaplayici).Hesapla(dg, koordinatlar);
+                if (ds.IsFailure)
+                {
+                    donusumHatasi = ds.Error;
+                    uyarilar.Add("Dönüşüm hesaplanamadı (ortak noktalar çakışık/eşdoğrusal olabilir); Fen Klasörü .zip üretilemez.");
+                }
+                else
+                {
+                    donusum = ds.Value;
+                }
+            }
+        }
+
         var crs = belge.Crs;
         var epok = crs.Epok is { } e ? " · epok " + e.ToString("0.00", CultureInfo.InvariantCulture) : string.Empty;
         return Result<CiktiPaketi>.Success(new CiktiPaketi(
@@ -136,8 +179,21 @@ public static class CiktiPaketiOlusturucu
             DopOzeti.From(degerlendirme.Dop),
             malikSirali,
             imarSirali,
-            uyarilar.Concat(degerlendirme.Bulgular.Where(b => b.Severity == ErrorSeverity.Warning).Select(b => b.UserMessage)).Distinct(StringComparer.Ordinal).ToArray()));
+            uyarilar.Concat(degerlendirme.Bulgular.Where(b => b.Severity == ErrorSeverity.Warning).Select(b => b.UserMessage)).Distinct(StringComparer.Ordinal).ToArray())
+        {
+            Kunye = belge.Kunye,
+            Donusum = donusum,
+            DonusumHatasi = donusumHatasi,
+            Rehber = belge.MalikRehberi,
+            KadastroParselleri = kadastroOzeti,
+        });
     }
+
+    /// <summary>Kadastro hissesi: 1 ise "TAM", değilse sadeleştirilmiş "pay/payda".</summary>
+    public static string HisseMetni(Fraction hisse) =>
+        hisse.Numerator == hisse.Denominator
+            ? "TAM"
+            : hisse.Numerator.ToString(CultureInfo.InvariantCulture) + "/" + hisse.Denominator.ToString(CultureInfo.InvariantCulture);
 
     internal static Result<CiktiPaketi> Hata(string kod, params (string Alan, string Deger)[] alanlar)
     {
@@ -201,8 +257,16 @@ public sealed class CiktiServisi
     private readonly ICiktiYazici _yazici;
     private readonly IParselTopolojiDenetcisi _topoloji;
 
-    public CiktiServisi(ProjeKomutYolu yol, IEnumerable<ICiktiUretici> ureticiler, ICiktiYazici yazici, IParselTopolojiDenetcisi topoloji)
+    private readonly IDonusumHesaplayici? _donusum;
+
+    public CiktiServisi(
+        ProjeKomutYolu yol,
+        IEnumerable<ICiktiUretici> ureticiler,
+        ICiktiYazici yazici,
+        IParselTopolojiDenetcisi topoloji,
+        IDonusumHesaplayici? donusum = null)
     {
+        _donusum = donusum;
         ArgumentNullException.ThrowIfNull(yol);
         ArgumentNullException.ThrowIfNull(ureticiler);
         ArgumentNullException.ThrowIfNull(yazici);
@@ -250,7 +314,7 @@ public sealed class CiktiServisi
             var uretim = await Task.Run(
                 () =>
                 {
-                    var paket = CiktiPaketiOlusturucu.Olustur(belge, ProjeDegerlendirici.Degerlendir(belge, _topoloji));
+                    var paket = CiktiPaketiOlusturucu.Olustur(belge, ProjeDegerlendirici.Degerlendir(belge, _topoloji), _donusum);
                     ilerleme?.Report(30);
                     return paket.IsFailure ? Result<byte[]>.Failure(paket.Error) : uretici.Uret(paket.Value, cancellationToken);
                 },

@@ -47,6 +47,7 @@ public static class TurkceAdlar
         CiktiTuru.Cetveller => "Excel Cetvelleri",
         CiktiTuru.FenKlasoru => "Fen Klasörü",
         CiktiTuru.CksDopOzeti => "CKS DOP Özeti",
+        CiktiTuru.FenKlasoruZip => "Fen Klasörü (.zip)",
         _ => "Bilinmeyen Çıktı",
     };
 
@@ -71,6 +72,7 @@ public static class TurkceAdlar
         null => string.Empty,
         CadLayerRole r => Ad(r),
         GeodetikDatum d => Ad(d),
+        DonusumModeli m => m == DonusumModeli.Helmert2B ? "Helmert (2B)" : "Afin (2B)",
         KoordinatKalitesi k => Ad(k),
         CiktiTuru c => Ad(c),
         CadFormat f => Ad(f),

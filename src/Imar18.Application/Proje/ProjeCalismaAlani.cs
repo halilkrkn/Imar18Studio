@@ -14,4 +14,7 @@ public sealed record ProjeCalismaAlani(ProjeKomutYolu Yol, ApprovalService Onay,
 
     /// <summary>P7.3-B2: Yaklaşık Yer Krokisi için poligon kesişim alanı hesaplayıcısı (GeometryEngine; yoksa kroki yükleme pasiftir).</summary>
     public Domain.Geometry.IParselKesisimHesaplayici? Kesisim { get; init; }
+
+    /// <summary>P7.3-C2: ortak noktalı dönüşüm servisi (GeometryEngine portu; yoksa 1. adımdaki dönüşüm önizlemesi pasiftir).</summary>
+    public KoordinatDonusumu.DonusumServisi? Donusum { get; init; }
 }

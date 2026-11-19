@@ -487,6 +487,70 @@
                   </Expander>
                 </Border>
 
+                <!-- P7.3-C2 (SAHA-007): Proje Künyesi & Dönüşüm — künye ve ortak noktalar CommandBus ile projeye yazılır (RevisionId'ye dahil). -->
+                <Border x:Name="KunyeDonusumKarti" Classes="kart" Padding="4" DataContext="{Binding Kunye}"
+                        IsVisible="{Binding Converter={x:Static ObjectConverters.IsNotNull}}">
+                  <Expander Classes="bolum" IsExpanded="False" Header="🏷️ Proje Künyesi &amp; Dönüşüm">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="PROJE KÜNYESİ" Classes="etiket" FontWeight="SemiBold" />
+                      <TextBlock Text="Fen Klasörü başlıklarına basılır; değişirse onay düşer." Classes="aciklama" TextWrapping="Wrap" />
+                      <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+                        <TextBlock Grid.Row="0" Text="İl" Classes="etiket" VerticalAlignment="Center" Margin="0,2,8,2" />
+                        <TextBox Margin="0,2" Grid.Row="0" Grid.Column="1" x:Name="KunyeIl" Text="{Binding Il}" />
+                        <TextBlock Grid.Row="1" Text="İlçe" Classes="etiket" VerticalAlignment="Center" Margin="0,2,8,2" />
+                        <TextBox Margin="0,2" Grid.Row="1" Grid.Column="1" Text="{Binding Ilce}" />
+                        <TextBlock Grid.Row="2" Text="Köy / Mahalle" Classes="etiket" VerticalAlignment="Center" Margin="0,2,8,2" />
+                        <TextBox Margin="0,2" Grid.Row="2" Grid.Column="1" Text="{Binding KoyMahalle}" />
+                        <TextBlock Grid.Row="3" Text="Belediye / İdare" Classes="etiket" VerticalAlignment="Center" Margin="0,2,8,2" />
+                        <TextBox Margin="0,2" Grid.Row="3" Grid.Column="1" Text="{Binding Belediye}" />
+                        <TextBlock Grid.Row="4" Text="Pafta No(lar)" Classes="etiket" VerticalAlignment="Center" Margin="0,2,8,2" />
+                        <TextBox Margin="0,2" Grid.Row="4" Grid.Column="1" Text="{Binding PaftaNolari}" Watermark="ör. N99-A-01-A-1, N99-A-01-A-2" />
+                        <TextBlock Grid.Row="5" Text="Kadastro ID" Classes="etiket" VerticalAlignment="Center" Margin="0,2,8,2" />
+                        <TextBox Margin="0,2" Grid.Row="5" Grid.Column="1" Text="{Binding KadastroId}" />
+                        <TextBlock Grid.Row="6" Text="Datum / Projeksiyon" Classes="etiket" VerticalAlignment="Center" Margin="0,2,8,2" />
+                        <TextBox Margin="0,2" Grid.Row="6" Grid.Column="1" Text="{Binding DatumProjeksiyon}" />
+                      </Grid>
+                      <Grid ColumnDefinitions="*,*">
+                        <Button Margin="0,0,3,0" x:Name="WebtapudanOnerDugmesi" Content="📄 webtapu'dan Öner" Command="{Binding WebtapudanOnerCommand}" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" IsEnabled="{Binding WebtapuOnerisiVar}"
+                                ToolTip.Tip="4. adımda yüklenen webtapu kaydındaki İl / İlçe / Mahalle değerlerini alanlara yazar." />
+                        <Button Margin="3,0,0,0" Grid.Column="1" x:Name="KunyeKaydetDugmesi" Content="💾 Künyeyi Kaydet" Command="{Binding KunyeyiKaydetCommand}"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                      </Grid>
+                      <TextBlock Text="{Binding KunyeDurumu}" Classes="aciklama" TextWrapping="Wrap"
+                                 IsVisible="{Binding KunyeDurumu, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                      <TextBlock Text="ORTAK NOKTALAR (DÖNÜŞÜM)" Classes="etiket" FontWeight="SemiBold" Margin="0,8,0,0" />
+                      <TextBlock Text="Satır biçimi: NoktaNo;Y1;X1;Y2;X2 (I = deprem öncesi, II = deprem sonrası; ondalık '.'). Proje noktaları deprem sonrası kabul edilir; deprem öncesi koordinatlar ters dönüşümle hesaplanır."
+                                 Classes="aciklama" TextWrapping="Wrap" />
+                      <TextBox x:Name="OrtakNoktaKutusu" Text="{Binding OrtakNoktaMetni}" AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="90" MaxHeight="200"
+                               FontFamily="Consolas, Menlo, monospace" FontSize="11" Watermark="P1;500000.00;4000000.00;500000.10;4000000.05" />
+                      <Grid ColumnDefinitions="Auto,*,Auto,90">
+                        <TextBlock Text="Model" Classes="etiket" VerticalAlignment="Center" Margin="0,2,8,2" />
+                        <ComboBox Margin="0,0,8,0" Grid.Column="1" x:Name="DonusumModeliSecimi" ItemsSource="{Binding Modeller}" SelectedItem="{Binding Model}"
+                                  ItemTemplate="{StaticResource TurkceAdSablonu}" HorizontalAlignment="Stretch" />
+                        <TextBlock Grid.Column="2" Text="MK" Classes="etiket" VerticalAlignment="Center" Margin="0,2,8,2" />
+                        <TextBox Grid.Column="3" x:Name="MkKutusu" Text="{Binding MkMetni}" ToolTip.Tip="Koordine özetteki MK değeri (varsayılan 0.09)" />
+                      </Grid>
+                      <Grid ColumnDefinitions="*,*">
+                        <Button Margin="0,0,3,0" x:Name="DonusumOnizleDugmesi" Content="🔍 Parametreleri Hesapla" Command="{Binding DonusumuOnizleCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                        <Button Margin="3,0,0,0" Grid.Column="1" x:Name="DonusumUygulaDugmesi" Content="✔ Dönüşümü Uygula" Command="{Binding DonusumuUygulaCommand}"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="Primary" Theme="{DynamicResource SolidButton}" />
+                      </Grid>
+                      <TextBlock Text="{Binding DonusumHatasi}" Classes="hata" TextWrapping="Wrap"
+                                 IsVisible="{Binding DonusumHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                      <ItemsControl ItemsSource="{Binding ParametreSatirlari}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <SelectableTextBlock Text="{Binding}" Classes="mono" FontSize="11" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <TextBlock Text="{Binding DonusumDurumu}" Classes="aciklama" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Expander>
+                </Border>
+
                 <!-- Doğrulama sonucu: başarı (yeşil) veya hata/uyarı (rozetli, ikonlu) kartı -->
                 <Border x:Name="DogrulamaBasariKarti" Classes="kart basari" IsVisible="{Binding Wizard.DogrulamaBasarili}">
                   <Grid ColumnDefinitions="Auto,*">
@@ -1082,7 +1146,8 @@
                       <StackPanel Spacing="6">
                         <Border Classes="kartBaslik"><TextBlock Text="📤 TASLAK ÇIKTILAR" Classes="bolum" /></Border>
                         <Button Content="📊 Excel Cetvelleri (.xlsx)" Command="{Binding CetvelIsteCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" />
-                        <Button Content="📗 Fen Klasörü (.pdf)" Command="{Binding FenKlasoruIsteCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" />
+                        <Button x:Name="FenKlasoruZipDugmesi" Content="📦 Fen Klasörü (.zip) Üret" Command="{Binding FenKlasoruZipIsteCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                ToolTip.Tip="Örnek paketle aynı adlı ayrı PDF'ler (Dönüşüm, Koordine Özet, Alan Hesabı, Cepheli Alan, DOP, Özet Cetveli, Mal Sahipleri, Tescil, Rölöve, Parselasyon) ve DOP.CKS" />
                         <Button Content="🗂️ CKS DOP Özeti (.CKS)" Command="{Binding CksIsteCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" />
                         <TextBlock Text="Yalnızca güncel revizyonun geçerli onayıyla üretilir; onaysız istek reddedilip denetime yazılır." Classes="aciklama" />
                         <ContentControl Content="{Binding DurumMetni}" ContentTemplate="{StaticResource OzetSablonu}" />

@@ -31,6 +31,12 @@ public sealed record ProjeBelgesi(
     /// </summary>
     public MalikRehberi MalikRehberi { get; init; } = MalikRehberi.Bos;
 
+    /// <summary>P7.3-C2: ortak noktalı dönüşüm girdisi (deprem öncesi ↔ sonrası). RevisionId'ye dahildir.</summary>
+    public DonusumGirdisi? Donusum { get; init; }
+
+    /// <summary>P7.3-C2: proje künyesi (İl, İlçe, Mahalle, Belediye, Pafta, Kadastro ID, Datum). RevisionId'ye dahildir.</summary>
+    public ProjeKunyesi? Kunye { get; init; }
+
     /// <summary>Boş proje.</summary>
     public static ProjeBelgesi Yeni(string projeAdi)
     {
@@ -40,7 +46,11 @@ public sealed record ProjeBelgesi(
 
     /// <summary>Geometri ve CRS dahil içerik revizyonu (AC-PILOT-06).</summary>
     public RevisionId RevizyonKimligi() => ProjeRevizyonu.Hesapla(new ProjeRevizyonGirdisi(
-        ProjeAdi, Crs, Parseller, Dop, TecvizParselleri, DuzenlemeToplamTecvizSiniriM2, HakEslestirme, KimlikCiftleri));
+        ProjeAdi, Crs, Parseller, Dop, TecvizParselleri, DuzenlemeToplamTecvizSiniriM2, HakEslestirme, KimlikCiftleri)
+    {
+        Donusum = Donusum,
+        Kunye = Kunye,
+    });
 
     /// <summary>Onay var ve güncel içerik revizyonuna bağlıysa true.</summary>
     public bool GecerliOnayVar(RevisionId guncelRevizyon) => Onay?.GecerliMi(guncelRevizyon) == true;

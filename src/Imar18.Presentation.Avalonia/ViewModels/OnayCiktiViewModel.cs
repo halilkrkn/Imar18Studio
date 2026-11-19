@@ -97,6 +97,7 @@ public sealed partial class OnayCiktiViewModel : ObservableObject
         CiktiTuru.Cetveller => "Imar18_Cetveller",
         CiktiTuru.FenKlasoru => "Imar18_Fen_Klasoru",
         CiktiTuru.CksDopOzeti => "Imar18_PILOT_CKS_DOP_Ozeti", // SORU-039: CKS içinde damga yok; taslak niteliği dosya adında
+        CiktiTuru.FenKlasoruZip => "Imar18_PILOT_Fen_Klasoru", // P7.3-C1: ZIP içindeki DOP.CKS damgasız olduğundan taslak izi adda
         _ => "Imar18_Cikti",
     }) + (Uzanti(tur) ?? string.Empty);
 
@@ -179,6 +180,10 @@ public sealed partial class OnayCiktiViewModel : ObservableObject
 
     [RelayCommand]
     private void FenKlasoruIste() => KayitYoluIstendi?.Invoke(this, CiktiTuru.FenKlasoru);
+
+    /// <summary>P7.3-C1: Fen Klasörü .zip paketi (ayrı PDF'ler + DOP.CKS).</summary>
+    [RelayCommand]
+    private void FenKlasoruZipIste() => KayitYoluIstendi?.Invoke(this, CiktiTuru.FenKlasoruZip);
 
     [RelayCommand]
     private void CksIste() => KayitYoluIstendi?.Invoke(this, CiktiTuru.CksDopOzeti);

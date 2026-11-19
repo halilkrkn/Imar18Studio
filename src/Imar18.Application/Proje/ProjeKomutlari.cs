@@ -4,6 +4,7 @@ using Imar18.Domain.Geometry;
 using Imar18.Domain.Mevzuat.Dop;
 using Imar18.Domain.Mevzuat.Tahsis;
 using Imar18.Domain.Mevzuat.Tecviz;
+using Imar18.Domain.Revizyon;
 
 namespace Imar18.Application.Proje;
 
@@ -75,6 +76,8 @@ public sealed record ProjeyiSifirlaKomutu : IProjeKomutu
             HakEslestirme = null,
             KimlikCiftleri = [],
             MalikRehberi = Girdi.MalikRehberi.Bos,
+            Donusum = null,
+            Kunye = null,
         });
     }
 }
@@ -257,5 +260,94 @@ public sealed record ParselKimlikEslemesiAyarlaKomutu(IReadOnlyList<ParselKimlik
         return eslesme.IsFailure
             ? Result<ProjeBelgesi>.Failure(eslesme.Error)
             : Result<ProjeBelgesi>.Success(mevcut with { KimlikCiftleri = eslesme.Value.Ciftler });
+    }
+}
+
+/// <summary>
+/// P7.3-C2: ortak noktalı dönüşüm girdisini ayarlar (<c>null</c> temizler). Yapısal doğrulama: tanımlı model, 0 &lt; MK ≤ 10 m,
+/// model için en az nokta (Helmert 2, Afin 3), en çok <see cref="MaxNokta"/>, boş olmayan tekil nokta no (≤ 32 karakter).
+/// Hesaplanabilirlik (eşdoğrusallık vb.) DonusumServisi ile önizlemede ve çıktıda denetlenir.
+/// Denetim kaydına yalnız model ve nokta sayısı yazılır (koordinat yok).
+/// </summary>
+public sealed record DonusumGirdisiAyarlaKomutu(DonusumGirdisi? Donusum) : IProjeKomutu
+{
+    public const int MaxNokta = 500;
+
+    public string Ad => "DonusumGirdisiAyarla";
+
+    public string? Ayrinti => Donusum is null
+        ? "donusum=yok"
+        : "model=" + Donusum.Model + ";nokta=" + KomutHatasi.Sayi(Donusum.OrtakNoktalar?.Count ?? 0);
+
+    public Result<ProjeBelgesi> Uygula(ProjeBelgesi mevcut)
+    {
+        ArgumentNullException.ThrowIfNull(mevcut);
+        if (Donusum is null)
+        {
+            return Result<ProjeBelgesi>.Success(mevcut with { Donusum = null });
+        }
+
+        if (!Enum.IsDefined(Donusum.Model))
+        {
+            return KomutHatasi.Gecersiz(Ad, "undefined transformation model");
+        }
+
+        if (Donusum.Mk <= 0m || Donusum.Mk > DonusumGirdisi.MaxMk)
+        {
+            return KomutHatasi.Gecersiz(Ad, "MK must be in (0, 10] m");
+        }
+
+        if (Donusum.OrtakNoktalar is null || Donusum.OrtakNoktalar.Any(n => n is null))
+        {
+            return KomutHatasi.Gecersiz(Ad, "common point list is null");
+        }
+
+        var enAz = DonusumGirdisi.EnAzNokta(Donusum.Model);
+        if (Donusum.OrtakNoktalar.Count < enAz || Donusum.OrtakNoktalar.Count > MaxNokta)
+        {
+            return KomutHatasi.Gecersiz(Ad, $"{Donusum.Model} needs {KomutHatasi.Sayi(enAz)}..{KomutHatasi.Sayi(MaxNokta)} common points");
+        }
+
+        var nolar = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < Donusum.OrtakNoktalar.Count; i++)
+        {
+            var no = Donusum.OrtakNoktalar[i].NoktaNo?.Trim() ?? string.Empty;
+            if (no.Length is 0 or > 32 || !nolar.Add(no))
+            {
+                return KomutHatasi.Gecersiz(Ad, $"empty, too long or duplicate point no at item #{KomutHatasi.Sayi(i + 1)}");
+            }
+        }
+
+        // Reviewer M5: RevisionId nokta sırasından bağımsız olduğundan saklanan sıra da kanonik (NoktaNo ordinal) olmalı:
+        // aynı revizyon -> aynı PDF/ZIP baytı.
+        var normal = Donusum with
+        {
+            OrtakNoktalar = Donusum.OrtakNoktalar.Select(n => n with { NoktaNo = n.NoktaNo.Trim() }).OrderBy(n => n.NoktaNo, StringComparer.Ordinal).ToArray(),
+        };
+        return Result<ProjeBelgesi>.Success(mevcut with { Donusum = normal });
+    }
+}
+
+/// <summary>P7.3-C2: proje künyesini ayarlar (<c>null</c> temizler); her alan kırpılır ve en çok 120 karakterdir.</summary>
+public sealed record ProjeKunyesiAyarlaKomutu(ProjeKunyesi? Kunye) : IProjeKomutu
+{
+    public string Ad => "ProjeKunyesiAyarla";
+
+    public Result<ProjeBelgesi> Uygula(ProjeBelgesi mevcut)
+    {
+        ArgumentNullException.ThrowIfNull(mevcut);
+        if (Kunye is null)
+        {
+            return Result<ProjeBelgesi>.Success(mevcut with { Kunye = null });
+        }
+
+        if (Kunye.Alanlar().Any(a => a.Deger is null || a.Deger.Trim().Length > ProjeKunyesi.MaxUzunluk))
+        {
+            return KomutHatasi.Gecersiz(Ad, "identity fields must be non-null and at most 120 characters");
+        }
+
+        var k = new ProjeKunyesi(Kunye.Il.Trim(), Kunye.Ilce.Trim(), Kunye.KoyMahalle.Trim(), Kunye.Belediye.Trim(),
+            Kunye.PaftaNolari.Trim(), Kunye.KadastroId.Trim(), Kunye.DatumProjeksiyon.Trim());
+        return Result<ProjeBelgesi>.Success(mevcut with { Kunye = k });
     }
 }

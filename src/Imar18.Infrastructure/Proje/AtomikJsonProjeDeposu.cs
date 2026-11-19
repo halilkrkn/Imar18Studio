@@ -161,7 +161,11 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
                     ? null
                     : new RehberDto(
                         b.MalikRehberi.Malikler.Select(m => new RehberMalikDto(m.MalikKodu, m.AdSoyad, m.BabaAdi, m.KisiSistemNo)).ToList(),
-                        b.MalikRehberi.Parseller.Select(x => new RehberParselDto(x.KadastroParselId, x.Cilt, x.Sayfa, x.Il, x.Ilce, x.Mahalle, x.Ada, x.Parsel, x.AtYuzolcumM2)).ToList())),
+                        b.MalikRehberi.Parseller.Select(x => new RehberParselDto(x.KadastroParselId, x.Cilt, x.Sayfa, x.Il, x.Ilce, x.Mahalle, x.Ada, x.Parsel, x.AtYuzolcumM2)).ToList()),
+                b.Kunye is { } ku ? new KunyeDto(ku.Il, ku.Ilce, ku.KoyMahalle, ku.Belediye, ku.PaftaNolari, ku.KadastroId, ku.DatumProjeksiyon) : null,
+                b.Donusum is { } dn
+                    ? new DonusumDto(dn.Model.ToString(), dn.Mk, dn.OrtakNoktalar.Select(n => new OrtakNoktaDto(n.NoktaNo, n.Y1, n.X1, n.Y2, n.X2)).ToList())
+                    : null),
             k.Denetim.ToList());
     }
 
@@ -273,6 +277,20 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
             };
         }
 
+        if (b.Kunye is { } kd)
+        {
+            belge = belge with { Kunye = new ProjeKunyesi(kd.Il, kd.Ilce, kd.Mahalle, kd.Belediye, kd.Pafta, kd.KadastroId, kd.Datum) };
+        }
+
+        if (b.Donusum is { } dd)
+        {
+            belge = belge with
+            {
+                Donusum = new DonusumGirdisi(Enm<DonusumModeli>(dd.Model), dd.Mk,
+                    (dd.Noktalar ?? throw new FormatException("donusum points missing")).Select(n => new DonusumOrtakNoktasi(n.No, n.Y1, n.X1, n.Y2, n.X2)).ToArray()),
+            };
+        }
+
         // Komut doğrulamaları yüklemede yeniden çalışır (P5 reviewer M4): elle düzenlenip özeti yeniden hesaplanmış kayıt,
         // CommandBus'ın kabul etmeyeceği bir durumu açamaz. Null metin alanları revizyon özetinde ArgumentException üretir.
         var bos = ProjeBelgesi.Yeni(belge.ProjeAdi);
@@ -289,6 +307,16 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
         if (hak is not null)
         {
             kontroller.Add(new HakEslestirmeAyarlaKomutu(hak));
+        }
+
+        if (belge.Donusum is not null)
+        {
+            kontroller.Add(new DonusumGirdisiAyarlaKomutu(belge.Donusum));
+        }
+
+        if (belge.Kunye is not null)
+        {
+            kontroller.Add(new ProjeKunyesiAyarlaKomutu(belge.Kunye));
         }
 
         // Not: Result<T> bir struct'tır; default değeri başarısız sayılır — FirstOrDefault yerine hata nesnesi aranır.
@@ -320,7 +348,17 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
         List<KimlikDto> Kimlikler,
         OnayDto? Onay,
         long Surum,
-        RehberDto? Rehber = null);
+        RehberDto? Rehber = null,
+        KunyeDto? Kunye = null,
+        DonusumDto? Donusum = null);
+
+    /// <summary>P7.3-C2: proje künyesi (P7.3-C öncesi kayıtlarda yoktur).</summary>
+    private sealed record KunyeDto(string Il, string Ilce, string Mahalle, string Belediye, string Pafta, string KadastroId, string Datum);
+
+    /// <summary>P7.3-C2: ortak noktalı dönüşüm girdisi (P7.3-C öncesi kayıtlarda yoktur).</summary>
+    private sealed record DonusumDto(string Model, decimal Mk, List<OrtakNoktaDto>? Noktalar);
+
+    private sealed record OrtakNoktaDto(string No, decimal Y1, decimal X1, decimal Y2, decimal X2);
 
     /// <summary>P7.3-B1: yerel Malik Rehberi (P7.3 öncesi kayıtlarda yoktur → boş rehber).</summary>
     private sealed record RehberDto(List<RehberMalikDto>? Malikler, List<RehberParselDto>? Parseller);

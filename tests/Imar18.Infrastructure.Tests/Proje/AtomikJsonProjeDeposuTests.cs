@@ -55,6 +55,34 @@ public sealed class AtomikJsonProjeDeposuTests : IDisposable
     }
 
     [Fact]
+    public async Task AtomikKayit_Donusum_Ve_Kunye_Gidis_Donus_Korunmali_RevisionId_Ayni_Kalmali_P73_C2()
+    {
+        var yol = await TamProjeyiDiskeYazAsync(new AtomikJsonProjeDeposu(Yol));
+        var donusum = Cikti.FenKlasoruZipTests.Donusum();
+        var kunye = new Imar18.Domain.Revizyon.ProjeKunyesi("SENTETİKİL", "ÖRNEKİLÇE", "DENEME", "ÖRNEK BELEDİYESİ", "N99-X-01, N99-X-02", "99999", "ITRF-96 / TM3 33");
+        (await yol.GonderAsync(new DonusumGirdisiAyarlaKomutu(donusum), OrnekProje.Muhendis)).IsSuccess.Should().BeTrue();
+        (await yol.GonderAsync(new ProjeKunyesiAyarlaKomutu(kunye), OrnekProje.Muhendis)).IsSuccess.Should().BeTrue();
+
+        var yuklenen = (await new AtomikJsonProjeDeposu(Yol).YukleAsync()).Value;
+
+        yuklenen.Belge.Donusum.Should().BeEquivalentTo(donusum);
+        yuklenen.Belge.Kunye.Should().Be(kunye);
+        yuklenen.Belge.RevizyonKimligi().Should().Be(yol.Belge.RevizyonKimligi());
+    }
+
+    [Fact]
+    public async Task AtomikKayit_Donusum_Ve_Kunyesiz_Eski_Kayit_Null_Ile_Acilmali_P73_C2()
+    {
+        var yol = await TamProjeyiDiskeYazAsync(new AtomikJsonProjeDeposu(Yol));
+
+        var yuklenen = (await new AtomikJsonProjeDeposu(Yol).YukleAsync()).Value;
+
+        yuklenen.Belge.Donusum.Should().BeNull();
+        yuklenen.Belge.Kunye.Should().BeNull();
+        yuklenen.Belge.RevizyonKimligi().Should().Be(yol.Belge.RevizyonKimligi());
+    }
+
+    [Fact]
     public async Task AtomikKayit_Rehbersiz_Eski_Kayit_Bos_Rehberle_Acilmali_P73_B1()
     {
         // P7.3 öncesi kayıtlar "rehber" alanı içermez: geriye uyumlu olarak boş rehberle açılmalı.

@@ -19,7 +19,7 @@ namespace Imar18.Infrastructure.Cikti;
 /// <item>DOPO / OKO özeti ve dengeleme kutusu (Tapu / Hesaplanan / Fark / Tecviz);</item>
 /// <item>FR.521 (EK-17) rölöve ölçü krokisi (SVG; poligonlar, tescil no ve cephe uzunlukları) ve koordine özet.</item>
 /// </list>
-/// Her sayfada üst bilgi, ön plan filigranı ve alt bilgide <see cref="PilotDamgasi.Metin"/> ile RevisionId bulunur
+/// Her sayfada üst bilgi ve alt bilgide (P7.3-C1: büyük çapraz filigran kaldırıldı) <see cref="PilotDamgasi.Metin"/> ile RevisionId bulunur
 /// (AC-PILOT-07). Belge meta verisindeki tarih onay zamanıdır. Şablonlar resmî TKGM örnekleriyle birebir doğrulanmadı
 /// (taslak, STATUS SORU-034). Koordinat/ölçek hesapları decimal'dir; <c>float</c> yalnızca QuestPDF yerleşim API'sidir.
 /// QuestPDF Community lisansı kullanılır (proje sahibi teyidi SORU-034).
@@ -83,7 +83,6 @@ public sealed class QuestPdfFenKlasoruUretici : ICiktiUretici
             col.Item().Text(p.ProjeAdi + " · Şablon " + p.SablonSurumu).FontSize(8);
             col.Item().PaddingBottom(6).LineHorizontal(0.5f);
         });
-        page.Foreground().AlignCenter().AlignMiddle().Rotate(-35).Text(p.PilotDamgasi).FontSize(34).Bold().FontColor(Colors.Red.Lighten3);
         page.Content().Element(icerik);
         page.Footer().Column(col =>
         {

@@ -298,7 +298,7 @@ public sealed class MainWindowHeadlessTests
 
         var basliklar = Bul<ItemsControl>(w, "ParselIslemleri").GetVisualDescendants().OfType<Button>().Select(b => b.Content?.ToString()).ToList();
 
-        basliklar.Should().Contain("🔍 Seçili Parsele Yakınlaş").And.Contain("🗺️ Tümünü Sığdır").And.Contain("📗 Fen Klasörü (He/M2/Dm2) Üret");
+        basliklar.Should().Contain("🔍 Seçili Parsele Yakınlaş").And.Contain("🗺️ Tümünü Sığdır").And.Contain("📦 Fen Klasörü (.zip) Üret");
         basliklar.Should().NotContain(b => b != null && b.Contains("Köşe Pahı", StringComparison.Ordinal), "sonraki faz işlemleri yalnız sağ tık menüsünde (gerekçeli pasif)");
         w.Close();
     }

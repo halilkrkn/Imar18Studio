@@ -167,14 +167,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 () => Hesap.WebtapuIsteCommand.Execute(null), () => Hesap.WebtapuIsteCommand.CanExecute(null)));
             Palette.Register(new PaletteCommand("importSketch", "Yaklaşık Yer Krokisi Yükle (.NCZ)", "kroki yaklasik yer kullanim ncz hak",
                 () => Hesap.KrokiNczIsteCommand.Execute(null), () => Hesap.KrokiNczIsteCommand.CanExecute(null)));
-            Hesap.Uygulandi += (_, _) => LastProjeTask = OnayCikti.YenileAsync();
+            Kunye = new KunyeDonusumViewModel(proje);
+            Kunye.Uygulandi += (_, _) => LastProjeTask = OnayCikti.YenileAsync();
+            Hesap.Uygulandi += (_, _) =>
+            {
+                Kunye.OneriyiYenile();
+                LastProjeTask = OnayCikti.YenileAsync();
+            };
             LastProjeTask = Hesap.YenileAsync();
-            var fen = new RelayCommand(() => OnayCikti.FenKlasoruIsteCommand.Execute(null), () => OnayCikti.GecerliOnayVar);
+            var fen = new RelayCommand(() => OnayCikti.FenKlasoruZipIsteCommand.Execute(null), () => OnayCikti.GecerliOnayVar);
             Canvas.BaglaFenKlasoru(fen);
             OnayCikti.OnayDurumuDegisti += (_, _) => fen.NotifyCanExecuteChanged();
             Palette.Register(new PaletteCommand("approve", "Mühendis Onayı Ver (güncel revizyon)", "onay revizyon approval", () => OnayCikti.OnaylaCommand.Execute(null), () => OnayCikti.OnaylaCommand.CanExecute(null)));
             Palette.Register(new PaletteCommand("revokeApproval", "Onayı Geri Al (24 saat)", "geri al onay iptal", () => OnayCikti.GeriAlCommand.Execute(null), () => OnayCikti.GeriAlCommand.CanExecute(null)));
             Palette.Register(new PaletteCommand("exportXlsx", "Excel Cetvelleri Üret (.xlsx)", "cetvel excel 4lu alan dagitim ozet", () => OnayCikti.CetvelIsteCommand.Execute(null)));
+            Palette.Register(new PaletteCommand("exportZip", "Fen Klasörü Üret (.zip — ayrı PDF'ler)", "fen klasoru zip pdf tescil rolove cepheli koordine dop ozet", () => OnayCikti.FenKlasoruZipIsteCommand.Execute(null)));
             Palette.Register(new PaletteCommand("exportPdf", "Fen Klasörü Üret (.pdf)", "fen klasoru pdf fr348 fr521 he m2 dm2", () => OnayCikti.FenKlasoruIsteCommand.Execute(null)));
             Palette.Register(new PaletteCommand("exportCks", "DOP Özeti Yaz (.CKS)", "cks netcad dop oko", () => OnayCikti.CksIsteCommand.Execute(null)));
             Wizard.GirdiDogrulandi += (_, _) =>
@@ -193,6 +200,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Son CommandBus gonderimi (testler ve gorunum bekleyebilir).</summary>
     public Task LastProjeTask { get; private set; } = Task.CompletedTask;
+
+    /// <summary>P7.3-C2: 1. adım Proje Künyesi &amp; Dönüşüm kartı (proje çalışma alanı yoksa null).</summary>
+    public KunyeDonusumViewModel? Kunye { get; }
 
     /// <summary>Sihirbaz 5. adim: onay ve cikti (proje calisma alani yoksa null — P4 davranisi).</summary>
     public OnayCiktiViewModel? OnayCikti { get; }
@@ -364,6 +374,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         BilgiNotlari.Clear();
         Wizard.Sifirla();
         Hesap?.Sifirla();
+        Kunye?.Sifirla();
         if (OnayCikti is not null)
         {
             await OnayCikti.YenileAsync().ConfigureAwait(true);
