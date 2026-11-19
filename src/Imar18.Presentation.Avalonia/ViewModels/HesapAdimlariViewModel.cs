@@ -11,19 +11,20 @@ using Imar18.Domain.Geometry;
 using Imar18.Domain.Mevzuat.Dop;
 using Imar18.Domain.Mevzuat.Tahsis;
 using Imar18.Domain.Mevzuat.Tecviz;
+using Imar18.Presentation.Avalonia.Gorunum;
 
 namespace Imar18.Presentation.Avalonia.ViewModels;
 
-/// <summary>Kullanıcı sayı girdisi: hem '.' hem ',' ondalık ayıracı kabul edilir (binlik ayıraç kabul edilmez).</summary>
+/// <summary>
+/// Kullanıcı sayı girdisi: hem '.' hem ',' ondalık ayıracı kabul edilir (binlik ayıraç kabul edilmez). Kurallar ve Türkçe
+/// uyarılar ortak <see cref="SayiGirdiAyristirici"/>'dadır.
+/// </summary>
 internal static class SayiGirdisi
 {
-    public static bool TryParse(string? text, out decimal value)
-    {
-        value = 0m;
-        var t = (text ?? string.Empty).Trim().Replace(',', '.');
-        return t.Length > 0 && t.Count(c => c == '.') <= 1
-            && decimal.TryParse(t, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out value);
-    }
+    public static bool TryParse(string? text, out decimal value) => SayiGirdiAyristirici.TryParseDecimal(text, out value);
+
+    /// <summary>Geçersiz girdi mesajı: binlik ayırıcı kullanıldıysa açık uyarı, değilse <paramref name="genel"/>.</summary>
+    public static string Hata(string? text, string genel) => SayiGirdiAyristirici.HataMesaji(text, genel);
 
     public static string Yaz(decimal v) => v.ToString("0.00", CultureInfo.InvariantCulture);
 }
@@ -160,10 +161,15 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
     partial void OnTakbisMetniChanged(string value)
     {
         TakbisHatasi = null;
+        _takbisSenkron?.MetindenYukle(value); // P7 UX: tablo metinle iki yönlü senkron
         TakbisDegisti(); // P7.3-B2: TAKBİS değişince eski hisselerle üretilmiş kroki önizlemesi bayatlar (reviewer M1, L2)
     }
 
-    partial void OnKrokiMetniChanged(string value) => KrokiHatasi = null;
+    partial void OnKrokiMetniChanged(string value)
+    {
+        KrokiHatasi = null;
+        _krokiSenkron?.MetindenYukle(value);
+    }
 
     partial void OnKimlikMetniChanged(string value) => KimlikHatasi = null;
 
@@ -204,6 +210,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         _alan = alan;
         _tecvizGirdisi = tecvizGirdisi;
         _krokiIthal = krokiIthal;
+        TablolariBagla();
     }
 
     /// <summary>Bir adım projeye başarıyla yazıldığında (ana pencere onay ekranını yeniler).</summary>
@@ -234,6 +241,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         var belge = _alan.Yol.Belge;
         var d = await Task.Run(() => _alan.Onay.Degerlendir()).ConfigureAwait(true);
         Degerlendirme = d;
+        TabloOnerileriniYenile(belge, d);
         TecvizYenile(belge, d);
         DopYenile(belge, d);
         HakYenile(belge, d);
@@ -295,7 +303,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
 
         if (TecvizSatirlari.Count == 0)
         {
-            DurumMetni = "Projede kadastro parseli geometrisi yok; önce CAD dosyasını içe aktarın.";
+            DurumMetni = "Projede kadastro parseli geometrisi yok. " + KadastroYonlendirmesi;
             return;
         }
 
@@ -306,8 +314,8 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         {
             if (!SayiGirdisi.TryParse(r.TapuAlaniText, out var tapu))
             {
-                r.Hata = string.IsNullOrWhiteSpace(r.TapuAlaniText) ? "Tapu alanı zorunludur." : "Tapu alanı (m²) geçerli bir sayı olmalı.";
-                ilkHata ??= $"{r.ParselId}: tapu alanı (m²) geçerli bir sayı olmalı.";
+                r.Hata = string.IsNullOrWhiteSpace(r.TapuAlaniText) ? "Tapu alanı zorunludur." : SayiGirdisi.Hata(r.TapuAlaniText, "Tapu alanı (m²) geçerli bir sayı olmalı.");
+                ilkHata ??= $"{r.ParselId}: " + SayiGirdisi.Hata(r.TapuAlaniText, "tapu alanı (m²) geçerli bir sayı olmalı.");
                 continue;
             }
 
@@ -320,7 +328,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         {
             if (!SayiGirdisi.TryParse(ToplamTecvizSiniriText, out var t))
             {
-                ToplamTecvizSiniriHatasi = "Geçerli bir sayı girin veya boş bırakın.";
+                ToplamTecvizSiniriHatasi = SayiGirdisi.Hata(ToplamTecvizSiniriText, "Geçerli bir sayı girin veya boş bırakın.");
                 ilkHata ??= "Düzenleme toplam tecviz sınırı (m²) geçerli bir sayı olmalı.";
             }
             else
@@ -398,7 +406,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         }
         else if (!SayiGirdisi.TryParse(R2Text, out r2))
         {
-            R2Hatasi = "R2 geçerli bir sayı olmalı (boş: otomatik).";
+            R2Hatasi = SayiGirdisi.Hata(R2Text, "R2 geçerli bir sayı olmalı (boş: otomatik).");
             DurumMetni = "R2 (m²) geçerli bir sayı olmalı.";
             return;
         }
@@ -408,10 +416,10 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         var d2Tamam = SayiGirdisi.TryParse(D2Text, out var d2);
         var r3Tamam = SayiGirdisi.TryParse(R3Text, out var r3);
         var okTamam = SayiGirdisi.TryParse(OrtakKatilimText, out var ok);
-        D1Hatasi = d1Tamam ? null : SayiOlmali;
-        D2Hatasi = d2Tamam ? null : SayiOlmali;
-        R3Hatasi = r3Tamam ? null : SayiOlmali;
-        OrtakKatilimHatasi = okTamam ? null : SayiOlmali;
+        D1Hatasi = d1Tamam ? null : SayiGirdisi.Hata(D1Text, SayiOlmali);
+        D2Hatasi = d2Tamam ? null : SayiGirdisi.Hata(D2Text, SayiOlmali);
+        R3Hatasi = r3Tamam ? null : SayiGirdisi.Hata(R3Text, SayiOlmali);
+        OrtakKatilimHatasi = okTamam ? null : SayiGirdisi.Hata(OrtakKatilimText, SayiOlmali);
         if (!(d1Tamam && d2Tamam && r3Tamam && okTamam))
         {
             DurumMetni = "D1, D2, R3 ve ortak katılım alanları (m²) geçerli sayılar olmalı (yoksa 0).";
@@ -488,7 +496,8 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         {
             if (s.Length != 4 || !SayiGirdisi.TryParse(s[3], out var a))
             {
-                DurumMetni = KrokiHatasi = "Kroki satırı biçimi: malikKodu;kadastroParselId;imarParselKodu;alan";
+                const string Bicim = "Kroki satırı biçimi: malikKodu;kadastroParselId;imarParselKodu;alan";
+                DurumMetni = KrokiHatasi = s.Length == 4 && SayiGirdisi.Hata(s[3], Bicim) is var h && h != Bicim ? "Kroki alanı (m²): " + h : Bicim;
                 return;
             }
 

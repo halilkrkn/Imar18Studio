@@ -174,6 +174,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 Kunye.OneriyiYenile();
                 LastProjeTask = OnayCikti.YenileAsync();
             };
+            Hesap.TakbiseAktarildi += (_, _) => Kunye.WebtapuAktarildi();
             LastProjeTask = Hesap.YenileAsync();
             var fen = new RelayCommand(() => OnayCikti.FenKlasoruZipIsteCommand.Execute(null), () => OnayCikti.GecerliOnayVar);
             Canvas.BaglaFenKlasoru(fen);

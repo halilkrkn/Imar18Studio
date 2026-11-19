@@ -156,7 +156,10 @@ public sealed class P73FenKlasoruZipKunyeTests
     }
 
     [Theory]
-    [InlineData("0,09")]
+    // P7 UX (Numpad virgülü, proje sahibi talebi 20 Kasım 2026): "0,09" artık geçerli MK'dır (P7UxKutucukluTablolarTests);
+    // çoklu / binlik ayırıcılı MK reddedilmeye devam eder.
+    [InlineData("0,0,9")]
+    [InlineData("1.078,90")]
     [InlineData("0")]
     [InlineData("11")]
     [InlineData("abc")]
