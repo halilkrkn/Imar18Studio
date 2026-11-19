@@ -623,6 +623,66 @@
               <!-- 4. Hak eşleştirme & hisse (anonim malik kodları — KVKK) -->
               <Panel IsVisible="{Binding Wizard.IsStep4}">
                 <StackPanel Spacing="10" DataContext="{Binding Hesap}" IsVisible="{Binding Converter={x:Static ObjectConverters.IsNotNull}}">
+                  <!-- P7.3-B (SAHA-006): webtapu PDF → TAKBİS + Malik Rehberi; Yaklaşık Yer Krokisi → Kroki. Önizleme onaylanmadan kutular değişmez. -->
+                  <Border Classes="kart">
+                    <StackPanel Spacing="6">
+                      <Border Classes="kartBaslik"><TextBlock Text="📥 İÇE AKTARIM" Classes="bolum" /></Border>
+                      <TextBlock Text="Ad/soyad yalnız yerel Malik Rehberi'ne yazılır; hesap anonim malik kodlarıyla yapılır (KVKK)." Classes="aciklama" TextWrapping="Wrap" />
+                      <Button x:Name="WebtapuYukleDugmesi" Content="📄 webtapu PDF Yükle" Command="{Binding WebtapuIsteCommand}"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                              ToolTip.Tip="webtapu 'Tapu Kaydı' PDF'lerini seçin (birden çok seçilebilir); yalnız TAKBİS hisselerini doldurur." />
+                      <ItemsControl ItemsSource="{Binding WebtapuOnizlemeleri}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <Border Classes="kart" Margin="0,2">
+                              <StackPanel Spacing="3">
+                                <Grid ColumnDefinitions="*,Auto">
+                                  <SelectableTextBlock Text="{Binding Baslik}" Classes="deger" TextWrapping="Wrap" />
+                                  <Button Grid.Column="1" Content="✕" Padding="6,0" ToolTip.Tip="Bu önizlemeyi kaldır"
+                                          Command="{Binding $parent[ItemsControl].DataContext.WebtapuOnizlemesiniKaldirCommand}"
+                                          CommandParameter="{Binding}" />
+                                </Grid>
+                                <TextBlock Text="{Binding Konum}" Classes="aciklama" TextWrapping="Wrap"
+                                           IsVisible="{Binding Konum, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                <ItemsControl ItemsSource="{Binding MalikSatirlari}">
+                                  <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                      <SelectableTextBlock Text="{Binding}" Classes="mono" FontSize="11" TextWrapping="Wrap" />
+                                    </DataTemplate>
+                                  </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Grid ColumnDefinitions="Auto,*" Margin="0,2,0,0">
+                                  <TextBlock Text="Kadastro parseli" Classes="etiket" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                  <ComboBox Grid.Column="1" ItemsSource="{Binding KadastroSecenekleri}" SelectedItem="{Binding SeciliKadastroParsel}"
+                                            HorizontalAlignment="Stretch" PlaceholderText="seçin" />
+                                </Grid>
+                                <SelectableTextBlock Text="{Binding Uyari}" Classes="hata" TextWrapping="Wrap"
+                                                     IsVisible="{Binding Uyari, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                              </StackPanel>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <Button x:Name="TakbiseAktarDugmesi" Content="TAKBİS'e Aktar" Command="{Binding TakbiseAktarCommand}"
+                              IsVisible="{Binding WebtapuOnizlemesiVar}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                              Classes="Primary" Theme="{DynamicResource SolidButton}" />
+                      <Button x:Name="KrokiNczYukleDugmesi" Content="📐 Yaklaşık Yer Krokisi (.NCZ) Yükle" Command="{Binding KrokiNczIsteCommand}"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,4,0,0"
+                              ToolTip.Tip="Malik kullanım alanları krokisi; TAKBİS hisseleri ve imar parselleriyle eşleştirilip Kroki satırları üretilir." />
+                      <ContentControl Content="{Binding KrokiOzeti}" ContentTemplate="{StaticResource OzetSablonu}"
+                                      IsVisible="{Binding KrokiOzeti, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                      <StackPanel Spacing="4" IsVisible="{Binding KrokiOnizlemesiVar}">
+                        <TextBox Text="{Binding KrokiOnizlemesi, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" MaxHeight="140"
+                                 FontFamily="Consolas" FontSize="11" />
+                        <ItemsControl ItemsSource="{Binding KrokiUyarilari}" ItemTemplate="{StaticResource UyariSablonu}" />
+                        <Grid ColumnDefinitions="*,6,Auto">
+                          <Button x:Name="KrokiyeAktarDugmesi" Content="Kroki'ye Aktar" Command="{Binding KrokiyeAktarCommand}"
+                                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="Primary" Theme="{DynamicResource SolidButton}" />
+                          <Button Grid.Column="2" Content="Vazgeç" Command="{Binding KrokiOnizlemesiniKaldirCommand}" />
+                        </Grid>
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
                   <Border Classes="kart">
                     <StackPanel Spacing="0">
                       <Border Classes="kartBaslik"><TextBlock Text="🧾 HAK EŞLEŞTİRME" Classes="bolum" /></Border>

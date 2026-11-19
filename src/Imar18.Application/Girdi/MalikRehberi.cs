@@ -34,13 +34,14 @@ public sealed record WebtapuAktarimi(IReadOnlyList<TakbisHisseGirdisi> Hisseler,
 /// <list type="bullet">
 /// <item>Yalnız aktif (terkin edilmemiş) satırlar aktarılır; muvafakat webtapu'da olmadığı için <c>H</c> (SORU-040 a).</item>
 /// <item>Malik kodu: rehberde aynı kişi sistem no'lu (yoksa aynı normalize ad + baba adlı) kişi varsa onun kodu; değilse
-/// rehberdeki en büyük <c>Mnn</c> kodundan devam eden yeni kod (M01, M02 …; belge sırası) — TAKBİS anonim kod biçimine uyar.</item>
+/// rehberdeki ve <c>ayrilmisKodlar</c>'daki (TAKBİS'te elle girilmiş başka kişiler) en büyük <c>Mnn</c> kodundan devam eden yeni
+/// kod (M01, M02 …; belge sırası) — TAKBİS anonim kod biçimine uyar ve ayrılmış kodlarla çakışmaz.</item>
 /// <item>Parsel kaydı (Cilt/Sayfa vb.) kadastro parsel kimliğine göre eklenir ya da güncellenir.</item>
 /// </list>
 /// </summary>
 public static class WebtapuAktarici
 {
-    public static WebtapuAktarimi Aktar(TapuKaydi kayit, string kadastroParselId, MalikRehberi mevcut)
+    public static WebtapuAktarimi Aktar(TapuKaydi kayit, string kadastroParselId, MalikRehberi mevcut, IReadOnlyCollection<string>? ayrilmisKodlar = null)
     {
         ArgumentNullException.ThrowIfNull(kayit);
         ArgumentException.ThrowIfNullOrWhiteSpace(kadastroParselId);
@@ -48,7 +49,8 @@ public static class WebtapuAktarici
 
         var parselId = kadastroParselId.Trim();
         var malikler = mevcut.Malikler.ToList();
-        var sonraki = malikler.Select(m => KodNumarasi(m.MalikKodu)).DefaultIfEmpty(0).Max() + 1;
+        var ayrilmis = new HashSet<string>((ayrilmisKodlar ?? []).Select(k => k.Trim()), StringComparer.OrdinalIgnoreCase);
+        var sonraki = malikler.Select(m => m.MalikKodu).Concat(ayrilmis).Select(KodNumarasi).DefaultIfEmpty(0).Max() + 1;
         var hisseler = new List<(string Kod, Fraction Hisse)>();
         foreach (var s in kayit.AktifMalikler)
         {
@@ -60,8 +62,13 @@ public static class WebtapuAktarici
             }
             else
             {
-                kod = "M" + sonraki.ToString("00", CultureInfo.InvariantCulture);
-                sonraki++;
+                do
+                {
+                    kod = "M" + sonraki.ToString("00", CultureInfo.InvariantCulture);
+                    sonraki++;
+                }
+                while (ayrilmis.Contains(kod));
+
                 malikler.Add(new MalikRehberKaydi(kod, Normalize(s.AdSoyad), BosIseNull(s.BabaAdi), BosIseNull(s.KisiSistemNo)));
             }
 

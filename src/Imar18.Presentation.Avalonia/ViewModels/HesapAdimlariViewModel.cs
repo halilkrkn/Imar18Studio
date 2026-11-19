@@ -110,7 +110,8 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
     private string _hakOzeti = string.Empty;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(TecvizUygulaCommand), nameof(DopUygulaCommand), nameof(HakUygulaCommand))]
+    [NotifyCanExecuteChangedFor(nameof(TecvizUygulaCommand), nameof(DopUygulaCommand), nameof(HakUygulaCommand), nameof(WebtapuIsteCommand),
+        nameof(KrokiNczIsteCommand), nameof(TakbiseAktarCommand), nameof(KrokiyeAktarCommand), nameof(KrokiOnizlemesiniKaldirCommand), nameof(WebtapuOnizlemesiniKaldirCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -156,7 +157,11 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
 
     partial void OnOrtakKatilimTextChanged(string value) => OrtakKatilimHatasi = null;
 
-    partial void OnTakbisMetniChanged(string value) => TakbisHatasi = null;
+    partial void OnTakbisMetniChanged(string value)
+    {
+        TakbisHatasi = null;
+        TakbisDegisti(); // P7.3-B2: TAKBİS değişince eski hisselerle üretilmiş kroki önizlemesi bayatlar (reviewer M1, L2)
+    }
 
     partial void OnKrokiMetniChanged(string value) => KrokiHatasi = null;
 
@@ -181,6 +186,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         KrokiMetni = string.Empty;
         KimlikMetni = string.Empty;
         DurumMetni = string.Empty;
+        IceAktarimiSifirla();
         foreach (var h in new Action[] { () => ToplamTecvizSiniriHatasi = null, () => R2Hatasi = null, () => D1Hatasi = null, () => D2Hatasi = null,
                      () => R3Hatasi = null, () => OrtakKatilimHatasi = null, () => TakbisHatasi = null, () => KrokiHatasi = null, () => KimlikHatasi = null })
         {
@@ -188,12 +194,16 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         }
     }
 
-    public HesapAdimlariViewModel(ProjeCalismaAlani alan, Func<TecvizGirdisi?> tecvizGirdisi)
+    /// <param name="alan">Proje çalışma alanı (webtapu okuyucusu ve kesişim hesaplayıcısı isteğe bağlıdır).</param>
+    /// <param name="tecvizGirdisi">1. adımdaki doğrulanmış tecviz girdisi.</param>
+    /// <param name="krokiIthal">P7.3-B2: Yaklaşık Yer Krokisi okuması için CAD içe aktarma servisi (yoksa kroki yükleme pasif).</param>
+    public HesapAdimlariViewModel(ProjeCalismaAlani alan, Func<TecvizGirdisi?> tecvizGirdisi, Imar18.Application.Cad.CadImportService? krokiIthal = null)
     {
         ArgumentNullException.ThrowIfNull(alan);
         ArgumentNullException.ThrowIfNull(tecvizGirdisi);
         _alan = alan;
         _tecvizGirdisi = tecvizGirdisi;
+        _krokiIthal = krokiIthal;
     }
 
     /// <summary>Bir adım projeye başarıyla yazıldığında (ana pencere onay ekranını yeniler).</summary>
@@ -577,11 +587,12 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         .Where(s => !s.StartsWith('#'))
         .Select(s => s.Split(';').Select(p => p.Trim()).ToArray());
 
-    /// <summary>Komutları sırayla CommandBus'a gönderir; ilk retçe durur (Türkçe mesaj). Sonra adımları yeniler.</summary>
-    private async Task GonderAsync(IReadOnlyList<IProjeKomutu> komutlar, string basariMetni)
+    /// <summary>Komutları sırayla CommandBus'a gönderir; ilk retçe durur (Türkçe mesaj). Sonra adımları yeniler; tümü yazıldıysa true.</summary>
+    private async Task<bool> GonderAsync(IReadOnlyList<IProjeKomutu> komutlar, string basariMetni)
     {
         IsBusy = true;
         var durum = basariMetni;
+        var basarili = true;
         try
         {
             foreach (var k in komutlar)
@@ -590,6 +601,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
                 if (sonuc.IsFailure)
                 {
                     durum = "Projeye yazılamadı: " + sonuc.Error.UserMessage;
+                    basarili = false;
                     break;
                 }
             }
@@ -603,5 +615,6 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         await YenileAsync().ConfigureAwait(true);
         DurumMetni = durum;
         Uygulandi?.Invoke(this, EventArgs.Empty);
+        return basarili;
     }
 }

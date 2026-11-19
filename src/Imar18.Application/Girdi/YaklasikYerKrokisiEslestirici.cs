@@ -78,6 +78,12 @@ public static class YaklasikYerKrokisiEslestirici
     /// <summary>Kıymık eşiği (m²): bu alanın altındaki kesişimler dağıtıma girmez.</summary>
     public const decimal KiymikEsigiM2 = 0.50m;
 
+    /// <summary>Teknik neden: kroki proje kadastro alanıyla örtüşmüyor (arayüz Türkçe ipucu için eşler).</summary>
+    public const string OrtusmeYokNedeni = "sketch does not overlap the project cadastral area (check CRS / coordinate offset)";
+
+    /// <summary>Teknik neden: dağıtılacak imar parseli yok.</summary>
+    public const string ImarParseliYokNedeni = "no zoning parcels to distribute";
+
     public static Result<KrokiEslestirmeSonucu> Eslestir(KrokiEslestirmeGirdisi girdi, IParselKesisimHesaplayici kesisim, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(girdi);
@@ -90,7 +96,7 @@ public static class YaklasikYerKrokisiEslestirici
 
         if (girdi.ImarParselleri is null || girdi.ImarParselleri.Count == 0)
         {
-            return Gecersiz("no zoning parcels to distribute");
+            return Gecersiz(ImarParseliYokNedeni);
         }
 
         var geometri = (girdi.ProjeParselleri ?? []).ToLookup(p => (p.Rol, p.ParselId));
@@ -129,7 +135,7 @@ public static class YaklasikYerKrokisiEslestirici
         if (poligonlar.Count > 0 && kadastro.Count > 0
             && poligonlar.All(p => kadastro.All(k => kesisim.KesisimAlaniM2([p.Vertices, k.Halka], cancellationToken) < KiymikEsigiM2)))
         {
-            return Gecersiz("sketch does not overlap the project cadastral area (check CRS / coordinate offset)");
+            return Gecersiz(OrtusmeYokNedeni);
         }
 
         if (poligonlar.Count == 0)

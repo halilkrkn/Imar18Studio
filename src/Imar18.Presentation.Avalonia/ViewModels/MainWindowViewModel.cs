@@ -105,7 +105,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void AltPanelDegistir() => AltPanelAcik = !AltPanelAcik;
 
-    public MainWindowViewModel(CadImportService importService, ProjeCalismaAlani? proje = null)
+    /// <param name="importService">Ana CAD içe aktarımı.</param>
+    /// <param name="proje">Proje çalışma alanı (yoksa P4 davranışı).</param>
+    /// <param name="krokiImportService">P7.3-B2: Yaklaşık Yer Krokisi için ayrı servis örneği (ana içe aktarımın arka plan
+    /// okumasıyla çakışmaz — reviewer M5); verilmezse <paramref name="importService"/> kullanılır.</param>
+    public MainWindowViewModel(CadImportService importService, ProjeCalismaAlani? proje = null, CadImportService? krokiImportService = null)
     {
         ArgumentNullException.ThrowIfNull(importService);
         _importService = importService;
@@ -136,7 +140,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             OnayCikti = new OnayCiktiViewModel(proje);
             OnayCikti.TopolojiNotlari.CollectionChanged += (_, _) => OnPropertyChanged(nameof(DenetimUyariSayisi));
-            Hesap = new HesapAdimlariViewModel(proje, () => Wizard.Tecviz);
+            Hesap = new HesapAdimlariViewModel(proje, () => Wizard.Tecviz, krokiImportService ?? importService);
+            Palette.Register(new PaletteCommand("importWebtapu", "webtapu PDF Yükle (TAKBİS + Malik Rehberi)", "tapu kaydi webtapu pdf takbis malik hisse",
+                () => Hesap.WebtapuIsteCommand.Execute(null), () => Hesap.WebtapuIsteCommand.CanExecute(null)));
+            Palette.Register(new PaletteCommand("importSketch", "Yaklaşık Yer Krokisi Yükle (.NCZ)", "kroki yaklasik yer kullanim ncz hak",
+                () => Hesap.KrokiNczIsteCommand.Execute(null), () => Hesap.KrokiNczIsteCommand.CanExecute(null)));
             Hesap.Uygulandi += (_, _) => LastProjeTask = OnayCikti.YenileAsync();
             LastProjeTask = Hesap.YenileAsync();
             var fen = new RelayCommand(() => OnayCikti.FenKlasoruIsteCommand.Execute(null), () => OnayCikti.GecerliOnayVar);

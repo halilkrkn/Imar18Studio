@@ -62,6 +62,16 @@ public sealed class WebtapuAktarimiTests
     }
 
     [Fact]
+    public void WebtapuAktarimi_Yeni_Kod_TAKBISte_Kullanilan_Ayrilmis_Kodlarla_Cakismamali()
+    {
+        // Reviewer H1: TAKBİS'te elle girilmiş M01/M3 başka kişilerdir; rehber boş olsa da yeni kodlar onların üstünden başlamalı.
+        var a = WebtapuAktarici.Aktar(Ornek(), "K7", MalikRehberi.Bos, ["M01", "M3", "MLK-001"]);
+
+        a.Hisseler.Select(h => h.MalikKodu).Should().Equal("M04", "M05", "M06");
+        a.Rehber.Malikler.Select(m => m.MalikKodu).Should().NotContain(["M01", "M03"]);
+    }
+
+    [Fact]
     public void WebtapuAktarimi_Kisi_No_Yoksa_Ad_Ve_Baba_Adi_Esitliginde_Ayni_Kodu_Kullanmali()
     {
         var ilk = WebtapuAktarici.Aktar(Kayit("901", "7", Malik("1", null, "AYŞE YILMAZ", "ALİ", 1, 1, 1000.00m)), "K7", MalikRehberi.Bos);
