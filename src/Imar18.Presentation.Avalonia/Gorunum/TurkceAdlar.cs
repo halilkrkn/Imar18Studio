@@ -17,7 +17,7 @@ public static class TurkceAdlar
     {
         CadLayerRole.Unassigned => "Atanmamış",
         CadLayerRole.CadastralParcel => "Kadastro Parseli",
-        CadLayerRole.ZoningParcel => "İmar Parseli",
+        CadLayerRole.ZoningParcel => "TK_Oluşan", // SAHA-013: mühendisin Netcad'deki adıyla
         CadLayerRole.RoadDedication => "Yola Terk",
         CadLayerRole.RegulationBoundary => "Düzenleme Sınırı",
         CadLayerRole.BlockEdge => "Ada Kenarı",

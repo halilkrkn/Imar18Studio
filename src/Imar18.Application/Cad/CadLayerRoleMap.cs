@@ -76,6 +76,49 @@ public sealed class CadLayerRoleMap
         ["TESCİLLİ_NOKTA"] = CadLayerRole.RegisteredPoint,
     });
 
+    /// <summary>
+    /// SAHA-013: 1. adımda katmanlar yüklenirken önerilen rol (mühendis her satırı değiştirebilir). Kurallar bu sırayla uygulanır
+    /// ve ilk eşleşen kazanır:
+    /// <list type="number">
+    /// <item>Adında <c>OLUSAN</c> veya <c>OLUŞAN</c> geçen her katman (<c>TK_OLUSAN</c>, <c>TK_PARSEL_OLUŞAN</c>, <c>PARSEL_OLUSAN</c> …)
+    /// → <see cref="CadLayerRole.ZoningParcel"/>; diğer tüm kurallardan önce gelir, kadastro parseli sayılmaz.</item>
+    /// <item>Adı tam <c>İMAR</c> veya <c>IMAR</c> → <see cref="CadLayerRole.Ignored"/> (tuvalde görünür, DOP R2'ye girmez).</item>
+    /// <item><see cref="Standard"/> birebir Netcad adları.</item>
+    /// <item>Adında <c>PARSEL_ALN</c> geçen (ör. <c>02_PARSEL_ALN_YENI</c>) → <see cref="CadLayerRole.CadastralParcel"/>.</item>
+    /// <item>Adı tam <c>YOL</c> → <see cref="CadLayerRole.RoadDedication"/>.</item>
+    /// </list>
+    /// Diğer adlar <see cref="CadLayerRole.Unassigned"/> kalır. Karşılaştırma <see cref="Resolve"/> ile aynıdır (baş/son boşluk
+    /// kırpılmış, ordinal / büyük-küçük harf duyarlı; Türkçe harf dönüşümü tahmin edilmez). <see cref="Standard"/> ve
+    /// <see cref="Resolve"/> değişmez; öneri yalnız sihirbaz satırına yazılır ve <see cref="WithAssignment"/> ile kesinleşir.
+    /// </summary>
+    public static CadLayerRole OtomatikRol(string layerName)
+    {
+        ArgumentNullException.ThrowIfNull(layerName);
+        var ad = layerName.Trim();
+        if (ad.Contains("OLUSAN", StringComparison.Ordinal) || ad.Contains("OLUŞAN", StringComparison.Ordinal))
+        {
+            return CadLayerRole.ZoningParcel;
+        }
+
+        if (ad is "İMAR" or "IMAR")
+        {
+            return CadLayerRole.Ignored;
+        }
+
+        var standart = Standard.Resolve(ad);
+        if (standart != CadLayerRole.Unassigned)
+        {
+            return standart;
+        }
+
+        if (ad.Contains("PARSEL_ALN", StringComparison.Ordinal))
+        {
+            return CadLayerRole.CadastralParcel;
+        }
+
+        return ad == "YOL" ? CadLayerRole.RoadDedication : CadLayerRole.Unassigned;
+    }
+
     /// <summary>Tum atamalar (anahtarlar ordinal sirali).</summary>
     public IReadOnlyDictionary<string, CadLayerRole> Assignments => _assignments;
 

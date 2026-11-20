@@ -136,7 +136,7 @@ public sealed class Saha012ImarAdasiDogrulamaTests
 
         vm.Wizard.Validate().Should().BeFalse();
         vm.Wizard.Errors.Should().Contain(WizardViewModel.ImarRoluHatasi);
-        WizardViewModel.ImarRoluHatasi.Should().Be("En az bir katman 'İmar Parseli (Oluşan)' veya 'İmar Adası' rolüne atanmalı.");
+        WizardViewModel.ImarRoluHatasi.Should().Be("En az bir katman 'TK_Oluşan' veya 'İmar Adası' rolüne atanmalı.");
 
         await RolAtaAsync(vm, ImarAdasi, CadLayerRole.ZoningBlock);
 

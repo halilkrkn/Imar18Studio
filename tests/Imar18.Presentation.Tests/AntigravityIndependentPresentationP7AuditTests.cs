@@ -284,7 +284,7 @@ public sealed class AntigravityIndependentPresentationP7AuditTests
         // 1. CadLayerRole
         TurkceAdlar.Ad(CadLayerRole.Unassigned).Should().Be("Atanmamış");
         TurkceAdlar.Ad(CadLayerRole.CadastralParcel).Should().Be("Kadastro Parseli");
-        TurkceAdlar.Ad(CadLayerRole.ZoningParcel).Should().Be("İmar Parseli");
+        TurkceAdlar.Ad(CadLayerRole.ZoningParcel).Should().Be("TK_Oluşan");
         TurkceAdlar.Ad(CadLayerRole.RoadDedication).Should().Be("Yola Terk");
         TurkceAdlar.Ad(CadLayerRole.RegulationBoundary).Should().Be("Düzenleme Sınırı");
         TurkceAdlar.Ad(CadLayerRole.BlockEdge).Should().Be("Ada Kenarı");
@@ -336,11 +336,11 @@ public sealed class AntigravityIndependentPresentationP7AuditTests
         var conv = TurkceAdConverter.Ornek;
 
         conv.Convert(36, typeof(string), "meridyen", CultureInfo.InvariantCulture).Should().Be("DOM 36°");
-        conv.Convert(CadLayerRole.ZoningParcel, typeof(string), null, CultureInfo.InvariantCulture).Should().Be("İmar Parseli");
+        conv.Convert(CadLayerRole.ZoningParcel, typeof(string), null, CultureInfo.InvariantCulture).Should().Be("TK_Oluşan");
         conv.Convert(null, typeof(string), null, CultureInfo.InvariantCulture).Should().Be(string.Empty);
         conv.Convert(123.45m, typeof(string), null, CultureInfo.InvariantCulture).Should().Be("123.45");
 
-        var act = () => conv.ConvertBack("İmar Parseli", typeof(CadLayerRole), null, CultureInfo.InvariantCulture);
+        var act = () => conv.ConvertBack("TK_Oluşan", typeof(CadLayerRole), null, CultureInfo.InvariantCulture);
         act.Should().Throw<NotSupportedException>().WithMessage("*tek yönlüdür*");
     }
 
