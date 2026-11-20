@@ -160,6 +160,24 @@ public interface ICiktiUretici
     string Uzanti { get; }
 
     Result<byte[]> Uret(CiktiPaketi paket, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Seçenekli üretim. Seçeneklere bağlı içeriği olmayan üreticiler (Excel, tek PDF, CKS) için varsayılan uygulama
+    /// <see cref="Uret(CiktiPaketi, CancellationToken)"/>'e iletir; Fen Klasörü ZIP'i ZIP içi <c>.sha256</c> girişleri için ezer (SORU-053).
+    /// Seçeneğe duyarlı bir üretici bu metodu <c>public</c> olarak ezmelidir; yalnız eski metodu ileten bir sarmalayıcı seçenekleri düşürür.
+    /// </summary>
+    Result<byte[]> Uret(CiktiPaketi paket, CiktiSecenekleri secenekler, CancellationToken cancellationToken = default) => Uret(paket, cancellationToken);
+}
+
+/// <summary>
+/// Çıktı üretim seçenekleri (SORU-053, proje sahibi kararı 20 Kasım 2026). <see cref="Sha256YanDosyasiUret"/> varsayılan olarak
+/// kapalıdır: diske <c>*.sha256</c> yan dosyası ve Fen Klasörü ZIP'ine <c>.sha256</c> girişleri yalnız kullanıcı isterse yazılır.
+/// SHA-256 özeti her iki modda da hesaplanır; <see cref="CiktiSonucu.Sha256"/> ve başarılı audit kaydında (<c>sha256=…</c>) tutulur.
+/// </summary>
+public sealed record CiktiSecenekleri(bool Sha256YanDosyasiUret = false)
+{
+    /// <summary>Varsayılan seçenekler: yan <c>.sha256</c> dosyası yok.</summary>
+    public static CiktiSecenekleri Varsayilan { get; } = new();
 }
 
 /// <summary>Atomik çıktı dosyası yazıcısı (Infrastructure).</summary>

@@ -1285,6 +1285,8 @@
                         <Button x:Name="FenKlasoruZipDugmesi" Content="📦 Fen Klasörü (.zip) Üret" Command="{Binding FenKlasoruZipIsteCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                                 ToolTip.Tip="Örnek paketle aynı adlı ayrı PDF'ler (Dönüşüm, Koordine Özet, Alan Hesabı, Cepheli Alan, DOP, Özet Cetveli, Mal Sahipleri, Tescil, Rölöve, Parselasyon) ve DOP.CKS" />
                         <Button Content="🗂️ CKS DOP Özeti (.CKS)" Command="{Binding CksIsteCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" />
+                        <CheckBox x:Name="Sha256YanDosyasiKutusu" Content="Doğrulama özeti (.sha256) yan dosyası oluştur" IsChecked="{Binding Sha256YanDosyasiUret}"
+                                  ToolTip.Tip="Kurumsal kullanım için isteğe bağlı: çıktının yanına ve Fen Klasörü .zip içine .sha256 dosyası yazar. Kapalıyken de SHA-256 özeti denetim (audit) kaydında tutulur." />
                         <TextBlock Text="Yalnızca güncel revizyonun geçerli onayıyla üretilir; onaysız istek reddedilip denetime yazılır." Classes="aciklama" />
                         <ContentControl Content="{Binding DurumMetni}" ContentTemplate="{StaticResource OzetSablonu}" />
                       </StackPanel>

@@ -34,6 +34,13 @@ public sealed partial class OnayCiktiViewModel : ObservableObject
     [ObservableProperty]
     private string _durumMetni = string.Empty;
 
+    /// <summary>
+    /// SORU-053: "Doğrulama özeti (.sha256) yan dosyası oluştur" kutucuğu. Varsayılan kapalıdır; kapalıyken diske ve Fen Klasörü
+    /// ZIP'ine <c>.sha256</c> yazılmaz, SHA-256 özeti yine durum satırında ve audit kaydında tutulur.
+    /// </summary>
+    [ObservableProperty]
+    private bool _sha256YanDosyasiUret;
+
     public OnayCiktiViewModel(ProjeCalismaAlani alan)
     {
         ArgumentNullException.ThrowIfNull(alan);
@@ -195,9 +202,9 @@ public sealed partial class OnayCiktiViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var sonuc = await _alan.Cikti.UretAsync(tur, _alan.KullaniciId, hedefYol).ConfigureAwait(true);
+            var sonuc = await _alan.Cikti.UretAsync(tur, _alan.KullaniciId, hedefYol, new CiktiSecenekleri(Sha256YanDosyasiUret)).ConfigureAwait(true);
             DurumMetni = sonuc.IsSuccess
-                ? $"{TurkceAdlar.Ad(tur)} üretildi · SHA-256 {Kisa(sonuc.Value.Sha256)} · {PilotDamgasi.Metin}"
+                ? $"{TurkceAdlar.Ad(tur)} üretildi · SHA-256 {Kisa(sonuc.Value.Sha256)}{(sonuc.Value.ChecksumDosyasi is null ? string.Empty : " (.sha256 yan dosyası yazıldı)")} · {PilotDamgasi.Metin}"
                 : sonuc.Error.UserMessage;
             return sonuc.IsSuccess;
         }

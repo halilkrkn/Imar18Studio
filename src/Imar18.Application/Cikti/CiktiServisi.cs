@@ -11,8 +11,12 @@ using Imar18.Domain.Revizyon;
 
 namespace Imar18.Application.Cikti;
 
-/// <summary>Başarılı çıktı: dosya, SHA-256 checksum ve bağlı revizyon.</summary>
-public sealed record CiktiSonucu(CiktiTuru Tur, string DosyaYolu, string ChecksumDosyasi, string Sha256, long Boyut, RevisionId Revizyon);
+/// <summary>
+/// Başarılı çıktı: dosya, SHA-256 checksum ve bağlı revizyon. <see cref="ChecksumDosyasi"/> yalnız
+/// <see cref="CiktiSecenekleri.Sha256YanDosyasiUret"/> açıkken yazılan yan dosyanın yoludur, aksi hâlde <see langword="null"/>;
+/// <see cref="Sha256"/> her zaman doludur (SORU-053).
+/// </summary>
+public sealed record CiktiSonucu(CiktiTuru Tur, string DosyaYolu, string? ChecksumDosyasi, string Sha256, long Boyut, RevisionId Revizyon);
 
 /// <summary>
 /// Onaylı revizyonun anlık görüntüsünden <see cref="CiktiPaketi"/> üretir. Nokta numaraları deterministiktir: parseller rol
@@ -246,8 +250,9 @@ public sealed class ParselNoKarsilastirici : IComparer<string>
 
 /// <summary>
 /// Çıktı servisi (P5.3, spec 14.2): (1) güncel revizyon için geçerli onay yoksa <see cref="AuditSonucu.OnaysizGirisim"/> kaydı
-/// ve <c>ERR-CIKTI-007</c>; (2) paket ve dosya arka planda üretilir (50 ms kuralı); (3) SHA-256 hesaplanır, çıktı ve
-/// <c>.sha256</c> dosyası atomik yazılır; (4) yalnızca bundan sonra başarılı denetim kaydı eklenir (AC-FEN-04). Herhangi bir
+/// ve <c>ERR-CIKTI-007</c>; (2) paket ve dosya arka planda üretilir (50 ms kuralı); (3) SHA-256 hesaplanır, çıktı (ve yalnız
+/// <see cref="CiktiSecenekleri.Sha256YanDosyasiUret"/> açıkken <c>.sha256</c> yan dosyası, SORU-053) atomik yazılır; (4) yalnızca
+/// bundan sonra özeti (<c>sha256=…</c>) taşıyan başarılı denetim kaydı eklenir (AC-FEN-04). Herhangi bir
 /// adım başarısızsa reddedilen girişim denetime yazılır ve başarılı kayıt oluşmaz (AC-FEN-05). Denetim kaydı yazılamazsa
 /// üretilen dosyalar silinir (her çıktının denetim izi olması kuralı). Pilot checksum'u imza değildir (Ed25519 Faz 12).
 /// </summary>
@@ -285,10 +290,12 @@ public sealed class CiktiServisi
         CiktiTuru tur,
         string kullaniciId,
         string hedefYol,
+        CiktiSecenekleri? secenekler = null,
         IProgress<int>? ilerleme = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(hedefYol);
+        secenekler ??= CiktiSecenekleri.Varsayilan;
         var islem = ApprovalService.CiktiIslemOneki + tur;
         var (belge, rev) = _yol.AnlikGoruntu();
         ilerleme?.Report(0);
@@ -307,7 +314,7 @@ public sealed class CiktiServisi
                 rev, null).ConfigureAwait(false);
         }
 
-        var checksumYolu = hedefYol + ".sha256";
+        var checksumYolu = secenekler.Sha256YanDosyasiUret ? hedefYol + ".sha256" : null;
         var yazildi = false;
         var basarili = false;
         try
@@ -317,7 +324,7 @@ public sealed class CiktiServisi
                 {
                     var paket = CiktiPaketiOlusturucu.Olustur(belge, ProjeDegerlendirici.Degerlendir(belge, _topoloji), _donusum);
                     ilerleme?.Report(30);
-                    return paket.IsFailure ? Result<byte[]>.Failure(paket.Error) : uretici.Uret(paket.Value, cancellationToken);
+                    return paket.IsFailure ? Result<byte[]>.Failure(paket.Error) : uretici.Uret(paket.Value, secenekler, cancellationToken);
                 },
                 cancellationToken).ConfigureAwait(false);
             if (uretim.IsFailure)
@@ -331,10 +338,15 @@ public sealed class CiktiServisi
             cancellationToken.ThrowIfCancellationRequested();
             yazildi = true;
             await _yazici.YazAsync(hedefYol, bytes, cancellationToken).ConfigureAwait(false);
-            await _yazici.YazAsync(checksumYolu, Encoding.UTF8.GetBytes(sha + "  " + Path.GetFileName(hedefYol) + "\n"), cancellationToken).ConfigureAwait(false);
+            if (checksumYolu is not null)
+            {
+                await _yazici.YazAsync(checksumYolu, Encoding.UTF8.GetBytes(sha + "  " + Path.GetFileName(hedefYol) + "\n"), cancellationToken).ConfigureAwait(false);
+            }
 
             // Başarılı kayıt iptal edilmez; kilit altında revizyon ve onay yeniden doğrulanır (AC-FEN-04, reviewer M2).
-            var ayrinti = string.Create(CultureInfo.InvariantCulture, $"sha256={sha};boyut={bytes.Length};uzanti={Path.GetExtension(hedefYol)}");
+            // SORU-053: yan dosya isteğe bağlıdır; bütünlük özeti her iki modda da bu kayıttadır.
+            var ayrinti = string.Create(CultureInfo.InvariantCulture,
+                $"sha256={sha};boyut={bytes.Length};uzanti={Path.GetExtension(hedefYol)};yanDosya={(checksumYolu is null ? "hayir" : "evet")}");
             var kayit = await _yol.CiktiBasariKaydiEkleAsync(kullaniciId, islem, rev, ayrinti, CancellationToken.None).ConfigureAwait(false);
             if (kayit.IsFailure)
             {
@@ -342,6 +354,13 @@ public sealed class CiktiServisi
             }
 
             basarili = true;
+            if (checksumYolu is null)
+            {
+                // Reviewer M1 (SORU-053): aynı hedefe önceki yan dosyalı üretimden kalan .sha256 yeni dosyayla uyuşmaz; başarılı
+                // kayıttan sonra kaldırılır (başarısız üretim önceki uyumlu çifte dokunmaz). Özet audit kaydındadır.
+                await SessizSilAsync(hedefYol + ".sha256").ConfigureAwait(false);
+            }
+
             ilerleme?.Report(100);
             return Result<CiktiSonucu>.Success(new CiktiSonucu(tur, hedefYol, checksumYolu, sha, bytes.Length, rev));
         }
@@ -370,7 +389,10 @@ public sealed class CiktiServisi
             if (yazildi && !basarili)
             {
                 await SessizSilAsync(hedefYol).ConfigureAwait(false);
-                await SessizSilAsync(checksumYolu).ConfigureAwait(false);
+                if (checksumYolu is not null)
+                {
+                    await SessizSilAsync(checksumYolu).ConfigureAwait(false);
+                }
             }
         }
     }

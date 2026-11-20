@@ -104,8 +104,34 @@ public sealed class CiktiServisiTests
         (await h.Servis.UretAsync(CiktiTuru.FenKlasoru, OrnekProje.Muhendis, "cikti.pdf")).Error.Code.Should().Be(ErrorCodes.CiktiGecerliOnayYok);
     }
 
+    /// <summary>Seçenekli üretim yolunu (ZIP içi .sha256 girişleri için) gözleyen sahte üretici.</summary>
+    private sealed class SecenekliUretici : ICiktiUretici
+    {
+        public CiktiTuru Tur => CiktiTuru.FenKlasoruZip;
+
+        public string Uzanti => ".zip";
+
+        public CiktiSecenekleri? SonSecenekler { get; private set; }
+
+        public Result<byte[]> Uret(CiktiPaketi paket, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("servis seçenekli aşırı yüklemeyi çağırmalı");
+
+        public Result<byte[]> Uret(CiktiPaketi paket, CiktiSecenekleri secenekler, CancellationToken cancellationToken = default)
+        {
+            SonSecenekler = secenekler;
+            return Result<byte[]>.Success(Icerik);
+        }
+    }
+
     [Fact]
-    public async Task FenKlasoru_Onayli_Uretimde_Checksum_Dosyasi_Ve_Basarili_Denetim_Olusmali()
+    public void CiktiSecenekleri_Varsayilan_Sha256_Yan_Dosyasi_Kapali_Olmali_SORU_053()
+    {
+        new CiktiSecenekleri().Sha256YanDosyasiUret.Should().BeFalse();
+        CiktiSecenekleri.Varsayilan.Sha256YanDosyasiUret.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task FenKlasoru_Varsayilan_Uretimde_Sha256_Yan_Dosyasi_Yazilmamali_Ama_Ozet_Sonucta_Ve_Denetimde_Olmali_SORU_053()
     {
         var h = await HazirAsync();
         var beklenenSha = Convert.ToHexStringLower(SHA256.HashData(Icerik));
@@ -114,13 +140,80 @@ public sealed class CiktiServisiTests
 
         sonuc.IsSuccess.Should().BeTrue(sonuc.IsFailure ? sonuc.Error.TechnicalMessage : string.Empty);
         sonuc.Value.Sha256.Should().Be(beklenenSha);
+        sonuc.Value.ChecksumDosyasi.Should().BeNull("yan dosya varsayılan olarak yazılmaz (SORU-053)");
         sonuc.Value.Boyut.Should().Be(Icerik.Length);
         sonuc.Value.Revizyon.Should().Be(h.Yol.Revizyon);
+        h.Yazici.Dosyalar.Keys.Should().Equal("klasor/fen.pdf");
+        h.Yazici.Dosyalar["klasor/fen.pdf"].Should().Equal(Icerik);
+        var kayit = h.Yol.Denetim[^1];
+        kayit.Should().Match<AuditKaydi>(d => d.Islem == "Cikti:FenKlasoru" && d.Sonuc == AuditSonucu.Basarili && d.SonrakiRevizyon == h.Yol.Revizyon.Deger);
+        kayit.Ayrinti.Should().Contain("sha256=" + beklenenSha).And.Contain("yanDosya=hayir");
+    }
+
+    [Fact]
+    public async Task FenKlasoru_Sha256_Yan_Dosyasi_Istenirse_Checksum_Dosyasi_Ve_Basarili_Denetim_Olusmali()
+    {
+        var h = await HazirAsync();
+        var beklenenSha = Convert.ToHexStringLower(SHA256.HashData(Icerik));
+
+        var sonuc = await h.Servis.UretAsync(CiktiTuru.FenKlasoru, OrnekProje.Muhendis, "klasor/fen.pdf", new CiktiSecenekleri(Sha256YanDosyasiUret: true));
+
+        sonuc.IsSuccess.Should().BeTrue(sonuc.IsFailure ? sonuc.Error.TechnicalMessage : string.Empty);
+        sonuc.Value.Sha256.Should().Be(beklenenSha);
+        sonuc.Value.ChecksumDosyasi.Should().Be("klasor/fen.pdf.sha256");
         h.Yazici.Dosyalar["klasor/fen.pdf"].Should().Equal(Icerik);
         Encoding.UTF8.GetString(h.Yazici.Dosyalar["klasor/fen.pdf.sha256"]).Should().Be(beklenenSha + "  fen.pdf\n");
         var kayit = h.Yol.Denetim[^1];
         kayit.Should().Match<AuditKaydi>(d => d.Islem == "Cikti:FenKlasoru" && d.Sonuc == AuditSonucu.Basarili && d.SonrakiRevizyon == h.Yol.Revizyon.Deger);
-        kayit.Ayrinti.Should().Contain("sha256=" + beklenenSha);
+        kayit.Ayrinti.Should().Contain("sha256=" + beklenenSha).And.Contain("yanDosya=evet");
+    }
+
+    [Fact]
+    public async Task Cikti_Yan_Dosya_Kapali_Tekrar_Uretimde_Eski_Sha256_Kalmamali_SORU_053()
+    {
+        // Reviewer M1: aynı hedefe önce yan dosyalı, sonra varsayılan üretimde eski .sha256 yeni dosyayla uyuşmaz → silinmeli.
+        var h = await HazirAsync();
+        (await h.Servis.UretAsync(CiktiTuru.FenKlasoru, OrnekProje.Muhendis, "fen.pdf", new CiktiSecenekleri(true))).IsSuccess.Should().BeTrue();
+        h.Yazici.Dosyalar.Should().ContainKey("fen.pdf.sha256");
+
+        var sonuc = await h.Servis.UretAsync(CiktiTuru.FenKlasoru, OrnekProje.Muhendis, "fen.pdf");
+
+        sonuc.IsSuccess.Should().BeTrue();
+        sonuc.Value.ChecksumDosyasi.Should().BeNull();
+        h.Yazici.Dosyalar.Keys.Should().Equal("fen.pdf");
+        h.Yol.Denetim[^1].Ayrinti.Should().Contain("sha256=" + sonuc.Value.Sha256).And.Contain("yanDosya=hayir");
+    }
+
+    [Fact]
+    public async Task Cikti_Yan_Dosya_Kapali_Uretim_Basarisizsa_Onceki_Cift_Korunmali_SORU_053()
+    {
+        // Başarısız üretim önceki (uyumlu) dosya + .sha256 çiftine dokunmaz; eski yan dosya yalnız başarılı kayıttan sonra silinir.
+        var h = await HazirAsync();
+        (await h.Servis.UretAsync(CiktiTuru.FenKlasoru, OrnekProje.Muhendis, "fen.pdf", new CiktiSecenekleri(true))).IsSuccess.Should().BeTrue();
+        await h.Yol.GonderAsync(new ProjeAdiDegistirKomutu("Değişti"), OrnekProje.Muhendis);
+
+        (await h.Servis.UretAsync(CiktiTuru.FenKlasoru, OrnekProje.Muhendis, "fen.pdf")).IsFailure.Should().BeTrue();
+
+        h.Yazici.Dosyalar.Should().ContainKeys("fen.pdf", "fen.pdf.sha256");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cikti_Secenekleri_Ureticiye_Aynen_Iletilmeli(bool yanDosya)
+    {
+        var (yol, depo, zaman) = await OrnekProje.TamProjeAsync();
+        var onay = new ApprovalService(yol, zaman, OrnekProje.Topoloji);
+        (await onay.OnaylaAsync(OrnekProje.Muhendis, ApprovalService.OnayMetni)).IsSuccess.Should().BeTrue();
+        var uretici = new SecenekliUretici();
+        var servis = new CiktiServisi(yol, [uretici], new BellekYazici(depo), OrnekProje.Topoloji);
+
+        var sonuc = yanDosya
+            ? await servis.UretAsync(CiktiTuru.FenKlasoruZip, OrnekProje.Muhendis, "fen.zip", new CiktiSecenekleri(true))
+            : await servis.UretAsync(CiktiTuru.FenKlasoruZip, OrnekProje.Muhendis, "fen.zip");
+
+        sonuc.IsSuccess.Should().BeTrue(sonuc.IsFailure ? sonuc.Error.TechnicalMessage : string.Empty);
+        uretici.SonSecenekler!.Sha256YanDosyasiUret.Should().Be(yanDosya);
     }
 
     [Fact]

@@ -258,6 +258,17 @@ public sealed class P73FenKlasoruZipKunyeTests
         Dispatcher.UIThread.RunJobs();
         var zip = w.FindControl<Button>("FenKlasoruZipDugmesi")!;
         zip.Content.Should().Be("📦 Fen Klasörü (.zip) Üret");
+        // SORU-053: çıktı düğmelerinin altında varsayılanı kapalı tek .sha256 kutucuğu; VM'ye iki yönlü bağlı.
+        var kutu = w.FindControl<CheckBox>("Sha256YanDosyasiKutusu")!;
+        kutu.Content.Should().Be("Doğrulama özeti (.sha256) yan dosyası oluştur");
+        kutu.IsEffectivelyVisible.Should().BeTrue();
+        kutu.IsChecked.Should().BeFalse();
+        kutu.IsChecked = true;
+        Dispatcher.UIThread.RunJobs();
+        vm.OnayCikti!.Sha256YanDosyasiUret.Should().BeTrue();
+        kutu.IsChecked = false;
+        Dispatcher.UIThread.RunJobs();
+        vm.OnayCikti!.Sha256YanDosyasiUret.Should().BeFalse();
         kart.IsEffectivelyVisible.Should().BeFalse();
         vm.Palette.Results.Select(r => r.Id).Should().Contain("exportZip");
         w.Close();

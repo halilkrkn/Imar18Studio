@@ -22,11 +22,12 @@ public sealed class P73FenKlasoruZipProjeATests
 {
     private static string Bosluksuz(string s) => new(s.Where(c => !char.IsWhiteSpace(c)).ToArray());
 
-    private static async Task<(PilotCalismaAlani Alan, CiktiSonucu Sonuc, Dictionary<string, byte[]> Dosyalar, List<string> Adlar)> UretAsync()
+    private static async Task<(PilotCalismaAlani Alan, CiktiSonucu Sonuc, Dictionary<string, byte[]> Dosyalar, List<string> Adlar)> UretAsync(
+        CiktiSecenekleri? secenekler = null)
     {
         var alan = await PilotCalismaAlani.AcAsync(SahaProjeleri.ProjeA());
         (await alan.Onay.OnaylaAsync(PilotCalismaAlani.Muhendis, ApprovalService.OnayMetni)).IsSuccess.Should().BeTrue();
-        var sonuc = await alan.Cikti.UretAsync(CiktiTuru.FenKlasoruZip, PilotCalismaAlani.Muhendis, alan.CiktiYolu("Imar18_PILOT_Fen_Klasoru.zip"));
+        var sonuc = await alan.Cikti.UretAsync(CiktiTuru.FenKlasoruZip, PilotCalismaAlani.Muhendis, alan.CiktiYolu("Imar18_PILOT_Fen_Klasoru.zip"), secenekler);
         sonuc.IsSuccess.Should().BeTrue(sonuc.IsFailure ? sonuc.Error.TechnicalMessage : string.Empty);
         using var zip = new ZipArchive(File.OpenRead(sonuc.Value.DosyaYolu));
         var adlar = zip.Entries.Select(e => e.FullName).ToList();
@@ -56,12 +57,30 @@ public sealed class P73FenKlasoruZipProjeATests
             "DÖNÜŞÜM PARAMETRELERİ.pdf", "KOORDİNE ÖZET.pdf", "ALAN HESABI.pdf", "ALAN HESABI-1.pdf", "KOORDİNE-ALAN.pdf", "DOP.pdf",
             "ÖZET CETVELİ.pdf", "MAL SAHİPLERİ ARAŞTIRMA VE ÖZET FORMU.pdf", "TESCİLE ESAS DAĞITIM CETVELİ.pdf",
             "TESCİL SAYFASI-1.pdf", "TESCİL SAYFASI-2.pdf", "TESCİL SAYFASI-3.pdf", "TESCİL-1-2-3.pdf",
-            "RÖLÖVE ÖLÇÜ KROKİSİ.pdf", "RÖLÖVE-1.pdf", "RÖLÖVE-2.pdf", "RÖLÖVE-3.pdf", "RÖLÖVE-1-2-3.pdf", "PARSELASYON HARİTASI.pdf", "PARSELASYON HARİTASI.NCZ", "PARSELASYON HARİTASI.NCZ.sha256",
-            "DOP_PILOT.CKS", "DOP_PILOT.CKS.sha256");
+            "RÖLÖVE ÖLÇÜ KROKİSİ.pdf", "RÖLÖVE-1.pdf", "RÖLÖVE-2.pdf", "RÖLÖVE-3.pdf", "RÖLÖVE-1-2-3.pdf", "PARSELASYON HARİTASI.pdf", "PARSELASYON HARİTASI.NCZ",
+            "DOP_PILOT.CKS");
+        adlar.Should().NotContain(a => a.EndsWith(".sha256", StringComparison.Ordinal), "SORU-053: ZIP içinde varsayılan olarak yan özet yok");
         adlar.Count(a => a.EndsWith(".pdf", StringComparison.Ordinal)).Should().BeGreaterThanOrEqualTo(19, "örnek paket 19 PDF'tir");
-        (await File.ReadAllTextAsync(sonuc.ChecksumDosyasi, Encoding.UTF8)).Should().Be(sonuc.Sha256 + "  Imar18_PILOT_Fen_Klasoru.zip\n");
+        sonuc.ChecksumDosyasi.Should().BeNull();
+        File.Exists(sonuc.DosyaYolu + ".sha256").Should().BeFalse("SORU-053: diskte yan .sha256 dosyası varsayılan olarak yazılmaz");
+        sonuc.Sha256.Should().Be(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(await File.ReadAllBytesAsync(sonuc.DosyaYolu))));
         alan.Yol.Denetim[^1].Should().Match<AuditKaydi>(k => k.Islem == "Cikti:FenKlasoruZip" && k.Sonuc == AuditSonucu.Basarili
             && k.SonrakiRevizyon == sonuc.Revizyon.Deger && k.Ayrinti!.Contains("sha256=" + sonuc.Sha256));
+    }
+
+    [Fact]
+    public async Task ProjeA_FenKlasoruZip_Sha256_Yan_Dosyasi_Istenirse_Diskte_Ve_Zip_Icinde_Ozetler_Olmali_SORU_053()
+    {
+        var (alan, sonuc, d, adlar) = await UretAsync(new CiktiSecenekleri(Sha256YanDosyasiUret: true));
+        using var _ = alan;
+
+        adlar.Should().ContainInOrder("PARSELASYON HARİTASI.NCZ", "PARSELASYON HARİTASI.NCZ.sha256", "DOP_PILOT.CKS", "DOP_PILOT.CKS.sha256");
+        Encoding.UTF8.GetString(d["DOP_PILOT.CKS.sha256"]).Should()
+            .Be(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(d["DOP_PILOT.CKS"])) + "  DOP_PILOT.CKS\n");
+        sonuc.ChecksumDosyasi.Should().Be(sonuc.DosyaYolu + ".sha256");
+        (await File.ReadAllTextAsync(sonuc.ChecksumDosyasi!, Encoding.UTF8)).Should().Be(sonuc.Sha256 + "  Imar18_PILOT_Fen_Klasoru.zip\n");
+        alan.Yol.Denetim[^1].Should().Match<AuditKaydi>(k => k.Islem == "Cikti:FenKlasoruZip" && k.Sonuc == AuditSonucu.Basarili
+            && k.Ayrinti!.Contains("sha256=" + sonuc.Sha256) && k.Ayrinti.Contains("yanDosya=evet"));
     }
 
     [Fact]

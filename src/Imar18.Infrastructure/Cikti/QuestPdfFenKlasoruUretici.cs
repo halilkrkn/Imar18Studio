@@ -97,7 +97,7 @@ public sealed class QuestPdfFenKlasoruUretici : ICiktiUretici
                     t.TotalPages().FontSize(7);
                 });
             });
-            col.Item().Text(p.PilotDamgasi + " · Pilot checksum (SHA-256) çıktıyla birlikte .sha256 dosyasındadır; dijital imza değildir.").FontSize(7);
+            col.Item().Text(p.PilotDamgasi + " · Pilot checksum (SHA-256) denetim (audit) kaydındadır; dijital imza değildir.").FontSize(7);
         });
     });
 

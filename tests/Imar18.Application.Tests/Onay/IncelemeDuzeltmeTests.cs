@@ -170,7 +170,8 @@ public sealed class IncelemeDuzeltmeTests
         var yazici = new Yazici { BozukMu = y => y.EndsWith(".sha256", StringComparison.Ordinal) };
         var servis = new CiktiServisi(yol, [new SahteUretici(_ => Result<byte[]>.Success([1]))], yazici, OrnekProje.Topoloji);
 
-        var sonuc = await servis.UretAsync(CiktiTuru.FenKlasoru, OrnekProje.Muhendis, "fen.pdf");
+        // SORU-053: yan dosya isteğe bağlıdır; yalnız istendiğinde yazımı başarısızlığı ana dosyayı geri alır.
+        var sonuc = await servis.UretAsync(CiktiTuru.FenKlasoru, OrnekProje.Muhendis, "fen.pdf", new CiktiSecenekleri(Sha256YanDosyasiUret: true));
 
         sonuc.IsFailure.Should().BeTrue();
         yazici.Dosyalar.Should().BeEmpty("denetim izi olmayan çıktı diskte kalmamalı");
