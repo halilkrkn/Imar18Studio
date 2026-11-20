@@ -155,7 +155,7 @@ public sealed class Saha010ImarAdasiR2Tests
 
         vm.Wizard.Validate();
 
-        vm.Wizard.Errors.Should().NotContain(e => e.Contains("imar parseli (oluşan)", StringComparison.Ordinal));
+        vm.Wizard.Errors.Should().NotContain(WizardViewModel.ImarRoluHatasi);
     }
 
     [Fact]
