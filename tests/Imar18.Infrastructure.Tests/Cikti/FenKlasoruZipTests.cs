@@ -407,6 +407,28 @@ public sealed class FenKlasoruZipTests
         dolu.Should().Contain("AYŞEÖRNEKSOY").And.Contain("İSMAİL").And.Contain("1/2").And.Contain("101/1");
     }
 
+    [Theory]
+    [InlineData("AYŞE ÖRNEKSOY (İSMAİL)", "AYŞE ÖRNEKSOY", "İSMAİL")]
+    [InlineData("AYŞE ÖRNEKSOY / İSMAİL", "AYŞE ÖRNEKSOY", "İSMAİL")]
+    [InlineData("AYŞE ÖRNEKSOY (İSMAİL) #2", "AYŞE ÖRNEKSOY #2", "İSMAİL")]
+    [InlineData("ÇAĞRI DENEMEOĞLU", "ÇAĞRI DENEMEOĞLU", "")]
+    [InlineData("MLK-009", "MLK-009", "")]
+    public async Task FenKlasoru_Rehbersiz_Malik_Etiketini_Maliki_Ve_Babasi_Alanlarina_Ayirmali_SAHA_011(string etiket, string ad, string baba)
+    {
+        var p = await PaketAsync(rehber: false);
+
+        FenKlasoruVerisi.Malik(p, etiket).Should().Be((ad, baba));
+    }
+
+    [Fact]
+    public async Task FenKlasoru_Ad_Etiketli_Malikte_Rehber_Ayri_Alanlari_Kullanilmali_SAHA_011()
+    {
+        var p = await PaketAsync();
+        var etiketli = p with { Rehber = new MalikRehberi([new MalikRehberKaydi("AYŞE ÖRNEKSOY (İSMAİL) #2", "AYŞE ÖRNEKSOY", "İSMAİL", null)], []) };
+
+        FenKlasoruVerisi.Malik(etiketli, "AYŞE ÖRNEKSOY (İSMAİL) #2").Should().Be(("AYŞE ÖRNEKSOY", "İSMAİL"));
+    }
+
     [Fact]
     public async Task DonusumParametreleri_Girdi_Yoksa_Anlasilir_Bilgi_Notu_Basilmali()
     {

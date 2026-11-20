@@ -12,7 +12,8 @@ namespace Imar18.Presentation.Avalonia.ViewModels;
 
 /// <summary>
 /// P7.3-B1: tek webtapu belgesinin önizleme kartı (Ada/Parsel, AT m², Cilt/Sayfa, aktif malikler ve kadastro parseli eşlemesi).
-/// Ad/baba adı yalnız ekranda ve yerel Malik Rehberi'nde görünür; denetim kaydına ve durum metnine yazılmaz (KVKK).
+/// SORU-055: ad/baba adı yerel ekranlarda ve Malik Rehberi'nde görünür (TAKBİS'e <c>AD SOYAD (BABA ADI)</c> yazılır); denetim
+/// kaydına yazılmaz (KVKK).
 /// </summary>
 public sealed partial class WebtapuOnizlemesi : ObservableObject
 {
@@ -246,7 +247,7 @@ public sealed partial class HesapAdimlariViewModel
         WebtapuOnizlemeleri.Clear();
         WebtapuDurumunuBildir();
         DurumMetni = string.Create(CultureInfo.InvariantCulture,
-            $"TAKBİS'e aktarıldı: {aktarimlar.Count} parsel, {aktarimlar.Sum(a => a.Hisseler.Count)} hisse (muvafakat varsayılan H). Kroki satırlarını yeni malik kodlarıyla güncelleyip \"Hak Eşleştirmeyi Uygula\" deyin.");
+            $"TAKBİS'e aktarıldı: {aktarimlar.Count} parsel, {aktarimlar.Sum(a => a.Hisseler.Count)} hisse (muvafakat varsayılan H). Kroki satırlarını yeni malik adlarıyla güncelleyip \"Hak Eşleştirmeyi Uygula\" deyin.");
         TakbiseAktarildi?.Invoke(this, EventArgs.Empty); // P7 UX: 1. adım boş İl / İlçe / Mahalle webtapu'dan doldurulur
     }
 

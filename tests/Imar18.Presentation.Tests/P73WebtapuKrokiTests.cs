@@ -132,9 +132,10 @@ public sealed class P73WebtapuKrokiTests
 
         await vm.TakbiseAktarCommand.ExecuteAsync(null);
 
-        vm.TakbisMetni.Should().Contain("K1;M01;1/2;H").And.Contain("K1;M02;1/2;H").And.NotContain("MLK-001");
+        // SAHA-011 / SORU-055: TAKBİS'e anonim M01 yerine ekran etiketi "AD SOYAD (BABA ADI)" yazılır (eski beklenti M01/M02).
+        vm.TakbisMetni.Should().Contain("K1;AYŞE YILMAZ (ALİ);1/2;H").And.Contain("K1;MEHMET ÇAKIR (ALİ);1/2;H").And.NotContain("MLK-001");
         vm.KrokiMetni.Should().Be(krokiOnce, "webtapu yalnız TAKBİS ve Malik Rehberi'ni doldurur");
-        alan.Yol.Belge.MalikRehberi.Bul("M01")!.AdSoyad.Should().Be("AYŞE YILMAZ");
+        alan.Yol.Belge.MalikRehberi.Bul("AYŞE YILMAZ (ALİ)")!.Should().Match<MalikRehberKaydi>(r => r.AdSoyad == "AYŞE YILMAZ" && r.BabaAdi == "ALİ");
         alan.Yol.Belge.MalikRehberi.Parsel("K1")!.Cilt.Should().Be("12");
         vm.WebtapuOnizlemeleri.Should().BeEmpty();
         string.Join("|", alan.Yol.Denetim.Select(d => d.Ayrinti)).Should().NotContain("AYŞE").And.NotContain("800000001");
@@ -285,7 +286,8 @@ public sealed class P73WebtapuKrokiTests
 
         await vm.TakbiseAktarCommand.ExecuteAsync(null);
 
-        vm.TakbisMetni.Should().Contain("K2;M01;1/1;H").And.Contain("K1;M02;1/2;H").And.Contain("K1;M03;1/2;H");
+        // SORU-055: yeni kimlikler ad etiketidir; elle girilmiş M01 korunur ve rehberdeki kişilere verilmez.
+        vm.TakbisMetni.Should().Contain("K2;M01;1/1;H").And.Contain("K1;AYŞE YILMAZ (ALİ);1/2;H").And.Contain("K1;MEHMET ÇAKIR (ALİ);1/2;H");
         alan.Yol.Belge.MalikRehberi.Bul("M01").Should().BeNull("M01 elle girilmiş başka bir kişidir");
     }
 

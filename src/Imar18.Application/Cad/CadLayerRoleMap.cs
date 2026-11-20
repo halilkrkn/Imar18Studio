@@ -34,6 +34,15 @@ public enum CadLayerRole
 
     /// <summary>Tescilli nokta (<c>TESCİLLİ_NOKTA</c>).</summary>
     RegisteredPoint,
+
+    /// <summary>
+    /// İmar adası (SAHA-010 / SORU-054): projede İmar Parseli varsa yalnız görsel ada sınırı referansıdır, R2'ye eklenmez;
+    /// hiç İmar Parseli yoksa R2 ada alanlarından hesaplanır (ada, imar parseli rolüyle projeye girer).
+    /// </summary>
+    ZoningBlock,
+
+    /// <summary>Yoksay (SAHA-010): katman tuvalde görünür kalır, hiçbir hesaba girmez.</summary>
+    Ignored,
 }
 
 /// <summary>

@@ -104,7 +104,7 @@ internal static class CadSceneRenderer
             CadLayerRole.RoadDedication => p.Yol,
             CadLayerRole.Park => p.Park,
             CadLayerRole.RegulationBoundary => p.Sinir,
-            CadLayerRole.BlockEdge => p.AdaKenari,
+            CadLayerRole.BlockEdge or CadLayerRole.ZoningBlock => p.AdaKenari, // SAHA-010: İmar Adası = ada sınırı referansı
             _ => p.Diger,
         };
     }

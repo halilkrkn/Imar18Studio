@@ -456,22 +456,37 @@ public sealed class AntigravityIndependentCadAuditTests
         result.Error.TechnicalMessage.Should().NotContain(tcNo, "TC Kimlik No asla hata mesajına yazılamaz");
     }
 
+    // SORU-055 (proje sahibi kararı, 20 Kasım 2026, SAHA-011): eski beklenti "ad-soyad / unvan içeren malik reddedilir" değişti.
+    // Uygulama çevrimdışı çalıştığından yerel ekranlarda malik "AD SOYAD (BABA ADI)" olarak kabul edilir; KVKK sınırı 11 haneli
+    // T.C. Kimlik No reddi (yukarıdaki test) ve ad içine gömülü kimlik numarası reddiyle korunur. Adlar uydurmadır.
     [Theory]
     [InlineData("Ahmet Yılmaz")]
-    [InlineData("Fatma Demir")]
-    [InlineData("Mustafa Kemal")]
+    [InlineData("Fatma Demir (Hasan)")]
+    [InlineData("MUSTAFA KEMAL / ALİ")]
     [InlineData("Özlem Şahin")]
     [InlineData("Anonim Şirketi Ltd")]
-    public void TAKBIS_Gercek_Ad_Soyad_Veya_Unvan_Iceren_Malik_Kodlarini_Reddetmeli(string adSoyad)
+    public void TAKBIS_Ad_Soyad_Baba_Adi_Veya_Unvan_Iceren_Malik_Alanini_SORU_055_Geregi_Kabul_Etmeli(string adSoyad)
     {
         var hisseler = new[] { new TakbisHisseGirdisi(adSoyad, BigInteger.One, BigInteger.One, true) };
         var parsel = new TakbisParselGirdisi("101/1", 1000.00m, hisseler);
 
         var result = TakbisGirdiDogrulayici.Dogrula(parsel);
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Malikler[0].MalikId.Should().Be(adSoyad);
+    }
+
+    [Theory]
+    [InlineData("Ahmet Yılmaz 12345678901")]
+    [InlineData("Fatma Demir (Hasan) 123 456 789 01")]
+    public void TAKBIS_Ad_Icine_Gomulu_TC_Kimlik_No_KVKK_Geregi_Reddetmeli_Ve_Sizdirmamali(string deger)
+    {
+        var hisseler = new[] { new TakbisHisseGirdisi(deger, BigInteger.One, BigInteger.One, true) };
+        var parsel = new TakbisParselGirdisi("101/1", 1000.00m, hisseler);
+
+        var result = TakbisGirdiDogrulayici.Dogrula(parsel);
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be(ErrorCodes.TapuDagitimGirdisiGecersiz);
-        result.Error.TechnicalMessage.Should().Contain("KVKK");
-        result.Error.TechnicalMessage.Should().NotContain(adSoyad, "Ad-soyad bilgisi hata mesajına sızamaz");
+        result.Error.TechnicalMessage.Should().Contain("KVKK").And.NotContain(deger).And.NotContain("Yılmaz").And.NotContain("Demir");
     }
 
     [Theory]
