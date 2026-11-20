@@ -1,5 +1,6 @@
 using System.Globalization;
 using Imar18.Application.Cikti;
+using Imar18.Application.Girdi;
 using Imar18.Domain.Geometry;
 
 namespace Imar18.Infrastructure.Cikti.FenKlasoru;
@@ -132,11 +133,21 @@ internal static class FenKlasoruVerisi
         return 10000;
     }
 
-    /// <summary>Malik adı (rehberde varsa ad soyad, yoksa anonim kod) ve baba adı.</summary>
+    /// <summary>
+    /// Malik adı ve baba adı: rehberde varsa rehberin ayrı alanları; yoksa SAHA-011 / SORU-055 malik etiketi ayrıştırılır
+    /// (<c>AD SOYAD (BABA ADI)</c> / <c>AD SOYAD / BABA ADI</c>; <c> #n</c> eki ad sütununda kalır; eski anonim kod olduğu gibi, baba boş).
+    /// </summary>
     public static (string Ad, string Baba) Malik(CiktiPaketi p, string malikKodu)
     {
         var r = p.Rehber.Bul(malikKodu);
-        return r is null ? (malikKodu, string.Empty) : (r.AdSoyad, r.BabaAdi ?? string.Empty);
+        if (r is not null)
+        {
+            return (r.AdSoyad, r.BabaAdi ?? string.Empty);
+        }
+
+        // Reviewer L11: aynı adlı farklı kişiler cetvelde ayırt edilsin diye " #n" eki ad sütununda korunur.
+        var (ad, baba) = MalikEtiketi.Ayristir(malikKodu);
+        return (ad + MalikEtiketi.EkiAl(malikKodu), baba ?? string.Empty);
     }
 
     /// <summary>Kadastro parsel kimliğinden ada ve parsel (rehberdeki tapu kaydı varsa öncelikli).</summary>

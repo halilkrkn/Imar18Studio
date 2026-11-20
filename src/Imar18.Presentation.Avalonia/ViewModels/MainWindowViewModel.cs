@@ -437,7 +437,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // eşleme sahneye ve projeye (ParselGeometrileriAyarlaKomutu) yazılır, eskimiş sonuç sessizce atılır.
         var nesil = ++_uygulamaNesli;
         var roles = Wizard.RoleMap;
-        var (scene, notlar, format, layerCount, matched) = await Task.Run(() => Compute(document, roles)).ConfigureAwait(true);
+        var projeli = _proje is not null;
+        var (scene, notlar, format, layerCount, _, geometri) = await Task.Run(() =>
+        {
+            var c = Compute(document, roles);
+            // SAHA-010 (architect M6): kabuk/yinelenen denetimi O(n²) olduğundan eşleme de arka planda yapılır (50 ms kuralı).
+            return (c.Scene, c.Notlar, c.Format, c.LayerCount, c.Matched, projeli ? ProjeGeometriEslemesi.Olustur(c.Matched, roles) : null);
+        }).ConfigureAwait(true);
         if (nesil != _uygulamaNesli)
         {
             return;
@@ -457,16 +463,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
             Parcels.Add(new ParcelRow(p.LayerName, TurkceAdlar.Ad(p.Role), p.Label, p.AreaM2));
         }
 
-        if (_proje is not null)
+        if (_proje is not null && geometri is not null)
         {
-            var geometri = ProjeGeometriEslemesi.Olustur(matched, roles);
             if (geometri.AtlananSayisi > 0)
             {
                 Warnings.Add($"{geometri.AtlananSayisi} parsel poligonu geçersiz/açık olduğu için projeye alınmadı.");
             }
 
+            foreach (var u in geometri.Uyarilar)
+            {
+                Warnings.Add(u); // SAHA-010: R2 çift sayım önlemleri Uyarı & Denetim sekmesinde
+            }
+
             StatusText = DurumMetni(format, scene, layerCount);
-            LastProjeTask = ProjeyeGonderAsync(new ParselGeometrileriAyarlaKomutu(geometri.Parseller));
+            LastProjeTask = ProjeyeGonderAsync(new ParselGeometrileriAyarlaKomutu(geometri.Parseller) { CiftSayimHaricSayisi = geometri.CiftSayimHaricSayisi });
             await LastProjeTask.ConfigureAwait(true);
         }
         else
@@ -559,7 +569,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var notlar = document.Warnings.ToList();
         if (document.Format is CadFormat.Dxf or CadFormat.Dwg)
         {
-            foreach (var role in new[] { CadLayerRole.ZoningParcel, CadLayerRole.CadastralParcel })
+            // SAHA-010: İmar Adası yalnız İmar Parseli katmanı yoksa R2'ye girer; o zaman etiketlenir (aksi hâlde ada içindeki parsel
+            // yazıları "belirsiz etiket" uyarısı üretirdi).
+            // Reviewer L7: öncelik ProjeGeometriEslemesi ile aynı ölçüte (kapalı İmar Parseli poligonu var mı) dayanır.
+            var parselKatmaniVar = document.Polylines.Any(p => p.IsClosed && roles.Resolve(p.LayerName) == CadLayerRole.ZoningParcel);
+            CadLayerRole[] etiketRolleri = parselKatmaniVar
+                ? [CadLayerRole.ZoningParcel, CadLayerRole.CadastralParcel]
+                : [CadLayerRole.ZoningParcel, CadLayerRole.ZoningBlock, CadLayerRole.CadastralParcel];
+            foreach (var role in etiketRolleri)
             {
                 var match = CadLabelMatcher.Match(document, roles, [role]);
                 document = document with { Polylines = match.Polylines };

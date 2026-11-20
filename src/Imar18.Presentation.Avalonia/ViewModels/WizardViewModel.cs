@@ -486,7 +486,8 @@ public sealed partial class WizardViewModel : ObservableObject
             katman.Add("En az bir katman 'kadastro parseli (giren)' rolüne atanmalı.");
         }
 
-        if (!LayerRoles.Any(r => r.Role == CadLayerRole.ZoningParcel))
+        // SAHA-010 / SORU-054: İmar Parseli yoksa R2 İmar Adası alanlarından hesaplanır; ikisinden biri yeterlidir.
+        if (!LayerRoles.Any(r => r.Role is CadLayerRole.ZoningParcel or CadLayerRole.ZoningBlock))
         {
             katman.Add("En az bir katman 'imar parseli (oluşan)' rolüne atanmalı.");
         }

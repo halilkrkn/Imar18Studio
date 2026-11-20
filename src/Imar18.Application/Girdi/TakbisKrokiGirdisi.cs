@@ -6,7 +6,10 @@ using Imar18.Domain.Numerics;
 
 namespace Imar18.Application.Girdi;
 
-/// <summary>Vektorel/manuel TAKBİS hisse satiri. <see cref="MalikKodu"/> anonim koddur (TC Kimlik No girilmez — KVKK).</summary>
+/// <summary>
+/// Vektorel/manuel TAKBİS hisse satiri. <see cref="MalikKodu"/>: <c>AD SOYAD (BABA ADI)</c> etiketi veya eski anonim kod
+/// (<c>M01</c>, <c>Malik-01</c>) — SORU-055; T.C. Kimlik No girilmez (KVKK, <see cref="MalikEtiketi"/>).
+/// </summary>
 public sealed record TakbisHisseGirdisi(string MalikKodu, BigInteger Pay, BigInteger Payda, bool Muvafakatli);
 
 /// <summary>Vektorel/manuel TAKBİS kadastro parseli girdisi (P4.2).</summary>
@@ -17,8 +20,9 @@ public sealed record KrokiEslesmeGirdisi(string MalikKodu, string KadastroParsel
 
 /// <summary>
 /// TAKBİS girdisini dogrulayip Domain <see cref="KadastroParseli"/>'ne cevirir. Hisseler <see cref="Fraction"/> ile tam toplanir.
-/// Hatalar: hisse yok ERR-TAPU-002, toplam ≠ 1 ERR-TAPU-003, diger gecersiz girdiler ERR-TAPU-004. Mesajlara malik kodu
-/// veya kimlik numarasi yazilmaz.
+/// Hatalar: hisse yok ERR-TAPU-002, toplam ≠ 1 ERR-TAPU-003, diger gecersiz girdiler ERR-TAPU-004. Mesajlara malik adi/kodu
+/// veya kimlik numarasi yazilmaz. SORU-055: malik alani <see cref="MalikEtiketi.GecerliMi"/> kuralina uyar (ad etiketi veya eski kod);
+/// parsel ici yinelenen malik <see cref="MalikEtiketi.Anahtar"/> ile (yazim farkindan bagimsiz) denetlenir; kimlik yazildigi gibi saklanir.
 /// </summary>
 public static class TakbisGirdiDogrulayici
 {
@@ -43,7 +47,7 @@ public static class TakbisGirdiDogrulayici
         }
 
         var malikler = new List<KadastroMaliki>(girdi.Hisseler.Count);
-        var gorulen = new HashSet<string>(StringComparer.Ordinal);
+        var gorulen = new HashSet<string>(StringComparer.Ordinal); // MalikEtiketi.Anahtar
         foreach (var h in girdi.Hisseler)
         {
             var kod = h.MalikKodu?.Trim() ?? string.Empty;
@@ -52,13 +56,18 @@ public static class TakbisGirdiDogrulayici
                 return GirdiHatasi.Gecersiz<KadastroParseli>("owner code must not be empty");
             }
 
-            if (!AnonimKodGibi(kod) || KimlikNumarasiGibi(kod))
+            if (MalikEtiketi.KimlikNumarasiIceriyor(kod))
             {
-                return GirdiHatasi.Gecersiz<KadastroParseli>(
-                    "owner code must be an anonymous code (ASCII letters/digits/-/_/., no spaces, not a national id number) (KVKK)");
+                return GirdiHatasi.Gecersiz<KadastroParseli>("owner field must not contain a national id number (KVKK)");
             }
 
-            if (!gorulen.Add(kod))
+            if (!MalikEtiketi.GecerliMi(kod))
+            {
+                return GirdiHatasi.Gecersiz<KadastroParseli>(
+                    "owner field must be a name label 'AD SOYAD (BABA ADI)' or a code (letters, digits, space, - _ . ( ) / ' , & #; max 100; no ';', leading '#' or control characters) (KVKK)");
+            }
+
+            if (!gorulen.Add(MalikEtiketi.Anahtar(kod)))
             {
                 return GirdiHatasi.Gecersiz<KadastroParseli>("duplicate owner code in parcel");
             }
@@ -85,17 +94,29 @@ public static class TakbisGirdiDogrulayici
 
         return Result<KadastroParseli>.Success(new KadastroParseli(girdi.ParselKimligi.Trim(), girdi.TapuAlaniM2, malikler.AsReadOnly()));
     }
+}
 
-    /// <summary>Ayiraclar atildiginda 11 haneli, sifirla baslamayan sayi TC Kimlik No bicimidir ("123-456-789-01" dahil).</summary>
-    private static bool KimlikNumarasiGibi(string kod)
+/// <summary>
+/// SAHA-011 (reviewer H2): parseller arasinda yazim farkli ayni malik (<c>Ayşe Yılmaz (Ali)</c> / <c>AYŞE YILMAZ (ALİ)</c>) Domain'de
+/// Ordinal gruplandigi icin iki kisi sayilirdi. Her <see cref="MalikEtiketi.Anahtar"/> icin ilk gorulen yazim (parsel sirasiyla)
+/// tum parsellerde kanonik <see cref="KadastroMaliki.MalikId"/> olur; hisse ve muvafakat degismez.
+/// </summary>
+public static class TakbisMalikKimlikleri
+{
+    public static IReadOnlyList<KadastroParseli> Birlestir(IReadOnlyList<KadastroParseli> parseller)
     {
-        var rakamlar = new string(kod.Where(char.IsAsciiDigit).ToArray());
-        return rakamlar.Length == 11 && rakamlar[0] != '0' && kod.All(c => char.IsAsciiDigit(c) || c is '-' or '.' or '_');
-    }
+        ArgumentNullException.ThrowIfNull(parseller);
+        var kanonik = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var m in parseller.SelectMany(p => p.Malikler))
+        {
+            kanonik.TryAdd(MalikEtiketi.Anahtar(m.MalikId), m.MalikId);
+        }
 
-    /// <summary>Anonim kod: 1–32 ASCII harf/rakam ve - _ . (ad-soyad gibi bosluklu veya Turkce harfli metin reddedilir).</summary>
-    private static bool AnonimKodGibi(string kod) =>
-        kod.Length is >= 1 and <= 32 && kod.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.');
+        return parseller
+            .Select(p => p with { Malikler = p.Malikler.Select(m => m with { MalikId = kanonik[MalikEtiketi.Anahtar(m.MalikId)] }).ToList().AsReadOnly() })
+            .ToList()
+            .AsReadOnly();
+    }
 }
 
 /// <summary>Kroki satirlarini dogrulayip Domain <see cref="HakEslestirmeSatiri"/> listesine cevirir.</summary>
@@ -126,8 +147,10 @@ public static class KrokiGirdiDogrulayici
                 return GirdiHatasi.Gecersiz<IReadOnlyList<HakEslestirmeSatiri>>("sketch row references an unknown cadastral parcel");
             }
 
-            var malik = s.MalikKodu?.Trim() ?? string.Empty;
-            if (!parsel.Malikler.Any(m => string.Equals(m.MalikId, malik, StringComparison.Ordinal)))
+            // SAHA-011: yazım farkından bağımsız (Türkçe büyük harf, "AD / BABA" ≡ "AD (BABA)") eşleşir; Domain'e TAKBİS kimliği gider.
+            var anahtar = MalikEtiketi.Anahtar(s.MalikKodu?.Trim() ?? string.Empty);
+            var tapuMaliki = parsel.Malikler.FirstOrDefault(m => string.Equals(MalikEtiketi.Anahtar(m.MalikId), anahtar, StringComparison.Ordinal));
+            if (tapuMaliki is null)
             {
                 var e = ErrorCatalog.Get(ErrorCodes.TapuMalikEslesmedi);
                 return Result<IReadOnlyList<HakEslestirmeSatiri>>.Failure(e with
@@ -147,7 +170,7 @@ public static class KrokiGirdiDogrulayici
                 return GirdiHatasi.Gecersiz<IReadOnlyList<HakEslestirmeSatiri>>("sketch area must be positive with at most 2 decimals");
             }
 
-            sonuc.Add(new HakEslestirmeSatiri(malik, parselId, imar, s.AlanM2));
+            sonuc.Add(new HakEslestirmeSatiri(tapuMaliki.MalikId, parselId, imar, s.AlanM2));
         }
 
         return Result<IReadOnlyList<HakEslestirmeSatiri>>.Success(sonuc.AsReadOnly());

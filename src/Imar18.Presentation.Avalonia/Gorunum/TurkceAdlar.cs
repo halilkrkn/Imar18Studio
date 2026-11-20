@@ -25,6 +25,8 @@ public static class TurkceAdlar
         CadLayerRole.CadastralLine => "Kadastro Hattı",
         CadLayerRole.NewParcelPoint => "Yeni Parsel Noktası",
         CadLayerRole.RegisteredPoint => "Tescilli Nokta",
+        CadLayerRole.ZoningBlock => "İmar Adası",
+        CadLayerRole.Ignored => "Yoksay",
         _ => "Bilinmeyen Rol",
     };
 

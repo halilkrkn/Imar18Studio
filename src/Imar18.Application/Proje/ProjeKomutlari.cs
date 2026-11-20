@@ -84,8 +84,8 @@ public sealed record ProjeyiSifirlaKomutu : IProjeKomutu
 }
 
 /// <summary>
-/// P7.3-B1 (SAHA-006): yerel Malik Rehberi'ni tümüyle değiştirir (webtapu aktarımı). Kodlar benzersiz ve TAKBİS anonim kod
-/// biçiminde (1–32 ASCII harf/rakam/-_.), adlar boş olmamalıdır. Denetime yalnız sayım yazılır; ad/kimlik yazılmaz (KVKK).
+/// P7.3-B1 (SAHA-006): yerel Malik Rehberi'ni tümüyle değiştirir (webtapu aktarımı). Kodlar benzersiz (yazım farkından bağımsız)
+/// ve TAKBİS malik alanı kuralında (SORU-055: <c>AD SOYAD (BABA ADI)</c> veya eski kod; T.C. Kimlik No yok), adlar boş olmamalıdır. Denetime yalnız sayım yazılır; ad/kimlik yazılmaz (KVKK).
 /// Rehber RevisionId'ye girmediği için onay düşmez.
 /// </summary>
 public sealed record MalikRehberiAyarlaKomutu(Girdi.MalikRehberi Rehber) : IProjeKomutu
@@ -108,12 +108,12 @@ public sealed record MalikRehberiAyarlaKomutu(Girdi.MalikRehberi Rehber) : IProj
         foreach (var m in Rehber.Malikler)
         {
             var kod = m.MalikKodu?.Trim() ?? string.Empty;
-            if (kod.Length is 0 or > 32 || !kod.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.'))
+            if (!Girdi.MalikEtiketi.GecerliMi(kod))
             {
-                return KomutHatasi.Gecersiz(Ad, "owner code must be an anonymous code (ASCII letters/digits/-/_/.)");
+                return KomutHatasi.Gecersiz(Ad, "owner code must be a name label or code without a national id number (KVKK)");
             }
 
-            if (!kodlar.Add(kod))
+            if (!kodlar.Add(Girdi.MalikEtiketi.Anahtar(kod)))
             {
                 return KomutHatasi.Gecersiz(Ad, "duplicate owner code");
             }
@@ -151,7 +151,11 @@ public sealed record ParselGeometrileriAyarlaKomutu(IReadOnlyList<ParselGeometri
 {
     public string Ad => "ParselGeometrileriAyarla";
 
-    public string? Ayrinti => "parselSayisi=" + KomutHatasi.Sayi(Parseller?.Count ?? 0);
+    /// <summary>SAHA-010: R2 çift sayımını önlemek için projeye alınmayan imar adası / yinelenen / kabuk poligon sayısı (denetim izi).</summary>
+    public int CiftSayimHaricSayisi { get; init; }
+
+    public string? Ayrinti => "parselSayisi=" + KomutHatasi.Sayi(Parseller?.Count ?? 0)
+        + (CiftSayimHaricSayisi > 0 ? ";ciftSayimHaric=" + KomutHatasi.Sayi(CiftSayimHaricSayisi) : string.Empty);
 
     public Result<ProjeBelgesi> Uygula(ProjeBelgesi mevcut)
     {

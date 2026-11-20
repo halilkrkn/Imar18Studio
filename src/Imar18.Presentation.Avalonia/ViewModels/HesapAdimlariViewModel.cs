@@ -59,7 +59,7 @@ public sealed partial class TecvizSatiri : ObservableObject
 /// imar toplamı veya mühendis girdisi, D1/D2/R3/ortak katılım, <see cref="DopGirdisiAyarlaKomutu"/>), 4. Hak eşleştirme
 /// (TAKBİS hisseleri, kroki satırları, geçici↔tescil eşlemesi, <see cref="HakEslestirmeAyarlaKomutu"/>). Hesap yapılmaz: tüm
 /// sonuçlar <see cref="ApprovalService.Degerlendir"/> (Domain motoru) ile arka planda üretilir (50 ms kuralı) ve kullanıcıya
-/// yalnızca Türkçe <c>UserMessage</c> gösterilir. Malik kodları anonim kod olmalıdır (TAKBİS doğrulayıcı, KVKK).
+/// yalnızca Türkçe <c>UserMessage</c> gösterilir. Malik alanı SORU-055 gereği <c>AD SOYAD (BABA ADI)</c> veya eski koddur; T.C. Kimlik No reddedilir (TAKBİS doğrulayıcı, KVKK).
 /// </summary>
 public sealed partial class HesapAdimlariViewModel : ObservableObject
 {
@@ -368,6 +368,13 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
             : "Y1 dengelemesi için tek yol terk parseli ve geçen tecviz gerekir.";
 
         DopMesajlari.Clear();
+        if (belge.Dop is { } kayitli && d.OnerilenR2M2 is { } guncelR2 && kayitli.R2 != guncelR2)
+        {
+            // SAHA-010: katman rolü/geometri değişince R2 otomatik anında güncellenir; kayıtlı DOP girdisi sessizce değiştirilmez.
+            DopMesajlari.Add(string.Create(CultureInfo.InvariantCulture,
+                $"Kayıtlı DOP girdisindeki R2 {kayitli.R2:0.00} m², güncel otomatik R2 {guncelR2:0.00} m² ile farklı (katman rolü veya geometri değişti). Netcad DOP sayfası değeri değilse R2 kutusunu boşaltıp \"DOP Uygula\" deyin."));
+        }
+
         if (d.Dop is { } s)
         {
             DopOzeti = string.Create(CultureInfo.InvariantCulture,
@@ -554,7 +561,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         {
             if (grup.Any(s => s.Length != 4))
             {
-                DurumMetni = TakbisHatasi = "TAKBİS satırı biçimi: parselId;malikKodu;pay/payda;E|H";
+                DurumMetni = TakbisHatasi = "TAKBİS satırı biçimi: parselId;malik (AD SOYAD (BABA ADI) veya kod);pay/payda;E|H";
                 return null;
             }
 
@@ -588,7 +595,8 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
             kadastro.Add(k.Value);
         }
 
-        return kadastro;
+        // SAHA-011 (reviewer H2): parseller arası yazım farklı aynı malik tek kimliğe birleştirilir.
+        return [.. TakbisMalikKimlikleri.Birlestir(kadastro)];
     }
 
     private static IEnumerable<string[]> Satirlar(string metin) => (metin ?? string.Empty)

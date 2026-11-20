@@ -62,7 +62,8 @@ public sealed record KrokiEslestirmeSonucu(
 /// P7.3-B2 (SAHA-006): Yaklaşık Yer Krokisi (.NCZ/.DXF/.DWG) → Kroki satırları (<c>malik;kadastro;imar;alan</c>).
 /// <list type="number">
 /// <item><b>Kip 1</b> — krokideki kapalı poligonlar malikin kullanım alanıdır: etiket (poligon etiketi, sonra içindeki yazılar)
-/// sırasıyla TAKBİS malik kodu, rehberdeki kişi sistem no, rehberdeki normalize ad (NCZ etiketi 15 karakterle kesildiği için en
+/// sırasıyla TAKBİS malik kimliği (SAHA-011: <c>AD SOYAD (BABA ADI)</c> etiketi veya eski kod; Türkçe büyük harf duyarsız), rehberdeki
+/// kişi sistem no, rehberdeki normalize ad, en son rehbersiz etiketin ad soyad kısmı (NCZ etiketi 15 karakterle kesildiği için en
 /// az 5 karakterlik tekil önek de kabul) ile malike çözülür. Her kadastro K, imar I için ağırlık += alan(K ∩ I ∩ U).</item>
 /// <item><b>Kip 2</b> — K ∩ I'nin kullanım poligonlarıyla karşılanmayan kalanı (veya tamamı) K'nin TAKBİS hisse oranlarıyla
 /// (<see cref="Fraction"/>) maliklere bölünür.</item>
@@ -145,7 +146,7 @@ public static class YaklasikYerKrokisiEslestirici
         else if (cozulemeyen > 0)
         {
             uyarilar.Add(string.Create(CultureInfo.InvariantCulture,
-                $"{cozulemeyen} kullanım poligonu malike çözülemedi (etiket M-kodu, rehberdeki ad veya kişi no değil); alanı hisse oranında bölündü (Kip 2)."));
+                $"{cozulemeyen} kullanım poligonu malike çözülemedi (etiket TAKBİS malik adı/kodu, rehberdeki ad veya kişi no değil); alanı hisse oranında bölündü (Kip 2)."));
         }
 
         var satirlar = new List<KrokiEslesmeGirdisi>();
@@ -239,7 +240,9 @@ public static class YaklasikYerKrokisiEslestirici
             return null;
         }
 
-        var kod = kodlar.FirstOrDefault(k => string.Equals(k, t, StringComparison.OrdinalIgnoreCase));
+        // SAHA-011: TAKBİS kimliği (ad etiketi veya eski kod) yazım farkından bağımsız (Türkçe büyük harf) eşleşir.
+        var anahtar = MalikEtiketi.Anahtar(t);
+        var kod = kodlar.FirstOrDefault(k => string.Equals(MalikEtiketi.Anahtar(k), anahtar, StringComparison.Ordinal));
         if (kod is not null)
         {
             return kod;
@@ -253,7 +256,25 @@ public static class YaklasikYerKrokisiEslestirici
 
         var ad = WebtapuAktarici.Normalize(t);
         return Tek(adaylar.Where(r => string.Equals(WebtapuAktarici.Normalize(r.AdSoyad), ad, StringComparison.Ordinal)))
-            ?? (ad.Length >= 5 ? Tek(adaylar.Where(r => WebtapuAktarici.Normalize(r.AdSoyad).StartsWith(ad, StringComparison.Ordinal))) : null);
+            ?? (ad.Length >= 5 ? Tek(adaylar.Where(r => WebtapuAktarici.Normalize(r.AdSoyad).StartsWith(ad, StringComparison.Ordinal))) : null)
+            ?? EtikettenCoz(ad, kodlar);
+    }
+
+    /// <summary>
+    /// SAHA-011: rehbersiz (elle yazılmış) <c>AD SOYAD (BABA ADI)</c> TAKBİS etiketlerinin ad soyad kısmıyla tam, sonra ≥ 5 karakterlik
+    /// tekil önekle eşleşme.
+    /// </summary>
+    private static string? EtikettenCoz(string ad, IReadOnlyList<string> kodlar)
+    {
+        var adlar = kodlar.Select(k => (Kod: k, Ad: WebtapuAktarici.Normalize(MalikEtiketi.Ayristir(k).AdSoyad))).ToList();
+        return TekKod(adlar.Where(a => string.Equals(a.Ad, ad, StringComparison.Ordinal)).Select(a => a.Kod))
+            ?? (ad.Length >= 5 ? TekKod(adlar.Where(a => a.Ad.StartsWith(ad, StringComparison.Ordinal)).Select(a => a.Kod)) : null);
+    }
+
+    private static string? TekKod(IEnumerable<string> adaylar)
+    {
+        var liste = adaylar.Take(2).ToList();
+        return liste.Count == 1 ? liste[0] : null;
     }
 
     private static string? Tek(IEnumerable<MalikRehberKaydi> adaylar)

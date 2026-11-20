@@ -163,7 +163,7 @@ public sealed partial class OrtakNoktaSatirVm : TabloSatiri
     }
 }
 
-/// <summary>4. adım TAKBİS hisse satırı: <c>kadastroParseli;malikKodu;pay/payda;E|H</c>.</summary>
+/// <summary>4. adım TAKBİS hisse satırı: <c>kadastroParseli;malik;pay/payda;E|H</c> (malik: <c>AD SOYAD (BABA ADI)</c> veya kod — SORU-055).</summary>
 public sealed partial class TakbisSatirVm : TabloSatiri
 {
     /// <summary>Muvafakat seçenekleri: E (muvafakatli), H (muvafakatsiz).</summary>
@@ -225,7 +225,7 @@ public sealed partial class TakbisSatirVm : TabloSatiri
             || !BigInteger.TryParse(p[1], NumberStyles.None, CultureInfo.InvariantCulture, out var payda) || payda.IsZero);
         MuvafakatHatali = Kirp(Muvafakat) is { Length: > 0 } m && m is not ("E" or "H");
         Hata = MetinHucresiHatasi("Kadastro Parseli", KadastroParseli, ilkSutun: true)
-            ?? MetinHucresiHatasi("Malik Kodu", MalikKodu)
+            ?? MetinHucresiHatasi("Malik", MalikKodu)
             ?? (HisseHatali ? "Hisse: pay/payda tam sayı olmalı ve payda 0 olmamalı (ör. 1/2)."
             : MuvafakatHatali ? "Muvafakat: E veya H olmalı."
             : EkHatasi());
@@ -268,7 +268,7 @@ public sealed partial class KrokiSatirVm : TabloSatiri
     protected override void Denetle()
     {
         AlanHatali = SayiHatali(Alan);
-        Hata = MetinHucresiHatasi("Malik Kodu", MalikKodu, ilkSutun: true)
+        Hata = MetinHucresiHatasi("Malik", MalikKodu, ilkSutun: true)
             ?? MetinHucresiHatasi("Kadastro Parseli", KadastroParseli)
             ?? MetinHucresiHatasi("İmar Parseli", ImarParseli)
             ?? (AlanHatali ? SayiHatasi("Alan (m²)", Alan) : EkHatasi());

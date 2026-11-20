@@ -10,9 +10,10 @@ using Xunit;
 namespace Imar18.Application.Tests.Girdi;
 
 /// <summary>
-/// P7.3-B1 (SAHA-006): webtapu tapu kaydının TAKBİS hisselerine ve yerel Malik Rehberi'ne aktarımı. Hesap motoru anonim malik
-/// koduyla (M01, M02 …) çalışır; ad/baba adı/kişi no yalnız rehberde durur (RevisionId'ye ve denetim kaydına girmez —
-/// SORU-040 c). Kroki satırlarına dokunulmaz (B2'nin işi). Adlar uydurmadır.
+/// P7.3-B1 (SAHA-006): webtapu tapu kaydının TAKBİS hisselerine ve yerel Malik Rehberi'ne aktarımı. SAHA-011 / SORU-055 (proje
+/// sahibi kararı, 20 Kasım 2026) gereği yeni malik kimliği ekran etiketi <c>AD SOYAD (BABA ADI)</c>'dır (eski beklenti: anonim
+/// M01, M02 …); ad etiketi geçersizse (ör. T.C. Kimlik No içeren ad) anonim Mnn koduna düşülür. Ad/baba adı/kişi no rehberde ayrı
+/// alanlarda durur; denetim kaydına girmez. Kroki satırlarına dokunulmaz (B2'nin işi). Adlar uydurmadır.
 /// </summary>
 public sealed class WebtapuAktarimiTests
 {
@@ -28,14 +29,14 @@ public sealed class WebtapuAktarimiTests
         Malik("900000103", "800000003", "ŞÜKRÜ IŞIK", "HASAN", 1, 4, 250.00m));
 
     [Fact]
-    public void WebtapuAktarimi_Yeni_Maliklere_Belge_Sirasiyla_M01_den_Baslayan_Anonim_Kod_Vermeli()
+    public void WebtapuAktarimi_Yeni_Maliklere_Belge_Sirasiyla_Ad_Soyad_Baba_Adi_Etiketi_Vermeli_SORU_055()
     {
         var a = WebtapuAktarici.Aktar(Ornek(), "K7", MalikRehberi.Bos);
 
-        a.Hisseler.Select(h => h.MalikKodu).Should().Equal("M01", "M02", "M03");
+        a.Hisseler.Select(h => h.MalikKodu).Should().Equal("AYŞE YILMAZ (ALİ)", "MEHMET ÇAKIR (ALİ)", "ŞÜKRÜ IŞIK (HASAN)");
         a.Hisseler.Select(h => (h.Pay, h.Payda)).Should().Equal((1, 2), (1, 4), (1, 4));
         a.Hisseler.Should().OnlyContain(h => !h.Muvafakatli, "webtapu muvafakat bilgisi içermez; varsayılan H (SORU-040 a)");
-        a.Rehber.Malikler.Should().ContainSingle(r => r.MalikKodu == "M01" && r.AdSoyad == "AYŞE YILMAZ" && r.BabaAdi == "ALİ" && r.KisiSistemNo == "800000001");
+        a.Rehber.Malikler.Should().ContainSingle(r => r.MalikKodu == "AYŞE YILMAZ (ALİ)" && r.AdSoyad == "AYŞE YILMAZ" && r.BabaAdi == "ALİ" && r.KisiSistemNo == "800000001");
     }
 
     [Fact]
@@ -56,7 +57,7 @@ public sealed class WebtapuAktarimiTests
 
         var ikinci = WebtapuAktarici.Aktar(ikinciKayit, "K8", ilk.Rehber);
 
-        ikinci.Hisseler.Select(h => h.MalikKodu).Should().Equal("M03", "M04");
+        ikinci.Hisseler.Select(h => h.MalikKodu).Should().Equal("ŞÜKRÜ IŞIK (HASAN)", "ZEYNEP ÖZ (MUSA)");
         ikinci.Rehber.Malikler.Should().HaveCount(4);
         ikinci.Rehber.Parseller.Select(p => p.KadastroParselId).Should().BeEquivalentTo("K7", "K8");
     }
@@ -64,10 +65,13 @@ public sealed class WebtapuAktarimiTests
     [Fact]
     public void WebtapuAktarimi_Yeni_Kod_TAKBISte_Kullanilan_Ayrilmis_Kodlarla_Cakismamali()
     {
-        // Reviewer H1: TAKBİS'te elle girilmiş M01/M3 başka kişilerdir; rehber boş olsa da yeni kodlar onların üstünden başlamalı.
+        // Reviewer H1: TAKBİS'te elle girilmiş M01/M3 başka kişilerdir. SORU-055: ad etiketleri onlarla çakışmaz; anonim koda düşen
+        // (T.C. Kimlik No içeren adlı) malik için Mnn sayacı ayrılmış kodların üstünden başlar.
         var a = WebtapuAktarici.Aktar(Ornek(), "K7", MalikRehberi.Bos, ["M01", "M3", "MLK-001"]);
+        var tckn = WebtapuAktarici.Aktar(Kayit("901", "9", Malik("9", null, "AYŞE 12345678901", null, 1, 1, 1000.00m)), "K9", MalikRehberi.Bos, ["M01", "M3", "MLK-001"]);
 
-        a.Hisseler.Select(h => h.MalikKodu).Should().Equal("M04", "M05", "M06");
+        a.Hisseler.Select(h => h.MalikKodu).Should().Equal("AYŞE YILMAZ (ALİ)", "MEHMET ÇAKIR (ALİ)", "ŞÜKRÜ IŞIK (HASAN)");
+        tckn.Hisseler.Single().MalikKodu.Should().Be("M04");
         a.Rehber.Malikler.Select(m => m.MalikKodu).Should().NotContain(["M01", "M03"]);
     }
 
@@ -78,7 +82,7 @@ public sealed class WebtapuAktarimiTests
 
         var ikinci = WebtapuAktarici.Aktar(Kayit("901", "8", Malik("2", null, "AYŞE  YILMAZ", "ALİ", 1, 1, 1000.00m)), "K8", ilk.Rehber);
 
-        ikinci.Hisseler.Single().MalikKodu.Should().Be("M01");
+        ikinci.Hisseler.Single().MalikKodu.Should().Be("AYŞE YILMAZ (ALİ)");
     }
 
     [Fact]
@@ -108,11 +112,12 @@ public sealed class WebtapuAktarimiTests
     }
 
     [Fact]
-    public void WebtapuAktarimi_Mevcut_Rehberdeki_En_Buyuk_Koddan_Devam_Etmeli()
+    public void WebtapuAktarimi_Anonim_Koda_Dusen_Malik_Mevcut_Rehberdeki_En_Buyuk_Koddan_Devam_Etmeli()
     {
         var rehber = new MalikRehberi([new MalikRehberKaydi("M07", "VAR OLAN", "X", "811111111")], []);
+        var kayit = Kayit("901", "7", Malik("1", null, "AYŞE 12345678901", null, 1, 2, 500.00m), Malik("2", null, "ZEYNEP ÖZ", "MUSA", 1, 2, 500.00m));
 
-        WebtapuAktarici.Aktar(Ornek(), "K7", rehber).Hisseler.Select(h => h.MalikKodu).Should().Equal("M08", "M09", "M10");
+        WebtapuAktarici.Aktar(kayit, "K7", rehber).Hisseler.Select(h => h.MalikKodu).Should().Equal("M08", "ZEYNEP ÖZ (MUSA)");
     }
 
     [Fact]
@@ -123,7 +128,7 @@ public sealed class WebtapuAktarimiTests
 
         var yeni = WebtapuAktarici.TakbisMetniniGuncelle(Mevcut, "K7", a.Hisseler);
 
-        yeni.Split('\n').Select(s => s.TrimEnd('\r')).Should().Equal("# not", "K9;M50;1/1;E", "K7;M01;1/2;H", "K7;M02;1/4;H", "K7;M03;1/4;H");
+        yeni.Split('\n').Select(s => s.TrimEnd('\r')).Should().Equal("# not", "K9;M50;1/1;E", "K7;AYŞE YILMAZ (ALİ);1/2;H", "K7;MEHMET ÇAKIR (ALİ);1/4;H", "K7;ŞÜKRÜ IŞIK (HASAN);1/4;H");
     }
 
     [Theory]
@@ -163,7 +168,7 @@ public sealed class WebtapuAktarimiTests
 
     [Theory]
     [InlineData("M01", "M01", "AYŞE", "duplicate")]
-    [InlineData("AYŞE YILMAZ", "M02", "AYŞE", "anonymous")]
+    [InlineData("AYŞE 12345678901", "M02", "AYŞE", "KVKK")] // SORU-055: ad etiketi geçerli; T.C. Kimlik No reddedilir
     [InlineData("M01", "M02", " ", "name")]
     public async Task MalikRehberiAyarla_Gecersiz_Rehberi_Reddetmeli_Ve_Ret_Kaydi_Yazmali(string kod1, string kod2, string ad2, string neden)
     {
@@ -195,7 +200,7 @@ public sealed class WebtapuAktarimiTests
     {
         var r = WebtapuAktarici.Aktar(Ornek(), "K7", MalikRehberi.Bos).Rehber;
 
-        r.Bul("M02")!.AdSoyad.Should().Be("MEHMET ÇAKIR");
+        r.Bul("MEHMET ÇAKIR (ALİ)")!.AdSoyad.Should().Be("MEHMET ÇAKIR");
         r.Bul("M99").Should().BeNull();
         r.Parsel("K7")!.Cilt.Should().Be("12");
         r.Parsel("K0").Should().BeNull();

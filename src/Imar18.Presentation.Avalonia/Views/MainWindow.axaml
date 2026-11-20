@@ -789,7 +789,7 @@
                   <Border Classes="kart">
                     <StackPanel Spacing="6">
                       <Border Classes="kartBaslik"><TextBlock Text="📥 İÇE AKTARIM" Classes="bolum" /></Border>
-                      <TextBlock Text="Ad/soyad yalnız yerel Malik Rehberi'ne yazılır; hesap anonim malik kodlarıyla yapılır (KVKK)." Classes="aciklama" TextWrapping="Wrap" />
+                      <TextBlock Text="Malikler ekranda AD SOYAD (BABA ADI) olarak gösterilir (yalnız yerel, çevrimdışı). T.C. Kimlik No girilemez; denetim kaydına ad yazılmaz (KVKK)." Classes="aciklama" TextWrapping="Wrap" />
                       <Button x:Name="WebtapuYukleDugmesi" Content="📄 webtapu PDF Yükle" Command="{Binding WebtapuIsteCommand}"
                               HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                               ToolTip.Tip="webtapu 'Tapu Kaydı' PDF'lerini seçin (birden çok seçilebilir); yalnız TAKBİS hisselerini doldurur." />
@@ -848,7 +848,7 @@
                   <Border Classes="kart">
                     <StackPanel Spacing="0">
                       <Border Classes="kartBaslik"><TextBlock Text="🧾 HAK EŞLEŞTİRME" Classes="bolum" /></Border>
-                      <TextBlock Text="Malik kodları anonim olmalıdır (KVKK). Satır başına bir kayıt." Classes="aciklama" />
+                      <TextBlock Text="Malik: AD SOYAD (BABA ADI) veya kod (M01). T.C. Kimlik No girilemez (KVKK). Satır başına bir kayıt." Classes="aciklama" />
                       <StackPanel Classes="alanBaslik">
                         <TextBlock Text="TAKBİS hisseleri" Classes="etiket" TextWrapping="Wrap" />
                         <Border Classes="zorunlu"><TextBlock Text="Zorunlu" /></Border>
@@ -858,7 +858,7 @@
                         <StackPanel Spacing="1">
                           <Grid ColumnDefinitions="*,3,*,3,54,3,46,3,24">
                             <TextBlock Text="Kadastro Parseli" Classes="tabloBaslik" />
-                            <TextBlock Grid.Column="2" Text="Malik Kodu" Classes="tabloBaslik" />
+                            <TextBlock Grid.Column="2" Text="Malik (Ad Soyad (Baba Adı))" Classes="tabloBaslik" />
                             <TextBlock Grid.Column="4" Text="Hisse (Pay/Payda)" Classes="tabloBaslik" />
                             <TextBlock Grid.Column="6" Text="Muvafakat" Classes="tabloBaslik" ToolTip.Tip="E: muvafakatli · H: muvafakatsiz" />
                             <TextBlock Grid.Column="8" Text="Sil" Classes="tabloBaslik" HorizontalAlignment="Center" />
@@ -870,7 +870,7 @@
                                   <Grid ColumnDefinitions="*,3,*,3,54,3,46,3,24">
                                     <AutoCompleteBox Classes="hucre" ItemsSource="{Binding $parent[ItemsControl].DataContext.KadastroParselOnerileri}"
                                                      Text="{Binding KadastroParseli, Mode=TwoWay}" FilterMode="Contains" MinimumPrefixLength="0" Watermark="parsel" />
-                                    <TextBox Grid.Column="2" Classes="hucre" Text="{Binding MalikKodu}" Watermark="M01" />
+                                    <TextBox Grid.Column="2" Classes="hucre" Text="{Binding MalikKodu}" Watermark="AD SOYAD (BABA ADI)" />
                                     <TextBox Grid.Column="4" Classes="hucre" Classes.hatali="{Binding HisseHatali}" Text="{Binding Hisse}" Watermark="1/2" />
                                     <ComboBox Grid.Column="6" Classes="hucre" Classes.hatali="{Binding MuvafakatHatali}" ItemsSource="{x:Static vm:TakbisSatirVm.MuvafakatSecenekleri}"
                                               SelectedItem="{Binding Muvafakat, Mode=TwoWay}" HorizontalAlignment="Stretch" ToolTip.Tip="E: muvafakatli · H: muvafakatsiz" />
@@ -906,7 +906,7 @@
                       <Border x:Name="KrokiTablosu">
                         <StackPanel Spacing="1">
                           <Grid ColumnDefinitions="*,3,*,3,*,3,62,3,24">
-                            <TextBlock Text="Malik Kodu" Classes="tabloBaslik" />
+                            <TextBlock Text="Malik (Ad Soyad (Baba Adı))" Classes="tabloBaslik" />
                             <TextBlock Grid.Column="2" Text="Kadastro Parseli" Classes="tabloBaslik" />
                             <TextBlock Grid.Column="4" Text="İmar Parseli" Classes="tabloBaslik" />
                             <TextBlock Grid.Column="6" Text="Alan (m²)" Classes="tabloBaslik" />
@@ -917,7 +917,7 @@
                               <DataTemplate>
                                 <StackPanel Margin="0,1">
                                   <Grid ColumnDefinitions="*,3,*,3,*,3,62,3,24">
-                                    <TextBox Classes="hucre" Text="{Binding MalikKodu}" Watermark="M01" />
+                                    <TextBox Classes="hucre" Text="{Binding MalikKodu}" Watermark="AD SOYAD (BABA ADI)" />
                                     <AutoCompleteBox Grid.Column="2" Classes="hucre" ItemsSource="{Binding $parent[ItemsControl].DataContext.KadastroParselOnerileri}"
                                                      Text="{Binding KadastroParseli, Mode=TwoWay}" FilterMode="Contains" MinimumPrefixLength="0" Watermark="parsel" />
                                     <AutoCompleteBox Grid.Column="4" Classes="hucre" ItemsSource="{Binding $parent[ItemsControl].DataContext.ImarParselOnerileri}"

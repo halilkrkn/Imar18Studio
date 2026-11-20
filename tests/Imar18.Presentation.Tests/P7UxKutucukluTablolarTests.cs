@@ -357,18 +357,21 @@ public sealed class P7UxKutucukluTablolarTests
 
         await vm.TakbiseAktarCommand.ExecuteAsync(null);
 
-        vm.TakbisSatirlari.Select(s => s.MalikKodu).Should().Equal("M01", "M02");
+        // SAHA-011 / SORU-055: TAKBİS tablosunda malik "AD SOYAD (BABA ADI)" görünür (eski beklenti M01/M02).
+        vm.TakbisSatirlari.Select(s => s.MalikKodu).Should().Equal("AYŞE YILMAZ (ALİ)", "MEHMET ÇAKIR (ALİ)");
         vm.TakbisSatirlari.Should().OnlyContain(s => s.KadastroParseli == "K1" && s.Hisse == "1/2" && s.Muvafakat == "H");
 
-        vm.KrokiSatirlari[0].MalikKodu = "M01";
-        vm.KrokiSatirlari[1].MalikKodu = "M02";
+        // Kroki tablosuna yazım farklı (küçük harf, "AD / BABA") girilse de TAKBİS kimliğine eşlenir.
+        vm.KrokiSatirlari[0].MalikKodu = "Ayşe Yılmaz (Ali)";
+        vm.KrokiSatirlari[1].MalikKodu = "MEHMET ÇAKIR / ALİ";
         vm.TakbisSatirlari[0].Muvafakat = "E";
         await vm.HakUygulaCommand.ExecuteAsync(null);
 
         alan.Yol.Denetim[^1].Sonuc.Should().Be(AuditSonucu.Basarili, vm.DurumMetni);
         var hak = alan.Yol.Belge.HakEslestirme!;
-        hak.KadastroParselleri.Single().Malikler.Select(m => (m.MalikId, m.Muvafakatli)).Should().Equal(("M01", true), ("M02", false));
-        hak.Eslestirme.Select(r => r.MalikId).Should().Equal("M01", "M02");
+        hak.KadastroParselleri.Single().Malikler.Select(m => (m.MalikId, m.Muvafakatli)).Should().Equal(("AYŞE YILMAZ (ALİ)", true), ("MEHMET ÇAKIR (ALİ)", false));
+        hak.Eslestirme.Select(r => r.MalikId).Should().Equal("AYŞE YILMAZ (ALİ)", "MEHMET ÇAKIR (ALİ)");
+        string.Join("|", alan.Yol.Denetim.Select(d => d.Ayrinti)).Should().NotContain("AYŞE").And.NotContain("MEHMET", "denetim kaydına ad yazılmaz (KVKK)");
     }
 
     [Fact]
@@ -532,9 +535,9 @@ public sealed class P7UxKutucukluTablolarTests
 
         var (_, h) = await Hesap();
         h.TakbisSatirlari[0].MalikKodu = "MLK;001";
-        h.TakbisSatirlari[0].Hata.Should().Contain("Malik Kodu").And.Contain("';'");
+        h.TakbisSatirlari[0].Hata.Should().Contain("Malik").And.Contain("';'"); // SAHA-011: sütun "Malik (Ad Soyad (Baba Adı))"
         h.KrokiSatirlari[0].MalikKodu = "#MLK";
-        h.KrokiSatirlari[0].Hata.Should().Contain("Malik Kodu").And.Contain("'#'");
+        h.KrokiSatirlari[0].Hata.Should().Contain("Malik").And.Contain("'#'");
     }
 
     [Fact]
@@ -681,6 +684,28 @@ public sealed class P7UxKutucukluTablolarTests
         h.TakbisMetni.Should().Be(takbis);
         h.KrokiMetni.Should().Be(kroki);
         Bul<ItemsControl>(w, "TakbisSatirlari").GetVisualDescendants().OfType<AutoCompleteBox>().Select(a => a.Text).Should().Equal("K1", "K1");
+        w.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task Gorunum_TAKBIS_Ve_Kroki_Tablolari_Malik_Ad_Soyad_Baba_Adi_Sutunu_Ve_Etiketi_Gostermeli_SAHA_011()
+    {
+        var vm = new MainWindowViewModel(new CadImportService([new SahteKrokiAdaptoru()]), await Alan());
+        await vm.LastProjeTask;
+        var h = vm.Hesap!;
+        h.TakbisMetni = "K1;AYŞE YILMAZ (ALİ);1/2;H" + Environment.NewLine + "K1;M02;1/2;H";
+        vm.Wizard.CurrentIndex = 3;
+        var w = Ac(vm);
+
+        foreach (var tablo in new[] { "TakbisTablosu", "KrokiTablosu" })
+        {
+            Bul<Border>(w, tablo).GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)
+                .Should().Contain("Malik (Ad Soyad (Baba Adı))").And.NotContain("Malik Kodu");
+        }
+
+        var hucreler = Bul<ItemsControl>(w, "TakbisSatirlari").GetVisualDescendants().OfType<TextBox>().ToList();
+        hucreler.Select(t => t.Text).Should().Contain(["AYŞE YILMAZ (ALİ)", "M02"], "eski kod ve ad etiketi birlikte gösterilir");
+        hucreler.Should().Contain(t => t.Watermark as string == "AD SOYAD (BABA ADI)");
         w.Close();
     }
 

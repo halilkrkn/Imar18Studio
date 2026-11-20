@@ -4,7 +4,10 @@ using Imar18.Domain.Numerics;
 
 namespace Imar18.Application.Girdi;
 
-/// <summary>Malik Rehberi kaydı: anonim malik kodu ↔ ad-soyad, baba adı, TKGM kişi sistem no (yalnız yerel; KVKK).</summary>
+/// <summary>
+/// Malik Rehberi kaydı: malik kodu (SORU-055: <c>AD SOYAD (BABA ADI)</c> etiketi veya eski anonim kod) ↔ ad-soyad, baba adı,
+/// TKGM kişi sistem no (yalnız yerel; KVKK — denetim kaydına yazılmaz).
+/// </summary>
 public sealed record MalikRehberKaydi(string MalikKodu, string AdSoyad, string? BabaAdi, string? KisiSistemNo);
 
 /// <summary>Kadastro parselinin tapu kütüğü bilgisi (Fen Klasörü cetvelleri: Cilt/Sayfa, İl/İlçe/Mahalle, Ada/Parsel, AT alanı).</summary>
@@ -64,9 +67,11 @@ public sealed record WebtapuAktarimi(IReadOnlyList<TakbisHisseGirdisi> Hisseler,
 /// P7.3-B1 (SAHA-006): webtapu tapu kaydını TAKBİS hisselerine ve Malik Rehberi'ne çevirir (saf mantık, G/Ç yok).
 /// <list type="bullet">
 /// <item>Yalnız aktif (terkin edilmemiş) satırlar aktarılır; muvafakat webtapu'da olmadığı için <c>H</c> (SORU-040 a).</item>
-/// <item>Malik kodu: rehberde aynı kişi sistem no'lu (yoksa aynı normalize ad + baba adlı) kişi varsa onun kodu; değilse
-/// rehberdeki ve <c>ayrilmisKodlar</c>'daki (TAKBİS'te elle girilmiş başka kişiler) en büyük <c>Mnn</c> kodundan devam eden yeni
-/// kod (M01, M02 …; belge sırası) — TAKBİS anonim kod biçimine uyar ve ayrılmış kodlarla çakışmaz.</item>
+/// <item>Malik kodu: rehberde aynı kişi sistem no'lu (yoksa aynı normalize ad + baba adlı) kişi varsa onun (eski <c>Mnn</c> dahil)
+/// kodu. Değilse SAHA-011 / SORU-055 gereği ekran etiketi <c>AD SOYAD (BABA ADI)</c> (<see cref="MalikEtiketi.Olustur"/>): etiket
+/// <c>ayrilmisKodlar</c>'da (TAKBİS'te elle yazılmış) rehberde olmayan aynı anahtarla varsa aynı kişidir ve o yazım kullanılır;
+/// rehberde başka kişiye aitse <c> #2</c>, <c> #3</c>… eki alır. Etiket geçersizse (ör. T.C. Kimlik No içeren ad) rehberdeki ve
+/// ayrılmış kodlardaki en büyük <c>Mnn</c>'den devam eden anonim kod verilir.</item>
 /// <item>Parsel kaydı (Cilt/Sayfa vb.) kadastro parsel kimliğine göre eklenir ya da güncellenir.</item>
 /// </list>
 /// </summary>
@@ -93,13 +98,7 @@ public static class WebtapuAktarici
             }
             else
             {
-                do
-                {
-                    kod = "M" + sonraki.ToString("00", CultureInfo.InvariantCulture);
-                    sonraki++;
-                }
-                while (ayrilmis.Contains(kod));
-
+                kod = YeniKod(s, malikler, ayrilmis, ref sonraki);
                 malikler.Add(new MalikRehberKaydi(kod, Normalize(s.AdSoyad), BosIseNull(s.BabaAdi), BosIseNull(s.KisiSistemNo)));
             }
 
@@ -120,6 +119,43 @@ public static class WebtapuAktarici
         parseller.Add(new KadastroTapuKaydi(parselId, kayit.Cilt, kayit.Sayfa, kayit.Il, kayit.Ilce, kayit.Mahalle, kayit.Ada, kayit.Parsel, kayit.AtYuzolcumM2));
         var takbis = hisseler.Select(h => new TakbisHisseGirdisi(h.Kod, h.Hisse.Numerator, h.Hisse.Denominator, Muvafakatli: false)).ToList();
         return new WebtapuAktarimi(takbis.AsReadOnly(), new MalikRehberi(malikler.AsReadOnly(), parseller.AsReadOnly()));
+    }
+
+    /// <summary>SAHA-011: rehberde olmayan kişi için ad etiketi (gerekirse " #n" ekli) ya da geçersizse anonim Mnn kodu.</summary>
+    private static string YeniKod(TapuMalikSatiri s, List<MalikRehberKaydi> malikler, HashSet<string> ayrilmis, ref int sonraki)
+    {
+        var etiket = MalikEtiketi.Olustur(s.AdSoyad, s.BabaAdi);
+        if (MalikEtiketi.GecerliMi(etiket))
+        {
+            var rehberAnahtarlari = malikler.Select(m => MalikEtiketi.Anahtar(m.MalikKodu)).ToHashSet(StringComparer.Ordinal);
+            var anahtar = MalikEtiketi.Anahtar(etiket);
+            if (!rehberAnahtarlari.Contains(anahtar))
+            {
+                // Elle yazılmış aynı etiket (rehberde değil) aynı kişidir: yazımı korunur, hak eşleştirme bağı kopmaz.
+                return ayrilmis.FirstOrDefault(k => string.Equals(MalikEtiketi.Anahtar(k), anahtar, StringComparison.Ordinal)) ?? etiket;
+            }
+
+            for (var n = 2; ; n++)
+            {
+                var ekli = MalikEtiketi.Ekli(etiket, n);
+                var ekliAnahtar = MalikEtiketi.Anahtar(ekli);
+                if (!rehberAnahtarlari.Contains(ekliAnahtar)
+                    && !ayrilmis.Any(k => string.Equals(MalikEtiketi.Anahtar(k), ekliAnahtar, StringComparison.Ordinal)))
+                {
+                    return ekli;
+                }
+            }
+        }
+
+        string kod;
+        do
+        {
+            kod = "M" + sonraki.ToString("00", CultureInfo.InvariantCulture);
+            sonraki++;
+        }
+        while (ayrilmis.Contains(kod) || malikler.Any(m => string.Equals(m.MalikKodu, kod, StringComparison.OrdinalIgnoreCase)));
+
+        return kod;
     }
 
     /// <summary>
@@ -155,22 +191,7 @@ public static class WebtapuAktarici
     }
 
     /// <summary>Türkçe büyük harf ve tek boşluk normalizasyonu (ad karşılaştırması için).</summary>
-    public static string Normalize(string metin)
-    {
-        ArgumentNullException.ThrowIfNull(metin);
-        var sb = new StringBuilder(metin.Length);
-        foreach (var parca in metin.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (sb.Length > 0)
-            {
-                sb.Append(' ');
-            }
-
-            sb.Append(parca.ToUpper(CultureInfo.GetCultureInfo("tr-TR")));
-        }
-
-        return sb.ToString();
-    }
+    public static string Normalize(string metin) => MalikEtiketi.Normalize(metin);
 
     private static string? Tek(IEnumerable<string> adaylar)
     {

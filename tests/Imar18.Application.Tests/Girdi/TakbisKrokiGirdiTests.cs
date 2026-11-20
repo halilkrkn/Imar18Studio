@@ -10,7 +10,7 @@ namespace Imar18.Application.Tests.Girdi;
 
 /// <summary>
 /// P4.2 vektorel/manuel TAKBİS ve yaklasik yer krokisi girdi sozlesmeleri (roadmap P4.2, FR-F1.12).
-/// Malik kodlari anonimdir; TC Kimlik No bicimi reddedilir (KVKK, AC-PILOT-08).
+/// SORU-055: malik alani AD SOYAD (BABA ADI) veya eski kod olabilir; TC Kimlik No bicimi reddedilir (KVKK, AC-PILOT-08).
 /// </summary>
 public sealed class TakbisKrokiGirdiTests
 {
@@ -86,12 +86,13 @@ public sealed class TakbisKrokiGirdiTests
         hata.TechnicalMessage.Should().Contain("KVKK").And.NotContain("12345678901");
     }
 
+    // SORU-055 (proje sahibi kararı, 20 Kasım 2026): eski beklenti "ad-soyad / boşluklu kod reddedilir" değişti; "Ahmet Yılmaz" ve
+    // "Malik 01" artık geçerlidir (Saha011MalikAdiTests). Kimlik numarası biçimleri reddedilmeye devam eder.
     [Theory]
     [InlineData("123 456 789 01")]
     [InlineData("123-456-789-01")]
-    [InlineData("Ahmet Yılmaz")]
-    [InlineData("Malik 01")]
-    public void Takbis_Anonim_Olmayan_Malik_Kodunu_KVKK_Geregi_Reddetmeli(string kod)
+    [InlineData("Ahmet 12345678901")]
+    public void Takbis_Kimlik_No_Bicimli_Malik_Kodunu_KVKK_Geregi_Reddetmeli(string kod)
     {
         var hata = TakbisGirdiDogrulayici.Dogrula(Parsel(H(kod, 1, 1))).Error;
 

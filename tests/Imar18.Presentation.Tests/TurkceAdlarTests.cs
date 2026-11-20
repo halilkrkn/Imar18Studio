@@ -26,6 +26,8 @@ public sealed class TurkceAdlarTests
     [InlineData(CadLayerRole.CadastralLine, "Kadastro Hattı")]
     [InlineData(CadLayerRole.NewParcelPoint, "Yeni Parsel Noktası")]
     [InlineData(CadLayerRole.RegisteredPoint, "Tescilli Nokta")]
+    [InlineData(CadLayerRole.ZoningBlock, "İmar Adası")]
+    [InlineData(CadLayerRole.Ignored, "Yoksay")]
     public void TurkceAdlar_Katman_Rolu_Turkce_Gosterilmeli(CadLayerRole rol, string beklenen)
     {
         TurkceAdlar.Ad(rol).Should().Be(beklenen);
