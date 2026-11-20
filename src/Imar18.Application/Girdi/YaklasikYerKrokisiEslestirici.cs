@@ -231,8 +231,8 @@ public static class YaklasikYerKrokisiEslestirici
         }
     }
 
-    /// <summary>Etiketi malik koduna çözer: TAKBİS kodu → kişi no → normalize ad (tam, sonra ≥ 5 karakterlik tekil önek).</summary>
-    private static string? Coz(string etiket, IReadOnlyList<string> kodlar, MalikRehberi rehber)
+    /// <summary>Etiketi malik koduna çözer: TAKBİS kodu → kişi no → normalize ad (tam, sonra ≥ 5 karakterlik tekil önek). SAHA-015 kroki parselasyonu da kullanır.</summary>
+    internal static string? Coz(string etiket, IReadOnlyList<string> kodlar, MalikRehberi rehber)
     {
         var t = etiket.Trim();
         if (t.Length == 0)

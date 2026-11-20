@@ -63,6 +63,46 @@ internal sealed class NczSentetikDosya
         return this;
     }
 
+    /// <summary>
+    /// SAHA-015: gercek Netcad duzeninde tip 5 yazi kaydi (P7.3 spike §2.4): yuk = 93 + metin uzunlugu bayt; 3..18 ekleme noktasi
+    /// (Kuzey, Dogu), 30 int16 katman, 41 float 1.0, 45..76 sinir kutusu (minK, minD, maxK, maxD), 81 float yukseklik, 85 float
+    /// donukluk (radyan), 89 stil 'M', 92 Pascal metin (Windows-1254).
+    /// </summary>
+    public NczSentetikDosya YaziTip5(
+        int katman,
+        string metin,
+        (double Kuzey, double Dogu) ekleme,
+        (double MinK, double MinD, double MaxK, double MaxD)? kutu = null,
+        float yukseklik = 1.5f,
+        float donukluk = 0f,
+        int? uzunlukOverride = null,
+        int fazlaBayt = 0,
+        byte bayrak = 0x15,
+        int? katmanAlaniOverride = null)
+    {
+        var b = Turkce.GetBytes(metin);
+        var yuk = new byte[93 + b.Length + fazlaBayt];
+        yuk[0] = 5;
+        yuk[1] = 5;
+        yuk[2] = (byte)katman;
+        Double(yuk, 3, ekleme.Kuzey);
+        Double(yuk, 11, ekleme.Dogu);
+        BinaryPrimitives.WriteInt16LittleEndian(yuk.AsSpan(30), (short)(katmanAlaniOverride ?? katman));
+        BinaryPrimitives.WriteSingleLittleEndian(yuk.AsSpan(41), 1f);
+        var k = kutu ?? (ekleme.Kuzey, ekleme.Dogu, ekleme.Kuzey + yukseklik, ekleme.Dogu + (0.8 * yukseklik * metin.Length));
+        Double(yuk, 45, k.MinK);
+        Double(yuk, 53, k.MinD);
+        Double(yuk, 61, k.MaxK);
+        Double(yuk, 69, k.MaxD);
+        BinaryPrimitives.WriteSingleLittleEndian(yuk.AsSpan(81), yukseklik);
+        BinaryPrimitives.WriteSingleLittleEndian(yuk.AsSpan(85), donukluk);
+        yuk[89] = (byte)'M';
+        yuk[92] = (byte)(uzunlukOverride ?? b.Length);
+        b.CopyTo(yuk, 93);
+        _kayitlar.Add(Kayit(bayrak, yuk));
+        return this;
+    }
+
     /// <summary>Poligon/coklu cizgi (tip 7) kaydi.</summary>
     /// <param name="sinif">Null degilse genisletilmis (0x16) kayit ve 28 baytlik sinif alani yazilir.</param>
     /// <param name="bildirilenAlan">Null degilse alan bayragi (0x02) set edilir.</param>

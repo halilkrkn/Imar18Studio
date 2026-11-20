@@ -52,10 +52,21 @@ public sealed record CadPolyline(
     decimal? DeclaredAreaM2);
 
 /// <summary>
-/// CAD yazi varligi (TEXT/MTEXT; P4.2 etiket eslestirmesi). <see cref="Position"/> jeodezik (X = Kuzey, Y = Dogu)
-/// ekleme noktasidir; <see cref="Text"/> bicim kodlarindan arindirilmis, bas/son bosluksuz metindir.
+/// CAD yazi varligi (TEXT/MTEXT; P4.2 etiket eslestirmesi; SAHA-015 Netcad tip 5 yazi). <see cref="Position"/> jeodezik
+/// (X = Kuzey, Y = Dogu) ekleme noktasidir; <see cref="Text"/> bicim kodlarindan arindirilmis, bas/son bosluksuz metindir.
 /// </summary>
-public sealed record CadText(string LayerName, string Text, GeodeticPoint Position);
+public sealed record CadText(string LayerName, string Text, GeodeticPoint Position)
+{
+    /// <summary>
+    /// SAHA-015: yazinin gorunen merkezi (bicim biliyorsa; Netcad <c>.NCZ</c>'de kayittaki sinir kutusunun ortasi — dondurulmus
+    /// yazida ekleme noktasi metnin sol-alt kosesi oldugundan kroki bolgesi esleme icin merkez kullanilir). Yoksa null; tuketici
+    /// <see cref="Position"/>'a duser.
+    /// </summary>
+    public GeodeticPoint? Merkez { get; init; }
+
+    /// <summary>Bolge/poligon esleme icin capa noktasi: <see cref="Merkez"/> varsa o, yoksa <see cref="Position"/>.</summary>
+    public GeodeticPoint Capa => Merkez ?? Position;
+}
 
 /// <summary>
 /// Bicimden bagimsiz CAD okuma sonucu (spec 2.1 <c>CadLayerDocument</c>).

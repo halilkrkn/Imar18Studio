@@ -112,7 +112,8 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(TecvizUygulaCommand), nameof(DopUygulaCommand), nameof(HakUygulaCommand), nameof(WebtapuIsteCommand),
-        nameof(KrokiNczIsteCommand), nameof(TakbiseAktarCommand), nameof(KrokiyeAktarCommand), nameof(KrokiOnizlemesiniKaldirCommand), nameof(WebtapuOnizlemesiniKaldirCommand))]
+        nameof(KrokiNczIsteCommand), nameof(TakbiseAktarCommand), nameof(KrokiyeAktarCommand), nameof(KrokiOnizlemesiniKaldirCommand), nameof(WebtapuOnizlemesiniKaldirCommand),
+        nameof(ParselasyonCiziminiOnaylaCommand), nameof(ParselasyonTaslaginiIptalEtCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -241,6 +242,7 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
         var belge = _alan.Yol.Belge;
         var d = await Task.Run(() => _alan.Onay.Degerlendir()).ConfigureAwait(true);
         Degerlendirme = d;
+        ParselasyonDurumunuYenile(belge); // SAHA-015: bayat taslak / değişen proje parselleri
         TabloOnerileriniYenile(belge, d);
         TecvizYenile(belge, d);
         DopYenile(belge, d);

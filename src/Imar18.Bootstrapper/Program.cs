@@ -66,6 +66,8 @@ public static class Program
             Donusum = new Imar18.Application.KoordinatDonusumu.DonusumServisi(new Imar18.GeometryEngine.Crs.HelmertAfinDonusumHesaplayici()),
             // SAHA-014: Netcad .DNS okuyucusu (Deprem Öncesi → Deprem Sonrası ileri dönüşüm).
             DnsOkuyucu = new Imar18.Infrastructure.Cad.Donusum.NetcadDnsOkuyucu(),
+            // SAHA-015: Yaklaşık Yer Krokisi → kesin alanlı otomatik parselasyon (GeometryEngine paralel kesim motoru).
+            KrokiBolucu = new Imar18.GeometryEngine.Subdivision.KrokiBlokBolucu(),
         };
     }
 
