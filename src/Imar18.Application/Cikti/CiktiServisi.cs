@@ -142,10 +142,31 @@ public static class CiktiPaketiOlusturucu
                 .ToArray()))
             .ToArray();
 
+        // ---- SAHA-014: .DNS ileri dönüşüm (aktif = Deprem Sonrası; Deprem Öncesi = orijinal CAD köşeleri, ters hesap yok) ----
         // ---- P7.3-C2: ortak noktalı dönüşüm (proje noktaları deprem sonrası; deprem öncesi ters dönüşümle) ----
         KoordinatDonusumu.DonusumOzeti? donusum = null;
         AppError? donusumHatasi = null;
-        if (belge.Donusum is { } dg)
+        var nczSablonu = belge.NczSablonu;
+        if (belge.IleriDonusum is { } ik && belge.Donusum is { } idg)
+        {
+            var ileri = KoordinatDonusumu.DonusumOzeti.Ileri(idg, ik, belge.DepremOncesiParseller ?? [], koordinatlar);
+            if (ileri.IsFailure)
+            {
+                donusumHatasi = ileri.Error;
+                uyarilar.Add("Deprem öncesi koordinatlar eşleştirilemedi; Fen Klasörü .zip üretilemez.");
+            }
+            else
+            {
+                donusum = ileri.Value;
+            }
+
+            if (nczSablonu is not null)
+            {
+                nczSablonu = null;
+                uyarilar.Add("Kaynak NCZ Deprem Öncesi koordinatlarda olduğundan PARSELASYON HARİTASI.NCZ şablonsuz (iskelet) ve Deprem Sonrası koordinatlarla üretildi.");
+            }
+        }
+        else if (belge.Donusum is { } dg)
         {
             if (donusumHesaplayici is null)
             {
@@ -190,7 +211,7 @@ public static class CiktiPaketiOlusturucu
             DonusumHatasi = donusumHatasi,
             Rehber = belge.MalikRehberi,
             KadastroParselleri = kadastroOzeti,
-            NczSablonu = belge.NczSablonu,
+            NczSablonu = nczSablonu,
         });
     }
 

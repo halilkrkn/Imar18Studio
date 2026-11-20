@@ -55,6 +55,7 @@ public sealed partial class MainWindow : Window
             if (_vm.Kunye is { } eskiKunye)
             {
                 eskiKunye.WebtapuKunyeDosyasiIstendi -= OnWebtapuKunyeDosyasiIstendi;
+                eskiKunye.DnsDosyasiIstendi -= OnDnsDosyasiIstendi;
             }
         }
 
@@ -80,6 +81,7 @@ public sealed partial class MainWindow : Window
             if (_vm.Kunye is { } kunye)
             {
                 kunye.WebtapuKunyeDosyasiIstendi += OnWebtapuKunyeDosyasiIstendi;
+                kunye.DnsDosyasiIstendi += OnDnsDosyasiIstendi;
             }
 
             TemayiUygula(_vm.AcikStudyo);
@@ -372,6 +374,41 @@ public sealed partial class MainWindow : Window
         catch (UnauthorizedAccessException)
         {
             kunye.KunyeDurumu = "Dosyaya erişim izni yok.";
+        }
+    }
+
+    /// <summary>SAHA-014: 1. adım "📂 Dönüşüm Dosyası (.DNS) Yükle" — tek Netcad .DNS; okuma ViewModel/Application portundadır.</summary>
+    private async void OnDnsDosyasiIstendi(object? sender, EventArgs e)
+    {
+        if (_vm?.Kunye is not { } kunye)
+        {
+            return;
+        }
+
+        var dosyalar = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Netcad dönüşüm dosyasını seçin (.DNS — Deprem Öncesi → Deprem Sonrası)",
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("Netcad dönüşüm dosyası (.dns)") { Patterns = ["*.dns", "*.DNS"] }],
+        });
+        if (dosyalar.Count == 0)
+        {
+            return;
+        }
+
+        using var dosya = dosyalar[0];
+        try
+        {
+            await using var akis = await dosya.OpenReadAsync();
+            await kunye.DnsYukleAsync(akis);
+        }
+        catch (IOException)
+        {
+            kunye.DnsHatasi = "Dosya okunamadı (erişim veya disk hatası).";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            kunye.DnsHatasi = "Dosyaya erişim izni yok.";
         }
     }
 

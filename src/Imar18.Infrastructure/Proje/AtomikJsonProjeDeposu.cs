@@ -29,6 +29,12 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
     /// <summary>Kayıt şeması.</summary>
     public const string Sema = "imar18-pilot-proje-v1";
 
+    /// <summary>
+    /// SAHA-014 (architect D2): <c>.DNS</c> ileri dönüşümlü kayıtların şeması. Yalnız ileri dönüşüm varken yazılır; bilinmeyen alanı
+    /// yok sayan eski sürüm Deprem Öncesi orijinalleri sessizce düşürmesin diye v1 okuyucusu bu dosyayı reddeder. Okuma ikisini kabul eder.
+    /// </summary>
+    public const string SemaIleriDonusumlu = "imar18-pilot-proje-v2";
+
     /// <summary>Kabul edilen en büyük dosya boyutu.</summary>
     public const long MaxDosyaBoyutu = 256L * 1024 * 1024;
 
@@ -80,7 +86,8 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
             using var doc = JsonDocument.Parse(veri);
             var kok = doc.RootElement;
             if (kok.ValueKind != JsonValueKind.Object
-                || !kok.TryGetProperty("sema", out var sema) || sema.ValueKind != JsonValueKind.String || sema.GetString() != Sema)
+                || !kok.TryGetProperty("sema", out var sema) || sema.ValueKind != JsonValueKind.String
+                || (sema.GetString() != Sema && sema.GetString() != SemaIleriDonusumlu))
             {
                 return Hata("unknown schema");
             }
@@ -98,6 +105,11 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
             }
 
             var dto = icerik.Deserialize<KayitDto>(Secenekler);
+            if (dto is not null && (dto.Belge?.Ileri is not null) != (sema.GetString() == SemaIleriDonusumlu))
+            {
+                return Hata("schema does not match forward transformation content");
+            }
+
             return dto is null ? Hata("empty content") : Esle(dto);
         }
         catch (Exception ex) when (ex is JsonException or FormatException or ArgumentException or InvalidOperationException or OverflowException)
@@ -114,7 +126,7 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
 
         using var tampon = new MemoryStream(icerik.Length + 256);
         tampon.Write(Encoding.UTF8.GetBytes(
-            "{\"sema\":\"" + Sema + "\",\"pilot\":" + JsonSerializer.Serialize(PilotDamgasi.Metin, new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping })
+            "{\"sema\":\"" + (kayit.Belge.IleriDonusum is null ? Sema : SemaIleriDonusumlu) + "\",\"pilot\":" + JsonSerializer.Serialize(PilotDamgasi.Metin, new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping })
             + ",\"icerikSha256\":\"" + ozet + "\",\"icerik\":"));
         tampon.Write(icerik);
         tampon.Write("}"u8);
@@ -167,9 +179,18 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
                 b.Donusum is { } dn
                     ? new DonusumDto(dn.Model.ToString(), dn.Mk, dn.OrtakNoktalar.Select(n => new OrtakNoktaDto(n.NoktaNo, n.Y1, n.X1, n.Y2, n.X2)).ToList())
                     : null,
-                b.NczSablonu is { } ns ? new NczSablonuDto(ns.Sha256, Convert.ToBase64String(ns.Icerik.Span)) : null),
+                b.NczSablonu is { } ns ? new NczSablonuDto(ns.Sha256, Convert.ToBase64String(ns.Icerik.Span)) : null,
+                b.IleriDonusum is { } ik
+                    ? new IleriDonusumDto(ik.A, ik.B, ik.C, ik.D, ik.Cy, ik.Cx,
+                        (b.DepremOncesiParseller ?? []).Select(p => new ParselDto(p.ParselId, p.Rol.ToString(), p.Koseler.Select(v => new[] { v.X, v.Y }).ToList())).ToList())
+                    : null),
             k.Denetim.ToList());
     }
+
+    private static ParselGeometrisi[] Parseller(List<ParselDto> liste) => liste.Select(p => new ParselGeometrisi(
+        p.Id ?? throw new FormatException("parcel id"),
+        Enm<ParselRolu>(p.Rol),
+        (p.Koseler ?? throw new FormatException("vertices")).Select(v => v is { Length: 2 } ? new GeodeticPoint(v[0], v[1]) : throw new FormatException("vertex")).ToArray())).ToArray();
 
     private static Result<ProjeKaydi> Esle(KayitDto dto)
     {
@@ -191,10 +212,7 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
             crs = r.Value;
         }
 
-        var parseller = b.Parseller.Select(p => new ParselGeometrisi(
-            p.Id ?? throw new FormatException("parcel id"),
-            Enm<ParselRolu>(p.Rol),
-            (p.Koseler ?? throw new FormatException("vertices")).Select(v => v is { Length: 2 } ? new GeodeticPoint(v[0], v[1]) : throw new FormatException("vertex")).ToArray())).ToArray();
+        var parseller = Parseller(b.Parseller);
 
         DopGirdisi? dop = null;
         if (b.Dop is { } d)
@@ -304,10 +322,29 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
             belge = belge with { NczSablonu = sablon.Value };
         }
 
+        ParselGeometrisi[]? oncesi = null;
+        if (b.Ileri is { } id)
+        {
+            oncesi = Parseller(id.Oncesi ?? throw new FormatException("earthquake-before parcels missing"));
+            belge = belge with { IleriDonusum = new DonusumKatsayilari(id.A, id.B, id.C, id.D, id.Cy, id.Cx), DepremOncesiParseller = oncesi };
+        }
+
+        // SAHA-014 (architect K2): Parseller = İleri(DepremOncesiParseller) değişmezi yüklemede de denetlenir (elle değiştirilmiş
+        // aktif köşe, eksik ortak nokta veya geçersiz katsayı açılmaz).
+        if (IleriDonusumDegismezi.Dogrula(belge) is { IsFailure: true } bozuk)
+        {
+            return Hata("forward transformation invariant violated (" + bozuk.Error.Code + ")");
+        }
+
         // Komut doğrulamaları yüklemede yeniden çalışır (P5 reviewer M4): elle düzenlenip özeti yeniden hesaplanmış kayıt,
         // CommandBus'ın kabul etmeyeceği bir durumu açamaz. Null metin alanları revizyon özetinde ArgumentException üretir.
         var bos = ProjeBelgesi.Yeni(belge.ProjeAdi);
         var kontroller = new List<IProjeKomutu> { new ParselGeometrileriAyarlaKomutu(parseller) };
+        if (oncesi is not null)
+        {
+            kontroller.Add(new ParselGeometrileriAyarlaKomutu(oncesi));
+        }
+
         if (kimlikler.Length > 0)
         {
             kontroller.Add(new ParselKimlikEslemesiAyarlaKomutu(kimlikler));
@@ -369,7 +406,11 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
         RehberDto? Rehber = null,
         KunyeDto? Kunye = null,
         DonusumDto? Donusum = null,
-        NczSablonuDto? Ncz = null);
+        NczSablonuDto? Ncz = null,
+        IleriDonusumDto? Ileri = null);
+
+    /// <summary>SAHA-014: .DNS katsayıları (Netcad düzeni) ve Deprem Öncesi (orijinal CAD) parseller; yalnız v2 şemasında bulunur.</summary>
+    private sealed record IleriDonusumDto(decimal A, decimal B, decimal C, decimal D, decimal Cy, decimal Cx, List<ParselDto>? Oncesi);
 
     /// <summary>P7.3-C3: kaynak NCZ şablonu (base64) ve SHA-256 özeti; yüklemede özet yeniden doğrulanır (P7.3-C3 öncesi kayıtlarda yoktur).</summary>
     private sealed record NczSablonuDto(string Sha256, string Base64);

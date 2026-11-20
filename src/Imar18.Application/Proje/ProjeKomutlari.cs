@@ -79,6 +79,8 @@ public sealed record ProjeyiSifirlaKomutu : IProjeKomutu
             Donusum = null,
             Kunye = null,
             NczSablonu = null,
+            IleriDonusum = null,
+            DepremOncesiParseller = null,
         });
     }
 }
@@ -143,13 +145,29 @@ public sealed record ProjeCrsAyarlaKomutu(ProjeCrs Crs) : IProjeKomutu
         Crs is null ? KomutHatasi.Gecersiz(Ad, "CRS is null") : Result<ProjeBelgesi>.Success(mevcut with { Crs = Crs });
 }
 
+/// <summary>SAHA-014: <see cref="ParselGeometrileriAyarlaKomutu"/> girdisinin koordinat sistemi.</summary>
+public enum ParselKoordinatSistemi
+{
+    /// <summary>CAD dosyasının kendi koordinatları (Deprem Öncesi). <c>.DNS</c> ileri dönüşümü etkinse komut dönüştürür.</summary>
+    KaynakCad,
+
+    /// <summary>Projenin aktif koordinatları. İleri dönüşüm etkinken orijinal türetilemediği için reddedilir.</summary>
+    Aktif,
+}
+
 /// <summary>
 /// Parsel geometrilerinin tamamını değiştirir (CAD içe aktarma veya mühendis düzenlemesi). Kimlikler boş olamaz ve benzersizdir;
 /// her halka <see cref="PolygonRing.FromOpen"/> denetiminden geçmelidir (aksi ilgili ERR-TOPO/ERR-GIRD kodu).
+/// SAHA-014: <c>.DNS</c> ileri dönüşümü etkinse (<see cref="ProjeBelgesi.IleriDonusum"/>) <see cref="ParselKoordinatSistemi.KaynakCad"/>
+/// girdisi Deprem Öncesi sayılır: <see cref="ProjeBelgesi.DepremOncesiParseller"/> girdinin kendisi, <see cref="ProjeBelgesi.Parseller"/>
+/// ileri dönüşümü olur (rol değişiminde yeniden eşleme asla dönüşümsüz kalmaz, çift dönüşmez).
 /// </summary>
 public sealed record ParselGeometrileriAyarlaKomutu(IReadOnlyList<ParselGeometrisi> Parseller) : IProjeKomutu
 {
     public string Ad => "ParselGeometrileriAyarla";
+
+    /// <summary>SAHA-014: girdinin koordinat sistemi (varsayılan CAD kaynağı / Deprem Öncesi).</summary>
+    public ParselKoordinatSistemi Sistem { get; init; } = ParselKoordinatSistemi.KaynakCad;
 
     /// <summary>SAHA-010: R2 çift sayımını önlemek için projeye alınmayan imar adası / yinelenen / kabuk poligon sayısı (denetim izi).</summary>
     public int CiftSayimHaricSayisi { get; init; }
@@ -190,7 +208,26 @@ public sealed record ParselGeometrileriAyarlaKomutu(IReadOnlyList<ParselGeometri
             }
         }
 
-        return Result<ProjeBelgesi>.Success(mevcut with { Parseller = Parseller.ToArray() });
+        if (!Enum.IsDefined(Sistem))
+        {
+            return KomutHatasi.Gecersiz(Ad, "undefined coordinate system");
+        }
+
+        if (mevcut.IleriDonusum is not { } k)
+        {
+            return Result<ProjeBelgesi>.Success(mevcut with { Parseller = Parseller.ToArray() });
+        }
+
+        if (Sistem == ParselKoordinatSistemi.Aktif)
+        {
+            return KomutHatasi.Gecersiz(Ad, "active-system parcels cannot be set while a forward (.DNS) transformation is applied");
+        }
+
+        var orj = Parseller.ToArray();
+        var aktif = IleriDonusumHesabi.Donustur(Ad, orj, k);
+        return aktif.IsFailure
+            ? Result<ProjeBelgesi>.Failure(aktif.Error)
+            : Result<ProjeBelgesi>.Success(mevcut with { Parseller = aktif.Value, DepremOncesiParseller = orj });
     }
 }
 
@@ -287,49 +324,193 @@ public sealed record DonusumGirdisiAyarlaKomutu(DonusumGirdisi? Donusum) : IProj
     public Result<ProjeBelgesi> Uygula(ProjeBelgesi mevcut)
     {
         ArgumentNullException.ThrowIfNull(mevcut);
+        if (mevcut.IleriDonusum is not null)
+        {
+            if (Donusum is not null)
+            {
+                var e = ErrorCatalog.Get(ErrorCodes.GirdProjeGirdisiGecersiz);
+                return Result<ProjeBelgesi>.Failure(e with
+                {
+                    TechnicalMessage = e.TechnicalMessage.Replace("{command}", Ad, StringComparison.Ordinal)
+                        .Replace("{reason}", "manual common points cannot replace an applied forward (.DNS) transformation", StringComparison.Ordinal),
+                    UserMessage = ".DNS dönüşümü uygulanmış; ortak noktaları elle değiştirmek için önce \"Dönüşümü Kaldır\" kullanın.",
+                });
+            }
+
+            // SAHA-014 "Dönüşümü Kaldır": aktif geometri Deprem Öncesi orijinallere döner; ters kipe sessiz geçiş olmaz.
+            return Result<ProjeBelgesi>.Success(mevcut with
+            {
+                Parseller = mevcut.DepremOncesiParseller ?? mevcut.Parseller,
+                DepremOncesiParseller = null,
+                IleriDonusum = null,
+                Donusum = null,
+            });
+        }
+
         if (Donusum is null)
         {
             return Result<ProjeBelgesi>.Success(mevcut with { Donusum = null });
         }
 
-        if (!Enum.IsDefined(Donusum.Model))
+        var normal = Dogrula(Ad, Donusum);
+        return normal.IsFailure
+            ? Result<ProjeBelgesi>.Failure(normal.Error)
+            : Result<ProjeBelgesi>.Success(mevcut with { Donusum = normal.Value });
+    }
+
+    /// <summary>Yapısal doğrulama ve kanonik (NoktaNo ordinal) sıralama; <see cref="IleriDonusumUygulaKomutu"/> da kullanır.</summary>
+    internal static Result<DonusumGirdisi> Dogrula(string ad, DonusumGirdisi donusum)
+    {
+        if (!Enum.IsDefined(donusum.Model))
         {
-            return KomutHatasi.Gecersiz(Ad, "undefined transformation model");
+            return Red("undefined transformation model");
         }
 
-        if (Donusum.Mk <= 0m || Donusum.Mk > DonusumGirdisi.MaxMk)
+        if (donusum.Mk <= 0m || donusum.Mk > DonusumGirdisi.MaxMk)
         {
-            return KomutHatasi.Gecersiz(Ad, "MK must be in (0, 10] m");
+            return Red("MK must be in (0, 10] m");
         }
 
-        if (Donusum.OrtakNoktalar is null || Donusum.OrtakNoktalar.Any(n => n is null))
+        if (donusum.OrtakNoktalar is null || donusum.OrtakNoktalar.Any(n => n is null))
         {
-            return KomutHatasi.Gecersiz(Ad, "common point list is null");
+            return Red("common point list is null");
         }
 
-        var enAz = DonusumGirdisi.EnAzNokta(Donusum.Model);
-        if (Donusum.OrtakNoktalar.Count < enAz || Donusum.OrtakNoktalar.Count > MaxNokta)
+        var enAz = DonusumGirdisi.EnAzNokta(donusum.Model);
+        if (donusum.OrtakNoktalar.Count < enAz || donusum.OrtakNoktalar.Count > MaxNokta)
         {
-            return KomutHatasi.Gecersiz(Ad, $"{Donusum.Model} needs {KomutHatasi.Sayi(enAz)}..{KomutHatasi.Sayi(MaxNokta)} common points");
+            return Red($"{donusum.Model} needs {KomutHatasi.Sayi(enAz)}..{KomutHatasi.Sayi(MaxNokta)} common points");
         }
 
         var nolar = new HashSet<string>(StringComparer.Ordinal);
-        for (var i = 0; i < Donusum.OrtakNoktalar.Count; i++)
+        for (var i = 0; i < donusum.OrtakNoktalar.Count; i++)
         {
-            var no = Donusum.OrtakNoktalar[i].NoktaNo?.Trim() ?? string.Empty;
+            var no = donusum.OrtakNoktalar[i].NoktaNo?.Trim() ?? string.Empty;
             if (no.Length is 0 or > 32 || !nolar.Add(no))
             {
-                return KomutHatasi.Gecersiz(Ad, $"empty, too long or duplicate point no at item #{KomutHatasi.Sayi(i + 1)}");
+                return Red($"empty, too long or duplicate point no at item #{KomutHatasi.Sayi(i + 1)}");
             }
         }
 
         // Reviewer M5: RevisionId nokta sırasından bağımsız olduğundan saklanan sıra da kanonik (NoktaNo ordinal) olmalı:
         // aynı revizyon -> aynı PDF/ZIP baytı.
-        var normal = Donusum with
+        return Result<DonusumGirdisi>.Success(donusum with
         {
-            OrtakNoktalar = Donusum.OrtakNoktalar.Select(n => n with { NoktaNo = n.NoktaNo.Trim() }).OrderBy(n => n.NoktaNo, StringComparer.Ordinal).ToArray(),
-        };
-        return Result<ProjeBelgesi>.Success(mevcut with { Donusum = normal });
+            OrtakNoktalar = donusum.OrtakNoktalar.Select(n => n with { NoktaNo = n.NoktaNo.Trim() }).OrderBy(n => n.NoktaNo, StringComparer.Ordinal).ToArray(),
+        });
+
+        Result<DonusumGirdisi> Red(string neden) => Result<DonusumGirdisi>.Failure(KomutHatasi.Gecersiz(ad, neden).Error);
+    }
+}
+
+/// <summary>
+/// SAHA-014: <c>.DNS</c> ile Deprem Öncesi → Deprem Sonrası ileri dönüşüm. Taban her zaman orijinal Deprem Öncesi geometridir
+/// (<c>DepremOncesiParseller ?? Parseller</c>): aynı veya farklı <c>.DNS</c> yeniden uygulanınca koordinatlar ikinci kez kaymaz.
+/// Aktif <see cref="ProjeBelgesi.Parseller"/> = ileri dönüşüm (6 ondalık); orijinaller saklanır; ortak noktalar/MK
+/// <see cref="ProjeBelgesi.Donusum"/>'a, katsayılar birebir <see cref="ProjeBelgesi.IleriDonusum"/>'a yazılır. RevisionId değişir
+/// (onay düşer). Parsel yoksa (DNS önce, CAD sonra) yalnız katsayılar kaydedilir; sonraki CAD eşlemesi dönüştürülür.
+/// P7.3-C2 elle ters kipi kayıtlıyken (proje noktaları "deprem sonrası" beyan edilmiş) reddedilir — sessiz çift kayma olmaz
+/// (reviewer M1); önce "Dönüşümü Kaldır". Denetime yalnız model ve ortak nokta sayısı yazılır (koordinat, katsayı ve dosya adı
+/// yazılmaz — KVKK).
+/// </summary>
+public sealed record IleriDonusumUygulaKomutu(DonusumGirdisi Girdi, DonusumKatsayilari Katsayilar) : IProjeKomutu
+{
+    public string Ad => "IleriDonusumUygula";
+
+    public string? Ayrinti => Girdi is null
+        ? null
+        : "model=" + Girdi.Model + ";nokta=" + KomutHatasi.Sayi(Girdi.OrtakNoktalar?.Count ?? 0);
+
+    public Result<ProjeBelgesi> Uygula(ProjeBelgesi mevcut)
+    {
+        ArgumentNullException.ThrowIfNull(mevcut);
+        if (Girdi is null)
+        {
+            return KomutHatasi.Gecersiz(Ad, "transformation input is null");
+        }
+
+        if (mevcut.DonusumKipi == DonusumKipi.ElleTers)
+        {
+            var e = ErrorCatalog.Get(ErrorCodes.GirdProjeGirdisiGecersiz);
+            return Result<ProjeBelgesi>.Failure(e with
+            {
+                TechnicalMessage = e.TechnicalMessage.Replace("{command}", Ad, StringComparison.Ordinal)
+                    .Replace("{reason}", "manual (inverse) common-point transformation is stored; remove it before applying a forward (.DNS) transformation", StringComparison.Ordinal),
+                UserMessage = "Projede elle girilmiş ortak noktalı (ters) dönüşüm kayıtlı: proje noktaları Deprem Sonrası kabul edilmiş. "
+                    + ".DNS ileri dönüşümünü uygulamak için önce \"Dönüşümü Kaldır\" kullanın.",
+            });
+        }
+
+        var k = DonusumKatsayilari.Dogrula(Katsayilar);
+        if (k.IsFailure)
+        {
+            return Result<ProjeBelgesi>.Failure(k.Error);
+        }
+
+        var girdi = DonusumGirdisiAyarlaKomutu.Dogrula(Ad, Girdi);
+        if (girdi.IsFailure)
+        {
+            return Result<ProjeBelgesi>.Failure(girdi.Error);
+        }
+
+        var taban = (mevcut.IleriDonusum is null ? mevcut.Parseller : mevcut.DepremOncesiParseller ?? mevcut.Parseller).ToArray();
+        var aktif = IleriDonusumHesabi.Donustur(Ad, taban, k.Value);
+        if (aktif.IsFailure)
+        {
+            return Result<ProjeBelgesi>.Failure(aktif.Error);
+        }
+
+        return Result<ProjeBelgesi>.Success(mevcut with
+        {
+            Parseller = aktif.Value,
+            DepremOncesiParseller = taban,
+            IleriDonusum = k.Value,
+            Donusum = girdi.Value,
+        });
+    }
+}
+
+/// <summary>SAHA-014: parsel listesinin ileri dönüşümü ve güvenlik denetimleri (architect Y1).</summary>
+internal static class IleriDonusumHesabi
+{
+    /// <summary>
+    /// Her köşeyi <see cref="DonusumKatsayilari.Uygula"/> ile dönüştürür; sonuç halkası <see cref="PolygonRing.FromOpen"/>'dan geçmeli
+    /// ve iki farklı Deprem Öncesi köşe aynı Deprem Sonrası noktaya düşmemelidir (aksi <c>ERR-CRS-004</c>; nokta no eşlemesi bozulurdu).
+    /// </summary>
+    public static Result<IReadOnlyList<ParselGeometrisi>> Donustur(string ad, IReadOnlyList<ParselGeometrisi> orj, DonusumKatsayilari k)
+    {
+        var eslem = new Dictionary<GeodeticPoint, GeodeticPoint>();
+        var sonuc = new ParselGeometrisi[orj.Count];
+        for (var i = 0; i < orj.Count; i++)
+        {
+            var koseler = new GeodeticPoint[orj[i].Koseler.Count];
+            for (var j = 0; j < koseler.Length; j++)
+            {
+                var o = orj[i].Koseler[j];
+                var a = k.Uygula(o);
+                if (eslem.TryGetValue(a, out var onceki) && onceki != o)
+                {
+                    var e = ErrorCatalog.Get(ErrorCodes.CrsDonusumHesaplanamadi);
+                    return Result<IReadOnlyList<ParselGeometrisi>>.Failure(e with
+                    {
+                        TechnicalMessage = e.TechnicalMessage.Replace("{reason}", ad + ": two distinct original vertices map to the same transformed point (item #" + KomutHatasi.Sayi(i + 1) + ")", StringComparison.Ordinal),
+                    });
+                }
+
+                eslem[a] = o;
+                koseler[j] = a;
+            }
+
+            var halka = PolygonRing.FromOpen(koseler);
+            if (halka.IsFailure)
+            {
+                return Result<IReadOnlyList<ParselGeometrisi>>.Failure(halka.Error with { TechnicalMessage = halka.Error.TechnicalMessage + " (" + ad + ", item #" + KomutHatasi.Sayi(i + 1) + ")" });
+            }
+
+            sonuc[i] = orj[i] with { Koseler = koseler };
+        }
+
+        return Result<IReadOnlyList<ParselGeometrisi>>.Success(sonuc);
     }
 }
 

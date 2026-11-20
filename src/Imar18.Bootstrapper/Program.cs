@@ -64,6 +64,8 @@ public static class Program
             TapuOkuyucu = new WebtapuPdfOkuyucu(),
             Kesisim = new NtsParselKesisimHesaplayici(),
             Donusum = new Imar18.Application.KoordinatDonusumu.DonusumServisi(new Imar18.GeometryEngine.Crs.HelmertAfinDonusumHesaplayici()),
+            // SAHA-014: Netcad .DNS okuyucusu (Deprem Öncesi → Deprem Sonrası ileri dönüşüm).
+            DnsOkuyucu = new Imar18.Infrastructure.Cad.Donusum.NetcadDnsOkuyucu(),
         };
     }
 

@@ -244,6 +244,61 @@ public sealed class AtomikJsonProjeDeposuTests : IDisposable
         (await ProjeKomutYolu.AcAsync(new AtomikJsonProjeDeposu(Yol), "x")).Error.Code.Should().Be(ErrorCodes.CiktiProjeKaydiHatasi, "açılış çökmemeli");
     }
 
+    private async Task<ProjeKomutYolu> DnsliProjeyiDiskeYazAsync()
+    {
+        var yol = await TamProjeyiDiskeYazAsync(new AtomikJsonProjeDeposu(Yol));
+        (await yol.GonderAsync(new IleriDonusumUygulaKomutu(Cikti.FenKlasoruZipTests.Donusum(), Cikti.FenKlasoruZipTests.DnsK), OrnekProje.Muhendis))
+            .IsSuccess.Should().BeTrue();
+        return yol;
+    }
+
+    [Fact]
+    public async Task AtomikKayit_DNS_Ileri_Donusum_Gidis_Donus_Korunmali_v2_Semasi_RevisionId_Ayni_SAHA_014()
+    {
+        var yol = await DnsliProjeyiDiskeYazAsync();
+
+        var yuklenen = (await new AtomikJsonProjeDeposu(Yol).YukleAsync()).Value;
+
+        (await File.ReadAllTextAsync(Yol, Encoding.UTF8)).Should().StartWith("{\"sema\":\"" + AtomikJsonProjeDeposu.SemaIleriDonusumlu + "\"");
+        yuklenen.Belge.IleriDonusum.Should().Be(Cikti.FenKlasoruZipTests.DnsK);
+        yuklenen.Belge.DepremOncesiParseller.Should().BeEquivalentTo(OrnekProje.Geometri(), o => o.WithStrictOrdering());
+        yuklenen.Belge.Parseller.Should().BeEquivalentTo(yol.Belge.Parseller, o => o.WithStrictOrdering());
+        yuklenen.Belge.RevizyonKimligi().Should().Be(yol.Belge.RevizyonKimligi());
+
+        // Dönüşüm kaldırılınca v1 şemasına dönülür (eski kayıtlarla aynı biçim).
+        (await yol.GonderAsync(new DonusumGirdisiAyarlaKomutu(null), OrnekProje.Muhendis)).IsSuccess.Should().BeTrue();
+        (await File.ReadAllTextAsync(Yol, Encoding.UTF8)).Should().StartWith("{\"sema\":\"" + AtomikJsonProjeDeposu.Sema + "\"");
+        (await new AtomikJsonProjeDeposu(Yol).YukleAsync()).Value.Belge.Parseller.Should().BeEquivalentTo(OrnekProje.Geometri(), o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public async Task AtomikKayit_DNS_Projede_Elle_Degistirilmis_Aktif_Kose_Yuklemede_Reddedilmeli_SAHA_014()
+    {
+        var yol = await DnsliProjeyiDiskeYazAsync();
+        var aktifY = yol.Belge.Parseller[0].Koseler[0].Y.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var degisik = (yol.Belge.Parseller[0].Koseler[0].Y + 0.001m).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        await OzetiYenidenHesaplaAsync(i => i.Replace(aktifY, degisik, StringComparison.Ordinal));
+
+        var sonuc = await new AtomikJsonProjeDeposu(Yol).YukleAsync();
+
+        sonuc.IsFailure.Should().BeTrue("aktif geometri orijinallerin ileri dönüşümü olmalı (architect K2)");
+        sonuc.Error.Code.Should().Be(ErrorCodes.CiktiProjeKaydiHatasi);
+        sonuc.Error.TechnicalMessage.Should().Contain("forward transformation invariant");
+    }
+
+    [Fact]
+    public async Task AtomikKayit_v1_Semasinda_Ileri_Donusum_Icerigi_Reddedilmeli_SAHA_014()
+    {
+        await DnsliProjeyiDiskeYazAsync();
+        var metin = await File.ReadAllTextAsync(Yol, Encoding.UTF8);
+        await File.WriteAllTextAsync(Yol, metin.Replace(AtomikJsonProjeDeposu.SemaIleriDonusumlu, AtomikJsonProjeDeposu.Sema, StringComparison.Ordinal), new UTF8Encoding(false));
+
+        var sonuc = await new AtomikJsonProjeDeposu(Yol).YukleAsync();
+
+        sonuc.Error.Code.Should().Be(ErrorCodes.CiktiProjeKaydiHatasi);
+        sonuc.Error.TechnicalMessage.Should().Contain("schema");
+    }
+
     [Fact]
     public async Task AtomikKayit_Yinelenen_Parsel_Kimligi_Yuklemede_Reddedilmeli()
     {
