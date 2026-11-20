@@ -1,7 +1,7 @@
 {
   "projectCode": "PILOT-4 (Çıktı Sözleşmesi ve Revizyon — Sentetik)",
   "aciklama": "AC-PILOT-04..06 ve AC-PILOT-09 için bağlayıcı pilot çıktı sözleşmesi. Değerler uygulama sabitleriyle birebir eşleşmelidir; değişiklik sözleşme sürümü artırılarak ve proje sahibi onayıyla yapılır. Gerçek veri içermez.",
-  "sozlesmeSurumu": "p7-3e",
+  "sozlesmeSurumu": "p7-4",
   "pilotDamgasi": "PİLOT — RESMÎ İŞLEMDE KULLANILAMAZ",
   "fenKlasoruSablonSurumu": "TKGM_2023_4_v2-PILOT-TASLAK",
   "parsidDurumu": "Deneysel iç format (doğrulanmış PARSİD şeması yok)",
@@ -13,12 +13,14 @@
     "algoritma": "SHA-256",
     "yanDosyaUzantisi": ".sha256",
     "yanDosyaBicimi": "<64 küçük harf onaltılık><iki boşluk><dosya adı>\n",
+    "yanDosyaVarsayilan": false,
+    "yanDosyaNotu": "SORU-053 (proje sahibi kararı, 20 Kasım 2026): .sha256 yan dosyası ve ZIP içi .sha256 girişleri yalnız kullanıcı isterse üretilir; SHA-256 özeti her durumda CiktiSonucu.Sha256 ve audit kaydında (sha256=…) tutulur.",
     "imzaMi": false
   },
   "ciktilar": [
     { "tur": "Cetveller", "uzanti": ".xlsx", "damgaYeri": "her sayfa 1. satır ve yazdırma üst bilgisi" },
     { "tur": "FenKlasoru", "uzanti": ".pdf", "damgaYeri": "her sayfa üst bilgi + alt bilgi (P7.3-C1: filigran kaldırıldı)", "enAzSayfa": 5 },
-    { "tur": "FenKlasoruZip", "uzanti": ".zip", "damgaYeri": "ZIP içindeki her PDF sayfasının en altında tek satır: damga · RevisionId <ilk 16 hex>; DOP_PILOT.CKS damgasız + .sha256 girişi (SORU-039)", "enAzPdf": 12 },
+    { "tur": "FenKlasoruZip", "uzanti": ".zip", "damgaYeri": "ZIP içindeki her PDF sayfasının en altında tek satır: damga · RevisionId <ilk 16 hex>; DOP_PILOT.CKS damgasız (SORU-039); .sha256 girişleri yalnız isteğe bağlı (SORU-053)", "enAzPdf": 12 },
     { "tur": "CksDopOzeti", "uzanti": ".CKS", "damgaYeri": "yok — Netcad bayt düzeni (1. satır boş); taslak niteliği UI damgası, dosya adındaki PILOT ibaresi ve audit ile izlenir (SORU-039)", "netcadSatirBayt": 87 }
   ],
   "onay": {

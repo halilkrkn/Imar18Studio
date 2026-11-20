@@ -33,6 +33,14 @@ public sealed class FenKlasoruZipTests
     [
         "DÖNÜŞÜM PARAMETRELERİ.pdf", "KOORDİNE ÖZET.pdf", "ALAN HESABI.pdf", "ALAN HESABI-1.pdf", "KOORDİNE-ALAN.pdf", "DOP.pdf",
         "ÖZET CETVELİ.pdf", "MAL SAHİPLERİ ARAŞTIRMA VE ÖZET FORMU.pdf", "TESCİLE ESAS DAĞITIM CETVELİ.pdf", "TESCİL SAYFASI-1.pdf",
+        "RÖLÖVE ÖLÇÜ KROKİSİ.pdf", "RÖLÖVE-1.pdf", "PARSELASYON HARİTASI.pdf", "PARSELASYON HARİTASI.NCZ", "DOP_PILOT.CKS",
+    ];
+
+    /// <summary>SORU-053: <c>.sha256</c> girişleri yalnız <see cref="CiktiSecenekleri.Sha256YanDosyasiUret"/> açıkken eklenir.</summary>
+    private static readonly string[] TekAdaSha256liDosyalari =
+    [
+        "DÖNÜŞÜM PARAMETRELERİ.pdf", "KOORDİNE ÖZET.pdf", "ALAN HESABI.pdf", "ALAN HESABI-1.pdf", "KOORDİNE-ALAN.pdf", "DOP.pdf",
+        "ÖZET CETVELİ.pdf", "MAL SAHİPLERİ ARAŞTIRMA VE ÖZET FORMU.pdf", "TESCİLE ESAS DAĞITIM CETVELİ.pdf", "TESCİL SAYFASI-1.pdf",
         "RÖLÖVE ÖLÇÜ KROKİSİ.pdf", "RÖLÖVE-1.pdf", "PARSELASYON HARİTASI.pdf", "PARSELASYON HARİTASI.NCZ", "PARSELASYON HARİTASI.NCZ.sha256",
         "DOP_PILOT.CKS", "DOP_PILOT.CKS.sha256",
     ];
@@ -116,6 +124,13 @@ public sealed class FenKlasoruZipTests
         return r.Value;
     }
 
+    private static byte[] Sha256li(CiktiPaketi p)
+    {
+        var r = new FenKlasoruZipUretici().Uret(p, new CiktiSecenekleri(Sha256YanDosyasiUret: true));
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.TechnicalMessage : string.Empty);
+        return r.Value;
+    }
+
     [Fact]
     public async Task FenKlasoruZip_Tek_Adada_Dosya_Adlari_Ve_Sirasi_Ornek_Paket_Duzeninde_Olmali()
     {
@@ -124,8 +139,40 @@ public sealed class FenKlasoruZipTests
         var zip = Uret(p);
 
         Adlar(zip).Should().Equal(TekAdaDosyalari);
+        Adlar(zip).Should().NotContain(a => a.EndsWith(".sha256", StringComparison.Ordinal), "SORU-053: varsayılan pakette yan özet dosyası yok");
         new FenKlasoruZipUretici().Tur.Should().Be(CiktiTuru.FenKlasoruZip);
         new FenKlasoruZipUretici().Uzanti.Should().Be(".zip");
+    }
+
+    [Fact]
+    public async Task FenKlasoruZip_Varsayilan_Secenekle_Uretim_Seceneksiz_Uretimle_Bayt_Bayt_Ayni_Olmali_SORU_053()
+    {
+        var p = await PaketAsync();
+
+        new FenKlasoruZipUretici().Uret(p, CiktiSecenekleri.Varsayilan).Value.Should().Equal(Uret(p));
+    }
+
+    [Fact]
+    public async Task FenKlasoruZip_Sha256_Yan_Dosyasi_Istenirse_NCZ_Ve_CKS_Ozet_Girisleri_Eklenmeli_SORU_053()
+    {
+        var p = await PaketAsync();
+
+        var zip = Sha256li(p);
+
+        Adlar(zip).Should().Equal(TekAdaSha256liDosyalari);
+        var d = Ac(zip);
+        var ncz = d["PARSELASYON HARİTASI.NCZ"];
+        Encoding.UTF8.GetString(d["PARSELASYON HARİTASI.NCZ.sha256"]).Should()
+            .Be(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(ncz)) + "  PARSELASYON HARİTASI.NCZ\n");
+        var cks = d[FenKlasoruZipUretici.CksDosyaAdi];
+        Encoding.UTF8.GetString(d["DOP_PILOT.CKS.sha256"]).Should()
+            .Be(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(cks)) + "  DOP_PILOT.CKS\n");
+        var temiz = Ac(Uret(p));
+        temiz.Should().HaveCount(d.Count - 2);
+        foreach (var (ad, bayt) in temiz)
+        {
+            bayt.Should().Equal(d[ad], "yan özet girişleri dışında içerik iki modda aynıdır: " + ad);
+        }
     }
 
     [Fact]
@@ -166,8 +213,7 @@ public sealed class FenKlasoruZipTests
             belge.Value.Polylines.Should().Contain(x => x.LayerName == "TK_PARSEL_OLUŞAN" && x.Label == "101/1");
         }
 
-        var sha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(ncz));
-        Encoding.UTF8.GetString(d["PARSELASYON HARİTASI.NCZ.sha256"]).Should().Be(sha + "  PARSELASYON HARİTASI.NCZ\n");
+        d.Should().NotContainKey("PARSELASYON HARİTASI.NCZ.sha256", "SORU-053: yan özet girişi varsayılan olarak yok");
         using var arsiv = new ZipArchive(new MemoryStream(zip), ZipArchiveMode.Read);
         arsiv.Comment.Should().NotContain("bu pakette yoktur").And.Contain("SORU-042");
         FenKlasoruZipUretici.NczNotu.Should().Contain("PARSELASYON HARİTASI.NCZ").And.Contain("SORU-042").And.NotContain("yoktur");
@@ -390,10 +436,10 @@ public sealed class FenKlasoruZipTests
     }
 
     [Fact]
-    public async Task DopCks_Pakette_PILOT_Adli_CksUreticisiyle_Bayt_Bayt_Ayni_Ve_SHA256_Girisli_Olmali_SORU_039()
+    public async Task DopCks_Pakette_PILOT_Adli_CksUreticisiyle_Bayt_Bayt_Ayni_Ve_Istenirse_SHA256_Girisli_Olmali_SORU_039_053()
     {
         var p = await PaketAsync();
-        var d = Ac(Uret(p));
+        var d = Ac(Sha256li(p));
 
         var cks = d[FenKlasoruZipUretici.CksDosyaAdi];
 
@@ -489,6 +535,14 @@ public sealed class FenKlasoruZipTests
         var p = await PaketAsync();
 
         Uret(p).Should().Equal(Uret(p));
+    }
+
+    [Fact]
+    public async Task FenKlasoruZip_Sha256_Acikken_Ayni_Paketten_Tekrar_Uretim_Bayt_Bayt_Ayni_Olmali_SORU_053()
+    {
+        var p = await PaketAsync();
+
+        Sha256li(p).Should().Equal(Sha256li(p));
     }
 
     [Theory]

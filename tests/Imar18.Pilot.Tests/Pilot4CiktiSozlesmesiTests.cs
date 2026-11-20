@@ -63,7 +63,18 @@ public sealed class Pilot4CiktiSozlesmesiTests
     }
 
     [Fact]
-    public async Task Pilot4_Her_Cikti_Turu_Sozlesmedeki_Uzanti_Damga_Ve_SHA256_Yan_Dosyasiyla_Uretilmeli()
+    public void Pilot4_Sozlesme_SHA256_Yan_Dosyasini_Varsayilan_Olarak_Kapali_Tanimlamali_SORU_053()
+    {
+        var varsayilan = Sozlesme.GetProperty("checksum").GetProperty("yanDosyaVarsayilan").GetBoolean();
+
+        varsayilan.Should().BeFalse("SORU-053: yan .sha256 dosyası isteğe bağlıdır; özet her zaman audit'tedir");
+        CiktiSecenekleri.Varsayilan.Sha256YanDosyasiUret.Should().Be(varsayilan);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Pilot4_Her_Cikti_Turu_Sozlesmedeki_Uzanti_Damga_Ve_SHA256_Ozetiyle_Uretilmeli_Yan_Dosya_Istege_Bagli(bool yanDosya)
     {
         using var alan = await OnayliAsync();
         var rev = alan.Yol.Revizyon.Deger;
@@ -74,17 +85,28 @@ public sealed class Pilot4CiktiSozlesmesiTests
             var uzanti = c.GetProperty("uzanti").GetString()!;
             alan.Cikti.Uzanti(tur).Should().Be(uzanti);
             var yol = alan.CiktiYolu("cikti" + uzanti);
+            var yanYol = yol + S("checksum", "yanDosyaUzantisi");
 
-            var sonuc = await alan.Cikti.UretAsync(tur, PilotCalismaAlani.Muhendis, yol);
+            var sonuc = await alan.Cikti.UretAsync(tur, PilotCalismaAlani.Muhendis, yol, new CiktiSecenekleri(yanDosya));
 
             sonuc.IsSuccess.Should().BeTrue(sonuc.IsFailure ? sonuc.Error.TechnicalMessage : string.Empty);
             var bayt = await File.ReadAllBytesAsync(yol);
             var sha = Convert.ToHexStringLower(SHA256.HashData(bayt));
             sonuc.Value.Sha256.Should().Be(sha);
-            sonuc.Value.ChecksumDosyasi.Should().Be(yol + S("checksum", "yanDosyaUzantisi"));
-            (await File.ReadAllTextAsync(sonuc.Value.ChecksumDosyasi, Encoding.UTF8)).Should().Be(sha + "  " + Path.GetFileName(yol) + "\n");
+            if (yanDosya)
+            {
+                sonuc.Value.ChecksumDosyasi.Should().Be(yanYol);
+                (await File.ReadAllTextAsync(yanYol, Encoding.UTF8)).Should().Be(sha + "  " + Path.GetFileName(yol) + "\n");
+            }
+            else
+            {
+                sonuc.Value.ChecksumDosyasi.Should().BeNull();
+                File.Exists(yanYol).Should().BeFalse("SORU-053: " + tur + " için yan dosya varsayılan olarak yazılmaz");
+            }
+
             alan.Yol.Denetim[^1].Should().Match<AuditKaydi>(k =>
-                k.Islem == "Cikti:" + tur && k.Sonuc == AuditSonucu.Basarili && k.SonrakiRevizyon == rev && k.Ayrinti!.Contains("sha256=" + sha));
+                k.Islem == "Cikti:" + tur && k.Sonuc == AuditSonucu.Basarili && k.SonrakiRevizyon == rev && k.Ayrinti!.Contains("sha256=" + sha)
+                && k.Ayrinti.Contains(yanDosya ? "yanDosya=evet" : "yanDosya=hayir"));
             DamgaVeRevizyonTasimali(tur, bayt, rev, c);
         }
     }

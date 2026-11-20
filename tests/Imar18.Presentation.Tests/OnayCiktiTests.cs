@@ -128,8 +128,26 @@ public sealed class OnayCiktiTests
 
         istenen.Should().Be(CiktiTuru.FenKlasoru);
         sonuc.Should().BeTrue();
-        yazici.Dosyalar.Should().ContainKeys("fen.pdf", "fen.pdf.sha256");
+        vm.Sha256YanDosyasiUret.Should().BeFalse("SORU-053: kutucuk varsayılan olarak kapalıdır");
+        yazici.Dosyalar.Keys.Should().Equal("fen.pdf");
         vm.DurumMetni.Should().Contain("SHA-256");
+        yol.Denetim[^1].Ayrinti.Should().Contain("sha256=");
+    }
+
+    [Fact]
+    public async Task OnayCikti_Sha256_Kutucugu_Acilirsa_Yan_Dosya_Da_Yazilmali_SORU_053()
+    {
+        var (yol, _, zaman) = await OrnekProje.TamProjeAsync();
+        var yazici = new BellekYazici();
+        var vm = new OnayCiktiViewModel(Alan(yol, zaman, yazici)) { OnayMetniOkundu = true };
+        await vm.OnaylaCommand.ExecuteAsync(null);
+
+        vm.Sha256YanDosyasiUret = true;
+        var sonuc = await vm.UretAsync(CiktiTuru.FenKlasoru, "fen.pdf");
+
+        sonuc.Should().BeTrue(vm.DurumMetni);
+        yazici.Dosyalar.Should().ContainKeys("fen.pdf", "fen.pdf.sha256");
+        vm.DurumMetni.Should().Contain(".sha256");
     }
 
     [Fact]

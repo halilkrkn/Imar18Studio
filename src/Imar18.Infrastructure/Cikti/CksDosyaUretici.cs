@@ -12,7 +12,7 @@ namespace Imar18.Infrastructure.Cikti;
 /// Payı Hesabı" bölümü), CRLF; Türkçe harfler Windows-1254, çerçeve CP437 baytı (<see cref="NetcadCksKodlayici"/>).
 /// Pilot damgası CKS'e yazılmaz (proje sahibi kararı: Netcad 1. satırdaki metnin üstüne çerçeve çiziyor); bu yüzden dosyanın
 /// içeriği resmî Netcad dosyasından ayırt edilemez — taslak niteliği UI'daki damga, önerilen dosya adındaki <c>PILOT</c> ibaresi
-/// ve RevisionId'li audit kaydıyla izlenir (<c>.sha256</c> yalnız bütünlük içindir). Yazılan dosya <see cref="Cad.Cks.CksFileReader"/>
+/// ve RevisionId'li audit kaydıyla izlenir (SHA-256 özeti audit'tedir; <c>.sha256</c> yan dosyası isteğe bağlıdır, SORU-053). Yazılan dosya <see cref="Cad.Cks.CksFileReader"/>
 /// ile birebir geri okunur. Yazmadan önce "Hesap" bölümü aritmetiği doğrulanır; tutarsızsa veya bir satır 87 baytı aşarsa sahte
 /// dosya üretilmez (<c>ERR-CIKTI-003</c>).
 /// </summary>

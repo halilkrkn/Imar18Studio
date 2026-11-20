@@ -18,8 +18,9 @@ internal sealed record FenKlasoruDosyasi(string Ad, Func<byte[]> Uret);
 /// başına), <c>KOORDİNE-ALAN</c> (birleşik), <c>DOP</c>, <c>ÖZET CETVELİ</c>, <c>MAL SAHİPLERİ ARAŞTIRMA VE ÖZET FORMU</c>,
 /// <c>TESCİLE ESAS DAĞITIM CETVELİ</c>, <c>TESCİL SAYFASI-1..n</c> + <c>TESCİL-1-2-…</c> (imar adası başına), <c>RÖLÖVE ÖLÇÜ
 /// KROKİSİ</c>, <c>RÖLÖVE-1..n</c> + <c>RÖLÖVE-1-2-…</c> (birleşik dosyalar yalnız 2+ imar adasında; tek adada
-/// <c>RÖLÖVE-1</c> adı çakışırdı), <c>PARSELASYON HARİTASI</c>, <c>PARSELASYON HARİTASI.NCZ</c> + <c>.sha256</c> (P7.3-C3, <see cref="Cad.Ncz.NczParselasyonYazici"/>;
-/// deneysel, SORU-042) ve CKS eşlemesi mümkünse <c>DOP_PILOT.CKS</c> + <c>.sha256</c>.
+/// <c>RÖLÖVE-1</c> adı çakışırdı), <c>PARSELASYON HARİTASI</c>, <c>PARSELASYON HARİTASI.NCZ</c> (P7.3-C3, <see cref="Cad.Ncz.NczParselasyonYazici"/>;
+/// deneysel, SORU-042) ve CKS eşlemesi mümkünse <c>DOP_PILOT.CKS</c>. NCZ ve CKS'in <c>.sha256</c> yan girişleri yalnız
+/// <see cref="CiktiSecenekleri.Sha256YanDosyasiUret"/> açıkken eklenir (SORU-053; paket özeti her zaman audit'tedir).
 /// Dosya adları UTF-8 ad bayrağıyla yazılır; giriş zamanları onay zamanıdır (aynı revizyon → aynı bayt). NCZ üretilemezse (ör. şablon
 /// ayrıştırılamaz) PDF/CKS paketi engellenmez: NCZ girişi çıkarılır ve neden ZIP açıklamasına yazılır (reviewer H1). Onay/RevisionId/.sha256/audit kapıları
 /// <see cref="CiktiServisi"/>'ndedir.
@@ -33,7 +34,7 @@ public sealed class FenKlasoruZipUretici : ICiktiUretici
     /// <summary>NCZ yazıcısı hata döndürdüğünde (ör. 14 baytı aşan etiket, şablonda proje kadastrosu yok) ZIP açıklamasına yazılır.</summary>
     public const string NczUretilemediNotu = "Not: PARSELASYON HARİTASI.NCZ üretilemedi; paket NCZ olmadan oluşturuldu";
 
-    /// <summary>ZIP içindeki CKS adı: SORU-039 istisnası gereği taslak izi adda (<c>PILOT</c>) ve <c>.sha256</c> yan girişindedir.</summary>
+    /// <summary>ZIP içindeki CKS adı: SORU-039 istisnası gereği taslak izi adda (<c>PILOT</c>); <c>.sha256</c> girişi isteğe bağlıdır (SORU-053).</summary>
     public const string CksDosyaAdi = "DOP_PILOT.CKS";
 
     static FenKlasoruZipUretici() => QuestPDF.Settings.License = LicenseType.Community;
@@ -42,9 +43,17 @@ public sealed class FenKlasoruZipUretici : ICiktiUretici
 
     public string Uzanti => ".zip";
 
-    public Result<byte[]> Uret(CiktiPaketi paket, CancellationToken cancellationToken = default)
+    public Result<byte[]> Uret(CiktiPaketi paket, CancellationToken cancellationToken = default) =>
+        Uret(paket, CiktiSecenekleri.Varsayilan, cancellationToken);
+
+    /// <summary>
+    /// ZIP paketini üretir. SORU-053: <c>.sha256</c> girişleri yalnız <see cref="CiktiSecenekleri.Sha256YanDosyasiUret"/> açıkken
+    /// eklenir; diğer tüm girişler iki modda bayt bayt aynıdır.
+    /// </summary>
+    public Result<byte[]> Uret(CiktiPaketi paket, CiktiSecenekleri secenekler, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(paket);
+        ArgumentNullException.ThrowIfNull(secenekler);
         if (paket.DonusumHatasi is { } dh)
         {
             // Reviewer M1: hesaplanamayan dönüşüm yalnız dönüşüme bağlı Fen Klasörü paketini engeller (Excel/CKS etkilenmez).
@@ -55,7 +64,7 @@ public sealed class FenKlasoruZipUretici : ICiktiUretici
         {
             // Reviewer H1: deneysel NCZ üretilemezse 19 PDF + CKS paketi engellenmez; giriş çıkarılır, neden açıklamaya yazılır.
             var ncz = Cad.Ncz.NczParselasyonYazici.Yaz(paket, cancellationToken);
-            var dosyalar = Dosyalar(paket, ncz.IsSuccess ? ncz.Value : null);
+            var dosyalar = Dosyalar(paket, ncz.IsSuccess ? ncz.Value : null, secenekler.Sha256YanDosyasiUret);
             using var ms = new MemoryStream();
             using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true, entryNameEncoding: Encoding.UTF8))
             {
@@ -82,7 +91,7 @@ public sealed class FenKlasoruZipUretici : ICiktiUretici
     }
 
     /// <summary>ZIP girişleri (sıra ve adlar sözleşmedir; içerik tembel üretilir).</summary>
-    internal static IReadOnlyList<FenKlasoruDosyasi> Dosyalar(CiktiPaketi p, byte[]? parselasyonNcz)
+    internal static IReadOnlyList<FenKlasoruDosyasi> Dosyalar(CiktiPaketi p, byte[]? parselasyonNcz, bool sha256YanDosyasiUret)
     {
         var liste = new List<FenKlasoruDosyasi>();
         void Ekle(string ad, Action<IDocumentContainer> bilesen) => liste.Add(new FenKlasoruDosyasi(ad + ".pdf", () => Pdf(p, ad, bilesen)));
@@ -151,26 +160,38 @@ public sealed class FenKlasoruZipUretici : ICiktiUretici
 
         Ekle("PARSELASYON HARİTASI", c => FenKlasoruBelgeleri.ParselasyonHaritasi(c, p));
 
-        // P7.3-C3: hesap motorundan üretilen Netcad çizimi; içerik damgası çizimdeki yazıdadır (SORU-050), bütünlük .sha256'dadır.
+        // P7.3-C3: hesap motorundan üretilen Netcad çizimi; içerik damgası çizimdeki yazıdadır (SORU-050). Paketin bütünlük
+        // özeti CiktiServisi audit kaydındadır; ZIP içi .sha256 girişi yalnız istenirse eklenir (SORU-053).
         if (parselasyonNcz is not null)
         {
             var nczAdi = Cad.Ncz.NczParselasyonYazici.DosyaAdi;
-            var nczSha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(parselasyonNcz));
             liste.Add(new FenKlasoruDosyasi(nczAdi, () => parselasyonNcz));
-            liste.Add(new FenKlasoruDosyasi(nczAdi + ".sha256", () => Encoding.UTF8.GetBytes(nczSha + "  " + nczAdi + "\n")));
+            if (sha256YanDosyasiUret)
+            {
+                liste.Add(OzetGirisi(nczAdi, parselasyonNcz));
+            }
         }
 
         // CKS yalnız Netcad alanlarıyla eşlenebiliyorsa (D1 = D2 = R3 = 0; SORU-033/034). İçeride damga yok (SORU-039);
-        // istisna koşulu gereği taslak izi dosya adındaki PILOT ibaresi ve yanındaki .sha256 girişiyle taşınır (reviewer H1).
+        // taslak izi dosya adındaki PILOT ibaresi, UI damgası ve RevisionId'li audit kaydıyla taşınır; .sha256 girişi isteğe bağlıdır (SORU-053).
         if (CksOzetiEslemesi.Olustur(p.Dop) is { IsSuccess: true } cks && CksDosyaUretici.Yaz(cks.Value) is { IsSuccess: true } cksBayt)
         {
             var bayt = cksBayt.Value;
-            var sha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bayt));
             liste.Add(new FenKlasoruDosyasi(CksDosyaAdi, () => bayt));
-            liste.Add(new FenKlasoruDosyasi(CksDosyaAdi + ".sha256", () => Encoding.UTF8.GetBytes(sha + "  " + CksDosyaAdi + "\n")));
+            if (sha256YanDosyasiUret)
+            {
+                liste.Add(OzetGirisi(CksDosyaAdi, bayt));
+            }
         }
 
         return liste;
+    }
+
+    /// <summary>ZIP içi <c>&lt;ad&gt;.sha256</c> girişi: "&lt;64 küçük harf hex&gt;  &lt;ad&gt;\n" (sha256sum biçimi).</summary>
+    private static FenKlasoruDosyasi OzetGirisi(string ad, byte[] icerik)
+    {
+        var sha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(icerik));
+        return new FenKlasoruDosyasi(ad + ".sha256", () => Encoding.UTF8.GetBytes(sha + "  " + ad + "\n"));
     }
 
     /// <summary>"1-2-3" (birleşik dosya adı eki).</summary>
