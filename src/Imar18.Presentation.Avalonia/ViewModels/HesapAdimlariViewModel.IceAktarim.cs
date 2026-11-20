@@ -88,6 +88,14 @@ public sealed partial class HesapAdimlariViewModel
 {
     private const string KrokiYenidenYukle = "Yaklaşık Yer Krokisi'ni yeniden yükleyin.";
 
+    /// <summary>Kroki yükleme sonucu: SAHA-015 parselasyon taslağı veya P7.3-B2 Kroki satırı eşleştirmesi (biri dolu).</summary>
+    private sealed record KrokiYuklemeSonucu(
+        KrokiEslestirmeSonucu? Eslestirme,
+        KrokiParselasyonOnizleme? Parselasyon,
+        decimal ImarToplami,
+        AppError? ParselasyonHatasi,
+        Imar18.Domain.Revizyon.RevisionId? Revizyon);
+
     private readonly CadImportService? _krokiIthal;
     private KrokiEslestirmeSonucu? _krokiSonucu;
     private ProjeBelgesi? _krokiBelgesi;
@@ -301,18 +309,36 @@ public sealed partial class HesapAdimlariViewModel
             }
 
             var belge = _alan.Yol.Belge;
+            var bolucu = _alan.KrokiBolucu;
             var sonuc = await GuvenliAsync(
                 () =>
                 {
                     var d = _alan.Onay.Degerlendir();
-                    // SAHA-014 (SORU-060 varsayımı): kroki 1. adım CAD'i gibi Deprem Öncesi sayılır; .DNS uygulanmışsa aynı katsayılarla
-                    // Deprem Sonrası'na dönüştürülüp aktif parsellerle kesiştirilir (dönüşüm yoksa belge aynen kullanılır).
+                    // SAHA-014 (SORU-060 kapandı): kroki 1. adım CAD'i gibi Deprem Öncesi sayılır; .DNS uygulanmışsa aynı katsayılarla
+                    // (çizgiler, poligonlar ve yazı konumları) Deprem Sonrası'na dönüştürülür (dönüşüm yoksa belge aynen kullanılır).
                     var kroki = Imar18.Application.Cad.CadBelgesiDonusumu.Uygula(okunan.Value, belge.IleriDonusum);
+
+                    // SAHA-015: imar bloğunun içinde 2 köşeli bölme çizgisi varsa kesin alanlı parselasyon taslağı; yoksa Kip 1/2 satırları.
+                    // Reviewer H1: parselasyon başarısız olursa Kip 1/2'ye dönülür ve neden uyarı olarak gösterilir (iki yol da başarısızsa
+                    // parselasyon hatası gösterilir).
+                    AppError? parselasyonHatasi = null;
+                    if (bolucu is not null && KrokiParselasyonMotoru.ParselasyonaUygun(kroki, belge.Parseller))
+                    {
+                        var p = KrokiParselasyonMotoru.Olustur(
+                            new KrokiParselasyonGirdisi(kroki, belge.Parseller, takbis, belge.MalikRehberi, d.Dop?.Dopo), bolucu, cancellationToken);
+                        if (p.IsSuccess)
+                        {
+                            return Result<KrokiYuklemeSonucu>.Success(new KrokiYuklemeSonucu(null, p.Value, 0m, null, belge.RevizyonKimligi()));
+                        }
+
+                        parselasyonHatasi = p.Error;
+                    }
+
                     var girdi = new KrokiEslestirmeGirdisi(kroki, belge.Parseller, d.HakIcinImarParselleri, takbis, belge.MalikRehberi, d.Dop?.Dopo);
                     var e = YaklasikYerKrokisiEslestirici.Eslestir(girdi, kesisim, cancellationToken);
                     return e.IsFailure
-                        ? Result<(KrokiEslestirmeSonucu Sonuc, decimal ImarToplami)>.Failure(e.Error)
-                        : Result<(KrokiEslestirmeSonucu Sonuc, decimal ImarToplami)>.Success((e.Value, d.HakIcinImarParselleri.Sum(p => p.AlanM2)));
+                        ? Result<KrokiYuklemeSonucu>.Failure(parselasyonHatasi ?? e.Error)
+                        : Result<KrokiYuklemeSonucu>.Success(new KrokiYuklemeSonucu(e.Value, null, d.HakIcinImarParselleri.Sum(p => p.AlanM2), parselasyonHatasi, null));
                 },
                 ErrorCodes.TopoAnalizYapilamadi,
                 cancellationToken).ConfigureAwait(true);
@@ -329,8 +355,23 @@ public sealed partial class HesapAdimlariViewModel
             }
 
             _krokiBelgesi = belge;
-            KrokiOnizlemesiniGoster(sonuc.Value.Sonuc, sonuc.Value.ImarToplami);
-            DurumMetni = "Yaklaşık Yer Krokisi eşleştirildi; önizlemeyi kontrol edip \"Kroki'ye Aktar\" deyin.";
+            if (sonuc.Value.Parselasyon is { } parselasyon)
+            {
+                _parselasyonRevizyonu = sonuc.Value.Revizyon;
+                ParselasyonTaslaginiGoster(parselasyon);
+                DurumMetni = string.Create(CultureInfo.InvariantCulture,
+                    $"Yaklaşık Yer Krokisi'nden {parselasyon.Parseller.Count} kesin alanlı parsel taslağı üretildi; tuvaldeki önizlemeyi kontrol edip \"✅ Parselasyon Çizimini Onayla ve Uygula\" deyin.");
+            }
+            else
+            {
+                KrokiOnizlemesiniGoster(sonuc.Value.Eslestirme!, sonuc.Value.ImarToplami);
+                if (sonuc.Value.ParselasyonHatasi is { } ph)
+                {
+                    KrokiUyarilari.Insert(0, "Otomatik parselasyon yapılamadı: " + ph.UserMessage + " Kroki satırları kullanım poligonu / hisse oranıyla (Kip 1/2) üretildi.");
+                }
+
+                DurumMetni = "Yaklaşık Yer Krokisi eşleştirildi; önizlemeyi kontrol edip \"Kroki'ye Aktar\" deyin.";
+            }
         }
         finally
         {
@@ -372,7 +413,7 @@ public sealed partial class HesapAdimlariViewModel
     private void TakbisDegisti()
     {
         Interlocked.Increment(ref _takbisSurumu);
-        if (_krokiSonucu is not null)
+        if (_krokiSonucu is not null || _parselasyonOnizleme is not null)
         {
             KrokiOnizlemesiniTemizle();
             KrokiOzeti = string.Empty;
@@ -444,6 +485,7 @@ public sealed partial class HesapAdimlariViewModel
     {
         _krokiSonucu = null;
         _krokiBelgesi = null;
+        ParselasyonTaslaginiTemizle(); // SAHA-015: taslak katman da kalkar (uygulanmış katman korunur)
         KrokiOnizlemesi = string.Empty;
         KrokiUyarilari.Clear();
         KrokiYoklamaDurumunuBildir();
@@ -455,6 +497,7 @@ public sealed partial class HesapAdimlariViewModel
         WebtapuOnizlemeleri.Clear();
         WebtapuDurumunuBildir();
         KrokiOnizlemesiniTemizle();
+        ParselasyonuSifirla();
         KrokiOzeti = string.Empty;
     }
 
@@ -468,5 +511,9 @@ public sealed partial class HesapAdimlariViewModel
     {
         KrokiyeAktarCommand.NotifyCanExecuteChanged();
         KrokiOnizlemesiniKaldirCommand.NotifyCanExecuteChanged();
+        ParselasyonCiziminiOnaylaCommand.NotifyCanExecuteChanged();
+        ParselasyonTaslaginiIptalEtCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(KrokiParselasyonTaslagiVar));
+        OnPropertyChanged(nameof(KrokiEslestirmeOnizlemesiVar));
     }
 }

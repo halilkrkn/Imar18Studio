@@ -69,7 +69,10 @@ public sealed class NczAnonimGercekVeriTests
             var sizanDeger = degerler.Count(v => sonuc.Icerik.AsSpan().IndexOf(Encoding.Latin1.GetBytes(v)) >= 0);
             sizanDeger.Should().Be(0);
 
-            sonuc.PngOnizlemeSilindi.Should().BeTrue();
+            // SORU-063: PNG önizlemesi yalnız kaynakta varsa silinmiş sayılır (ör. BMP önizlemeli Yaklaşık Yer Krokisi .NCZ'sinde PNG yoktur);
+            // çıktıda PNG imzası her durumda bulunmamalıdır.
+            var kaynaktaPngVar = bayt.AsSpan().IndexOf((ReadOnlySpan<byte>)[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) >= 0;
+            sonuc.PngOnizlemeSilindi.Should().Be(kaynaktaPngVar);
             sonuc.Icerik.AsSpan().IndexOf((ReadOnlySpan<byte>)[0x89, 0x50, 0x4E, 0x47]).Should().Be(-1);
             sonuc.BosaltilanXmlAlanSayisi.Should().BeGreaterThan(0);
 

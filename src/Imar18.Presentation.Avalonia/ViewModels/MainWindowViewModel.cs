@@ -183,6 +183,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 LastProjeTask = OnayCikti.YenileAsync();
             };
             Hesap.TakbiseAktarildi += (_, _) => Kunye.WebtapuAktarildi();
+
+            // SAHA-015: kroki parselasyon katmanı (taslak / uygulanmış) tuvalde CAD sahnesinin üstüne çizilir.
+            Hesap.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(HesapAdimlariViewModel.ParselasyonKatmani))
+                {
+                    Canvas.ParselasyonKatmani = Hesap.ParselasyonKatmani;
+                }
+            };
             LastProjeTask = Hesap.YenileAsync();
             var fen = new RelayCommand(() => OnayCikti.FenKlasoruZipIsteCommand.Execute(null), () => OnayCikti.GecerliOnayVar);
             Canvas.BaglaFenKlasoru(fen);
@@ -524,7 +533,27 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 return;
             }
 
-            LastProjeTask = ProjeyeGonderAsync(new ParselGeometrileriAyarlaKomutu(geometri.Parseller) { CiftSayimHaricSayisi = geometri.CiftSayimHaricSayisi });
+            // SAHA-015 (architect K1): onaylı kroki parselasyonu sessizce ezilmez. .DNS uygula/kaldır yolunda proje geometrisi CAD'den geri
+            // yazılmaz (IleriDonusumUygulaKomutu kroki parsellerini Deprem Öncesi orijinallerinden zaten dönüştürdü); 1. adım katman
+            // eşlemesi bilinçli yeniden içe aktarmadır — uyarılır ve denetime ezilen parsel sayısı yazılır.
+            var krokiParseli = Hesap?.UygulananKrokiParselSayisi ?? 0;
+            if (krokiParseli > 0 && yalnizDegistiyse)
+            {
+                Warnings.Add("Uygulanmış Yaklaşık Yer Krokisi parselasyonu korundu ve .DNS dönüşümüyle yeniden konumlandı; alanlar dönüşüm ölçeğiyle değişmiş olabilir — krokiyi yeniden yükleyip onaylayın.");
+                return;
+            }
+
+            if (krokiParseli > 0)
+            {
+                Warnings.Add(string.Create(CultureInfo.InvariantCulture,
+                    $"Uygulanmış Yaklaşık Yer Krokisi parselasyonu ({krokiParseli} parsel) 1. adım katman eşlemesiyle değiştirildi; Kroki satırları eski parsel kodlarına bakıyor — krokiyi yeniden yükleyip onaylayın."));
+            }
+
+            LastProjeTask = ProjeyeGonderAsync(new ParselGeometrileriAyarlaKomutu(geometri.Parseller)
+            {
+                CiftSayimHaricSayisi = geometri.CiftSayimHaricSayisi,
+                KrokiParselasyonuEzildi = krokiParseli,
+            });
             await LastProjeTask.ConfigureAwait(true);
 
             // SAHA-014 (reviewer M4): proje komutu beklenirken .DNS değiştiyse tuval yine güncel katsayılarla yenilenir.

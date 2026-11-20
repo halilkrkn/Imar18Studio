@@ -25,12 +25,13 @@ internal sealed record CadRenderState(
     bool EtiketGoster,
     OsnapSonucu? Yakalama,
     OsnapSonucu? SecilenNokta = null,
-    string? VurguluKatman = null)
+    string? VurguluKatman = null,
+    ParselasyonKatmani? Parselasyon = null)
 {
     public static CadRenderState From(CadCanvasViewModel vm, double width, double height) => new(
         vm.Scene, vm.Camera.Origin, vm.Camera.Scale, vm.Camera.OffsetX, vm.Camera.OffsetY, vm.SwipePercent,
         vm.Selected, vm.CutHandle.IsVisible, vm.CutHandle.AngleDeg, vm.CutHandle.PositionRatio, width, height,
-        vm.AcikPafta, vm.IzgaraGoster, vm.EtiketGoster, vm.Yakalama, vm.SecilenNokta, vm.VurguluKatman);
+        vm.AcikPafta, vm.IzgaraGoster, vm.EtiketGoster, vm.Yakalama, vm.SecilenNokta, vm.VurguluKatman, vm.ParselasyonKatmani);
 
     /// <summary>İmar perdesinin (swipe) sağ kenarı (yerel piksel).</summary>
     public double PerdeX => Width * SwipePercent / 100d;
@@ -269,6 +270,11 @@ internal static class CadSceneRenderer
         }
 
         DrawLabels(canvas, s, palet);
+        if (s.Parselasyon is { Parseller.Count: > 0 } parselasyon)
+        {
+            DrawParselasyon(canvas, s, parselasyon, palet);
+        }
+
         if (selected is not null && s.CutHandleVisible)
         {
             DrawCutHandle(canvas, matrix.MapPoint(selected.Centroid), s, palet);
@@ -304,6 +310,100 @@ internal static class CadSceneRenderer
         }
 
         canvas.Restore();
+    }
+
+    /// <summary>SAHA-015: parselasyon katmanı rengi — taslak parlak fuşya (kesikli), uygulanmış kesin çizim parlak yeşil (düz).</summary>
+    internal static SKColor ParselasyonRengi(bool taslak, bool acikPafta) => taslak
+        ? SKColor.Parse(acikPafta ? "#C026D3" : "#F0ABFC")
+        : SKColor.Parse(acikPafta ? "#4D7C0F" : "#A3E635");
+
+    /// <summary>
+    /// SAHA-015: parselasyon etiketleri (<c>Ada/Parsel • Malik • Alan m²</c>) — her parselin alan merkezinde, yerel ekran pikselinde.
+    /// Perde ve etiket anahtarından bağımsızdır (önizleme her zaman okunur); ekran dışındakiler atlanır.
+    /// </summary>
+    internal static IReadOnlyList<EtiketKonumu> ParselasyonEtiketleri(CadRenderState s)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        if (s.Parselasyon is not { } katman)
+        {
+            return [];
+        }
+
+        var sonuc = new List<EtiketKonumu>(katman.Parseller.Count);
+        foreach (var p in katman.Parseller)
+        {
+            var noktalar = p.Koseler.Select(s.Ekran).ToArray();
+            if (noktalar.Length < 3)
+            {
+                continue;
+            }
+
+            var m = Merkez(noktalar);
+            if (m.X < 0 || m.Y < 0 || m.X > s.Width || m.Y > s.Height)
+            {
+                continue;
+            }
+
+            sonuc.Add(new EtiketKonumu(p.Etiket, m.X, m.Y, false));
+        }
+
+        return sonuc;
+    }
+
+    private static void DrawParselasyon(SKCanvas canvas, CadRenderState s, ParselasyonKatmani katman, Palet palet)
+    {
+        var renk = ParselasyonRengi(katman.Taslak, s.AcikPafta);
+        using var dolgu = new SKPaint { Color = renk.WithAlpha(katman.Taslak ? (byte)38 : (byte)22), IsStroke = false, IsAntialias = true };
+        using var cizgi = new SKPaint { Color = renk, IsStroke = true, StrokeWidth = katman.Taslak ? 2.25f : 2.5f, IsAntialias = true, StrokeJoin = SKStrokeJoin.Round };
+        using var kesikli = SKPathEffect.CreateDash([9f, 5f], 0);
+        if (katman.Taslak)
+        {
+            cizgi.PathEffect = kesikli;
+        }
+
+        foreach (var p in katman.Parseller)
+        {
+            if (p.Koseler.Count < 3)
+            {
+                continue;
+            }
+
+            using var yol = new SKPath();
+            yol.AddPoly(p.Koseler.Select(s.Ekran).ToArray(), close: true);
+            canvas.DrawPath(yol, dolgu);
+            canvas.DrawPath(yol, cizgi);
+        }
+
+        using var yazi = new SKPaint { Color = palet.EtiketYazi, TextSize = EtiketBoyu, IsAntialias = true, FakeBoldText = true, TextAlign = SKTextAlign.Center };
+        using var zemin = new SKPaint { Color = palet.EtiketZemin, IsStroke = false, IsAntialias = true };
+        using var kenar = new SKPaint { Color = renk, IsStroke = true, StrokeWidth = 1f, IsAntialias = true };
+        foreach (var e in ParselasyonEtiketleri(s))
+        {
+            var genislik = yazi.MeasureText(e.Metin) + 10f;
+            var kutu = new SKRect(e.X - (genislik / 2f), e.Y - 9f, e.X + (genislik / 2f), e.Y + 9f);
+            canvas.DrawRoundRect(kutu, 4f, 4f, zemin);
+            canvas.DrawRoundRect(kutu, 4f, 4f, kenar);
+            canvas.DrawText(e.Metin, e.X, e.Y + (EtiketBoyu / 3f), yazi);
+        }
+    }
+
+    /// <summary>Ekran çokgeninin alan merkezi (dejenerede köşe ortalaması).</summary>
+    private static SKPoint Merkez(SKPoint[] n)
+    {
+        double a = 0, cx = 0, cy = 0;
+        for (var i = 0; i < n.Length; i++)
+        {
+            var p = n[i];
+            var q = n[(i + 1) % n.Length];
+            var k = ((double)p.X * q.Y) - ((double)q.X * p.Y);
+            a += k;
+            cx += (p.X + q.X) * k;
+            cy += (p.Y + q.Y) * k;
+        }
+
+        return Math.Abs(a) > 1e-9
+            ? new SKPoint((float)(cx / (3 * a)), (float)(cy / (3 * a)))
+            : new SKPoint(n.Average(p => p.X), n.Average(p => p.Y));
     }
 
     /// <summary>Seçilen OSNAP noktası: dolgu baklava + artı (imleç ayrılsa da işaretli kalır).</summary>

@@ -481,6 +481,7 @@ public static class NczAnonimlestirici
     {
         var hassas = new List<string>();
         hassas.AddRange(belge.Polylines.Select(p => p.Label));
+        hassas.AddRange(belge.Texts.Select(t => t.Text)); // SAHA-015: tip 5 yazılar (malik adı olabilir) artık çözülüyor; kayıtları atlanır
         hassas.AddRange(belge.Polylines.Select(p => p.FeatureClass ?? string.Empty).Where(s => !IzinliSiniflar.Contains(s.Trim())));
         hassas.AddRange(kaynakKatmanlari.Where(k => !StandartKatmanAdlari.Contains(k)));
         hassas.AddRange(xmlDegerleri);

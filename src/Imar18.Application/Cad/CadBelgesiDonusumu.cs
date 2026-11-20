@@ -24,7 +24,12 @@ public static class CadBelgesiDonusumu
             Polylines = belge.Polylines
                 .Select(p => p with { Vertices = p.Vertices.Select(katsayilar.Uygula).ToArray(), DeclaredAreaM2 = null })
                 .ToArray(),
-            Texts = belge.Texts.Select(t => t with { Position = katsayilar.Uygula(t.Position) }).ToArray(),
+            // SAHA-015: kroki yazı konumu ve (varsa) görünen merkezi aynı katsayılarla dönüştürülür.
+            Texts = belge.Texts.Select(t => t with
+            {
+                Position = katsayilar.Uygula(t.Position),
+                Merkez = t.Merkez is { } m ? katsayilar.Uygula(m) : null,
+            }).ToArray(),
         };
     }
 }

@@ -157,6 +157,10 @@ public sealed partial class CadCanvasViewModel : ObservableObject
     [ObservableProperty]
     private string _seciliOzet = SecimYok;
 
+    /// <summary>SAHA-015: CAD sahnesinin üstündeki kroki parselasyon katmanı (taslak önizleme veya uygulanmış kesin çizim; yoksa null).</summary>
+    [ObservableProperty]
+    private ParselasyonKatmani? _parselasyonKatmani;
+
     /// <summary>Yakalama toleransı (ekran pikseli).</summary>
     public const double YakalamaToleransiPx = 10d;
 
@@ -413,6 +417,8 @@ public sealed partial class CadCanvasViewModel : ObservableObject
     partial void OnEtiketGosterChanged(bool value) => Invalidate();
 
     partial void OnAcikPaftaChanged(bool value) => Invalidate();
+
+    partial void OnParselasyonKatmaniChanged(ParselasyonKatmani? value) => Invalidate();
 
     private void OsnapDegisti()
     {

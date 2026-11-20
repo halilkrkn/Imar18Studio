@@ -7,10 +7,11 @@ using Imar18.Domain.Geometry;
 namespace Imar18.Infrastructure.Cad.Ncz;
 
 /// <summary>
-/// Birincil Netcad 8.5 <c>.NCZ</c> okuyucusu (spec 2.1, D14, P4.0 spike). Yalnizca katman tablosunu ve poligon/coklu cizgi
-/// (tip 7) varliklarini okur; diger varliklar atlanip sayilir. Gomulu <c>&lt;NetmapManager&gt;</c> XML ust verisi
-/// (kisi/kurum/adres alanlari) ve PNG onizleme hic ayristirilmaz (KVKK, AC-PILOT-08).
-/// Ikili yerlesim: docs/spikes/P4.0_NCZ_Fizibilite_Raporu.md §2.
+/// Birincil Netcad 8.5 <c>.NCZ</c> okuyucusu (spec 2.1, D14, P4.0 spike). Katman tablosunu, poligon/coklu cizgi (tip 7; acik
+/// bolme cizgileri dahil) ve SAHA-015'ten itibaren standart (<c>0x15</c>) tip 5 yazi varliklarini okur; diger varliklar atlanip
+/// sayilir. Gomulu <c>&lt;NetmapManager&gt;</c> XML ust verisi (kisi/kurum/adres alanlari) ve PNG onizleme hic ayristirilmaz
+/// (KVKK, AC-PILOT-08); yazi metni (malik adi olabilir) yalniz bellekte tasinir, hata mesajina yazilmaz.
+/// Ikili yerlesim: docs/spikes/P4.0_NCZ_Fizibilite_Raporu.md §2, docs/spikes/P7.3_NCZ_Yazici_Spike.md §2.4.
 /// </summary>
 public sealed class NczFormatAdapter : ICadFormatAdapter
 {
@@ -71,7 +72,17 @@ internal static class NczParser
     private const byte ViewRecordA = 0x1B; // gorunum/kapsam kaydi (P4.0 gozlem)
     private const byte ViewRecordB = 0x1D; // gorunum/kapsam kaydi (P4.0 gozlem)
     internal const byte PolylineType = 7;
+    internal const byte TextType = 5;
     private const int CancellationCheckInterval = 256;
+
+    // ---- Tip 5 yazi yuku (P7.3 spike §2.4; yalniz 0x15 kayit, yuk = 93 + metin uzunlugu) ----
+    internal const int TextInsertionOffset = 3;
+    internal const int TextBoundsOffset = 45;
+    internal const int TextLengthOffset = 92;
+    internal const int TextFixedSize = 93;
+
+    /// <summary>Ekleme noktasının yazı sınır kutusu dışında kalabileceği pay (m; float yuvarlaması, uygulama eşiği).</summary>
+    private const decimal KutuPayiM = 0.5m;
 
     // ---- Poligon yuku (yuk baslangicina gore ofsetler) ----
     internal const int PolylineLayerOffset = 30;
@@ -141,6 +152,7 @@ internal static class NczParser
         }
 
         var polylines = new List<CadPolyline>();
+        var texts = new List<CadText>();
         var gate = new CadNormalizationGate("NCZ");
         var skipped = 0;
         var unrecognized = 0;
@@ -184,6 +196,21 @@ internal static class NczParser
                 continue;
             }
 
+            if (payload[0] == TextType)
+            {
+                // SAHA-015: yazi yardimci veridir (kroki malik etiketi); cozulemeyen yazi dosyayi dusurmez, atlanan sayilir.
+                if (flag == EntityRecord && ReadText(payload, layers) is { } text)
+                {
+                    texts.Add(text);
+                }
+                else
+                {
+                    skipped++;
+                }
+
+                continue;
+            }
+
             if (payload[0] != PolylineType)
             {
                 skipped++;
@@ -205,7 +232,7 @@ internal static class NczParser
             CadFormat.Ncz,
             layers,
             polylines.AsReadOnly(),
-            [],
+            texts.AsReadOnly(),
             skipped,
             unrecognized,
             gate.OffGridVertexCount,
@@ -331,6 +358,56 @@ internal static class NczParser
         // NCZ kapali halkayi ilk kosenin tekrariyla saklar (P4.0 DOGRULANDI): bayrak/tolerans kullanilmaz.
         polyline = gate.Add(layers[layerIndex].Name, label, featureClass, raw, closedFlag: false, closureToleranceM: 0m, declaredArea);
         return null;
+    }
+
+    /// <summary>
+    /// SAHA-015: standart (<c>0x15</c>) tip 5 yazi kaydi. Yuk boyu tam <c>93 + metin uzunlugu</c> olmali (spike §2.4, 200/200
+    /// DOGRULANDI); katman indeksi (ofset 30) aralikta ve ekleme noktasi (3..18: Kuzey, Dogu) sonlu olmali — aksi halde null
+    /// (kayit atlanir). Sinir kutusu (45..76: minK, minD, maxK, maxD) sonlu ve min &lt;= max ise ortasi
+    /// <see cref="CadText.Merkez"/> olur. Koordinatlar <see cref="CoordinateScale"/> ondaliga yuvarlanir; metin kirpilmaz.
+    /// </summary>
+    private static CadText? ReadText(ReadOnlySpan<byte> p, IReadOnlyList<CadLayer> layers)
+    {
+        if (p.Length < TextFixedSize || p.Length != TextFixedSize + p[TextLengthOffset])
+        {
+            return null;
+        }
+
+        int layerIndex = BinaryPrimitives.ReadInt16LittleEndian(p[PolylineLayerOffset..]);
+        if (layerIndex < 0 || layerIndex >= layers.Count
+            || !TryReadPoint(p[TextInsertionOffset..], out var position))
+        {
+            return null;
+        }
+
+        GeodeticPoint? merkez = null;
+        // Architect O3: ekleme noktası (döndürülmüş yazıda da) kutunun içindedir; değilse kutu bozuk sayılır ve merkez kullanılmaz
+        // (Netcad kutuyu float hassasiyetine yuvarlar — spike §2.1, ≤ 0.13 m; pay KutuPayiM).
+        if (TryReadPoint(p[TextBoundsOffset..], out var min) && TryReadPoint(p[(TextBoundsOffset + 16)..], out var max)
+            && min.X <= max.X && min.Y <= max.Y
+            && position.X >= min.X - KutuPayiM && position.X <= max.X + KutuPayiM && position.Y >= min.Y - KutuPayiM && position.Y <= max.Y + KutuPayiM)
+        {
+            merkez = new GeodeticPoint(
+                X: decimal.Round((min.X + max.X) / 2m, CoordinateScale, MidpointRounding.AwayFromZero),
+                Y: decimal.Round((min.Y + max.Y) / 2m, CoordinateScale, MidpointRounding.AwayFromZero));
+        }
+
+        var text = Turkish.GetString(p.Slice(TextFixedSize, p[TextLengthOffset])).Trim();
+        return new CadText(layers[layerIndex].Name, text, position) { Merkez = merkez };
+    }
+
+    /// <summary>(Kuzey, Dogu) <c>double</c> ciftini jeodezik noktaya cevirir (X = Kuzey, Y = Dogu); sonlu degilse false.</summary>
+    private static bool TryReadPoint(ReadOnlySpan<byte> v, out GeodeticPoint point)
+    {
+        point = default;
+        if (!Ieee754Decimal.TryDecode(BinaryPrimitives.ReadUInt64LittleEndian(v), CoordinateScale, out var north)
+            || !Ieee754Decimal.TryDecode(BinaryPrimitives.ReadUInt64LittleEndian(v[8..]), CoordinateScale, out var east))
+        {
+            return false;
+        }
+
+        point = new GeodeticPoint(X: north, Y: east);
+        return true;
     }
 
     /// <summary>[uzunluk:1][metin] alanini okur; uzunluk kapasiteyi asarsa null. Uzunluktan sonraki eski baytlar yok sayilir.</summary>

@@ -172,8 +172,16 @@ public sealed record ParselGeometrileriAyarlaKomutu(IReadOnlyList<ParselGeometri
     /// <summary>SAHA-010: R2 çift sayımını önlemek için projeye alınmayan imar adası / yinelenen / kabuk poligon sayısı (denetim izi).</summary>
     public int CiftSayimHaricSayisi { get; init; }
 
+    /// <summary>SAHA-015: geometri mühendisin onayladığı Yaklaşık Yer Krokisi parselasyonundan geliyor (denetim izi; yalnız işaret).</summary>
+    public bool KrokiParselasyonu { get; init; }
+
+    /// <summary>SAHA-015 (architect K1): bu yeniden eşlemeyle yerine geçilen, oturumda onaylanmış kroki parselasyonunun parsel sayısı (denetim izi).</summary>
+    public int KrokiParselasyonuEzildi { get; init; }
+
     public string? Ayrinti => "parselSayisi=" + KomutHatasi.Sayi(Parseller?.Count ?? 0)
-        + (CiftSayimHaricSayisi > 0 ? ";ciftSayimHaric=" + KomutHatasi.Sayi(CiftSayimHaricSayisi) : string.Empty);
+        + (CiftSayimHaricSayisi > 0 ? ";ciftSayimHaric=" + KomutHatasi.Sayi(CiftSayimHaricSayisi) : string.Empty)
+        + (KrokiParselasyonu ? ";kaynak=yaklasikYerKrokisi" : string.Empty)
+        + (KrokiParselasyonuEzildi > 0 ? ";krokiParselasyonuEzildi=" + KomutHatasi.Sayi(KrokiParselasyonuEzildi) : string.Empty);
 
     public Result<ProjeBelgesi> Uygula(ProjeBelgesi mevcut)
     {

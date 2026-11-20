@@ -62,6 +62,27 @@ public sealed record DonusumKatsayilari(decimal A, decimal B, decimal C, decimal
         Y: Math.Round((A * oncesi.Y) + (C * oncesi.X) + Cy, KoordinatOndaligi, MidpointRounding.AwayFromZero));
 
     /// <summary>
+    /// SAHA-015: Deprem Sonrası noktayı Deprem Öncesi'ne geri taşır (2×2 sistemin tam ondalık çözümü, 6 ondalık AwayFromZero):
+    /// <c>Y1 = (D·(Y2 − CY) − C·(X2 − CX)) / det</c>, <c>X1 = (A·(X2 − CX) − B·(Y2 − CY)) / det</c>. Kroki parselasyonunun yeni
+    /// köşeleri <see cref="Uygula"/> ile yeniden ileri dönüştürülmek üzere bu yolla kaynak (Deprem Öncesi) sisteme yazılır.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Matris tekilse (det = 0); katsayılar önce <see cref="Dogrula"/>'dan geçmelidir.</exception>
+    public GeodeticPoint TersUygula(GeodeticPoint sonrasi)
+    {
+        var det = Determinant;
+        if (det == 0m)
+        {
+            throw new InvalidOperationException("Singular transformation matrix has no inverse.");
+        }
+
+        var dy = sonrasi.Y - Cy;
+        var dx = sonrasi.X - Cx;
+        return new GeodeticPoint(
+            X: Math.Round(((A * dx) - (B * dy)) / det, KoordinatOndaligi, MidpointRounding.AwayFromZero),
+            Y: Math.Round(((D * dy) - (C * dx)) / det, KoordinatOndaligi, MidpointRounding.AwayFromZero));
+    }
+
+    /// <summary>
     /// Katsayıların ileri dönüşüm için kabul edilebilirliği: null değil, matris elemanları |·| ≤ <see cref="MaxMatrisElemani"/> ve
     /// ötelemeler |·| ≤ <see cref="MaxOtelemeM"/> (decimal taşması olmaz), determinant pozitif (yansıma/tekillik yok) ve
     /// |det − 1| ≤ <see cref="MaxDeterminantSapmasi"/>. Aksi hâlde <c>ERR-CRS-004</c>; istisna atmaz.

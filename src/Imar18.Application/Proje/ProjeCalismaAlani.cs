@@ -20,4 +20,7 @@ public sealed record ProjeCalismaAlani(ProjeKomutYolu Yol, ApprovalService Onay,
 
     /// <summary>SAHA-014: Netcad <c>.DNS</c> okuyucusu (Infrastructure; yoksa 1. adımdaki "Dönüşüm Dosyası (.DNS) Yükle" pasiftir).</summary>
     public KoordinatDonusumu.IDnsDosyaOkuyucu? DnsOkuyucu { get; init; }
+
+    /// <summary>SAHA-015: kroki blok bölücü (GeometryEngine; yoksa Yaklaşık Yer Krokisi yalnız Kip 1/2 Kroki satırı üretir, parselasyon taslağı yapılmaz).</summary>
+    public Domain.Geometry.IKrokiBlokBolucu? KrokiBolucu { get; init; }
 }

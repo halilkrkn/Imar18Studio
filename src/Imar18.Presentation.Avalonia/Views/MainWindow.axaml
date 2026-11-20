@@ -863,18 +863,27 @@
                               Classes="Primary" Theme="{DynamicResource SolidButton}" />
                       <Button x:Name="KrokiNczYukleDugmesi" Content="📐 Yaklaşık Yer Krokisi (.NCZ) Yükle" Command="{Binding KrokiNczIsteCommand}"
                               HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,4,0,0"
-                              ToolTip.Tip="Malik kullanım alanları krokisi; TAKBİS hisseleri ve imar parselleriyle eşleştirilip Kroki satırları üretilir." />
+                              ToolTip.Tip="Malik kullanım alanları krokisi; blok içinde bölme çizgileri ve malik yazıları varsa kesin alanlı parselasyon taslağı tuvalde çizilir, yoksa TAKBİS hisseleriyle Kroki satırları üretilir." />
                       <ContentControl Content="{Binding KrokiOzeti}" ContentTemplate="{StaticResource OzetSablonu}"
                                       IsVisible="{Binding KrokiOzeti, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                       <StackPanel Spacing="4" IsVisible="{Binding KrokiOnizlemesiVar}">
                         <TextBox Text="{Binding KrokiOnizlemesi, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" MaxHeight="140"
                                  FontFamily="Consolas" FontSize="11" />
                         <ItemsControl ItemsSource="{Binding KrokiUyarilari}" ItemTemplate="{StaticResource UyariSablonu}" />
-                        <Grid ColumnDefinitions="*,6,Auto">
+                        <Grid ColumnDefinitions="*,6,Auto" IsVisible="{Binding KrokiEslestirmeOnizlemesiVar}">
                           <Button x:Name="KrokiyeAktarDugmesi" Content="Kroki'ye Aktar" Command="{Binding KrokiyeAktarCommand}"
                                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="Primary" Theme="{DynamicResource SolidButton}" />
                           <Button Grid.Column="2" Content="Vazgeç" Command="{Binding KrokiOnizlemesiniKaldirCommand}" />
                         </Grid>
+                        <!-- SAHA-015: kroki parselasyon taslağı (tuvalde kesikli önizleme) → onay / iptal -->
+                        <StackPanel x:Name="ParselasyonOnayPaneli" Spacing="4" IsVisible="{Binding KrokiParselasyonTaslagiVar}">
+                          <Button x:Name="ParselasyonOnaylaDugmesi" Content="✅ Parselasyon Çizimini Onayla ve Uygula" Command="{Binding ParselasyonCiziminiOnaylaCommand}"
+                                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="Primary" Theme="{DynamicResource SolidButton}"
+                                  ToolTip.Tip="Taslak parselleri projenin kesin TK_Oluşan parselleri yapar; Kroki satırlarını doldurur. 5. adım çıktıları bu çizimden üretilir." />
+                          <Button x:Name="ParselasyonIptalDugmesi" Content="✕ Taslağı İptal Et" Command="{Binding ParselasyonTaslaginiIptalEtCommand}"
+                                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                  ToolTip.Tip="Önizleme çizimini tuvalden kaldırır; proje geometrisine dokunmaz." />
+                        </StackPanel>
                       </StackPanel>
                     </StackPanel>
                   </Border>
@@ -1089,6 +1098,18 @@
           <Border x:Name="RolAtamaHud" Classes="hud" Margin="12" HorizontalAlignment="Center" VerticalAlignment="Top"
                   BorderBrush="{DynamicResource CadAmber}" IsHitTestVisible="False" IsVisible="{Binding Canvas.RolAtamaAktif}">
             <TextBlock Text="{Binding Canvas.RolAtamaMetni}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource CadAmber}" />
+          </Border>
+
+          <!-- Üst orta: SAHA-015 kroki parselasyon taslağı bilgi şeridi (Onayla / İptal) -->
+          <Border x:Name="ParselasyonSeridi" Classes="hud" Margin="12,56,12,12" Padding="10,6" HorizontalAlignment="Center" VerticalAlignment="Top"
+                  BorderBrush="{DynamicResource CadAccent}" IsVisible="{Binding Hesap.KrokiParselasyonTaslagiVar, FallbackValue=False}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{Binding Hesap.KrokiParselasyonOzeti}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
+                         TextWrapping="Wrap" MaxWidth="460" />
+              <Button x:Name="SeritOnaylaDugmesi" Content="✅ Parselasyon Çizimini Onayla ve Uygula" Command="{Binding Hesap.ParselasyonCiziminiOnaylaCommand}"
+                      Classes="Primary" Theme="{DynamicResource SolidButton}" VerticalAlignment="Center" />
+              <Button x:Name="SeritIptalDugmesi" Content="✕ Taslağı İptal Et" Command="{Binding Hesap.ParselasyonTaslaginiIptalEtCommand}" VerticalAlignment="Center" />
+            </StackPanel>
           </Border>
 
           <!-- Sol alt: şeffaf Türkçe HUD (seçili parsel + jeodezik imleç) -->
