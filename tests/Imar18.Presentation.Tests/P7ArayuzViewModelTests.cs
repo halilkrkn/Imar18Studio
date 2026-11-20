@@ -168,7 +168,7 @@ public sealed class P7ArayuzViewModelTests
 
         await vm.ImportAsync(new MemoryStream([1]), ".ncz");
 
-        vm.Parcels.Select(p => p.Role).Should().BeEquivalentTo("Kadastro Parseli", "İmar Parseli");
+        vm.Parcels.Select(p => p.Role).Should().BeEquivalentTo("Kadastro Parseli", "TK_Oluşan");
         vm.StatusText.Should().StartWith("NCZ (Netcad):");
     }
 

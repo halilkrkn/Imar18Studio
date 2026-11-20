@@ -130,9 +130,9 @@ public sealed class MainWindowHeadlessTests
 
         var ihlaller = metinler.Where(m => HamKodAdlari.Any(k => Regex.IsMatch(m, $@"\b{k}\b"))).ToList();
         ihlaller.Should().BeEmpty("ekrana yansıyan tüm enum değerleri Türkçe görünen adla gösterilmeli");
-        metinler.Should().Contain("Kadastro Parseli").And.Contain("İmar Parseli").And.Contain("Atanmamış");
+        metinler.Should().Contain("Kadastro Parseli").And.Contain("TK_Oluşan").And.Contain("Atanmamış");
         metinler.Should().Contain("ITRF96 (TM 3°)").And.Contain("Arşiv Onaylı").And.Contain("DOM 30°");
-        metinler.Should().Contain("1600.00 m²").And.Contain("🎯 101/1 · İmar Parseli · 400.00 m²", "ondalık ayıracı makine kültüründen bağımsız ve tutarlı olmalı");
+        metinler.Should().Contain("1600.00 m²").And.Contain("🎯 101/1 · TK_Oluşan · 400.00 m²", "ondalık ayıracı makine kültüründen bağımsız ve tutarlı olmalı");
         w.Close();
     }
 

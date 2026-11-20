@@ -183,8 +183,11 @@ public sealed partial class WizardViewModel : ObservableObject
     /// <summary>Kadastro rolü eksik hatası.</summary>
     public const string KadastroRoluHatasi = "En az bir katman 'kadastro parseli (giren)' rolüne atanmalı.";
 
-    /// <summary>SAHA-012: imar rolü eksik hatası — İmar Parseli (Oluşan) veya İmar Adası rollerinden biri yeterlidir.</summary>
-    public const string ImarRoluHatasi = "En az bir katman 'İmar Parseli (Oluşan)' veya 'İmar Adası' rolüne atanmalı.";
+    /// <summary>
+    /// SAHA-012 / SAHA-013: imar rolü eksik hatası — TK_Oluşan (<see cref="CadLayerRole.ZoningParcel"/>) veya İmar Adası rollerinden
+    /// biri yeterlidir; rol adı açılır listedeki görünen adla (<c>TurkceAdlar</c>) aynıdır.
+    /// </summary>
+    public const string ImarRoluHatasi = "En az bir katman 'TK_Oluşan' veya 'İmar Adası' rolüne atanmalı.";
 
     public IReadOnlyList<string> Steps { get; } =
         ["1. Girdi & Sınır", "2. Tecviz", "3. DOP & Y1 Dengeleme", "4. Hak Eşleştirme & Hisse", "5. Onay & Çıktı"];
@@ -248,14 +251,17 @@ public sealed partial class WizardViewModel : ObservableObject
     /// <summary>Ilk adim girdileri basariyla dogrulandiginda (P5: CRS CommandBus ile projeye yazilir).</summary>
     public event EventHandler? GirdiDogrulandi;
 
-    /// <summary>Belge katmanlarini yukler; rol onerisi standart eslemeden gelir.</summary>
+    /// <summary>
+    /// Belge katmanlarini yukler; rol onerisi <see cref="CadLayerRoleMap.OtomatikRol"/> ile gelir (SAHA-013: OLUSAN/OLUŞAN →
+    /// TK_Oluşan, tam İMAR/IMAR → Yoksay, standart adlar, PARSEL_ALN → Kadastro Parseli, YOL → Yola Terk).
+    /// </summary>
     public void LoadLayers(IEnumerable<CadLayer> layers)
     {
         ArgumentNullException.ThrowIfNull(layers);
         KatmanlariTemizle();
         foreach (var l in layers)
         {
-            var row = new LayerRoleRow(l.Name, CadLayerRoleMap.Standard.Resolve(l.Name), SatiriVurgula);
+            var row = new LayerRoleRow(l.Name, CadLayerRoleMap.OtomatikRol(l.Name), SatiriVurgula);
             row.PropertyChanged += OnRowChanged;
             LayerRoles.Add(row);
         }

@@ -18,7 +18,7 @@ public sealed class TurkceAdlarTests
     [Theory]
     [InlineData(CadLayerRole.Unassigned, "Atanmamış")]
     [InlineData(CadLayerRole.CadastralParcel, "Kadastro Parseli")]
-    [InlineData(CadLayerRole.ZoningParcel, "İmar Parseli")]
+    [InlineData(CadLayerRole.ZoningParcel, "TK_Oluşan")]
     [InlineData(CadLayerRole.RoadDedication, "Yola Terk")]
     [InlineData(CadLayerRole.RegulationBoundary, "Düzenleme Sınırı")]
     [InlineData(CadLayerRole.BlockEdge, "Ada Kenarı")]
@@ -86,7 +86,7 @@ public sealed class TurkceAdlarTests
     {
         var c = TurkceAdConverter.Ornek;
 
-        c.Convert(CadLayerRole.ZoningParcel, typeof(string), null, CultureInfo.InvariantCulture).Should().Be("İmar Parseli");
+        c.Convert(CadLayerRole.ZoningParcel, typeof(string), null, CultureInfo.InvariantCulture).Should().Be("TK_Oluşan");
         c.Convert(KoordinatKalitesi.Gecici, typeof(string), null, CultureInfo.InvariantCulture).Should().Be("Geçici Koordinatlı");
         c.Convert(GeodetikDatum.Itrf96, typeof(string), null, CultureInfo.InvariantCulture).Should().Be("ITRF96 (TM 3°)");
         c.Convert(33, typeof(string), "meridyen", CultureInfo.InvariantCulture).Should().Be("DOM 33°");
