@@ -71,7 +71,7 @@ public sealed class WizardPaletteMainTests
         w.NextCommand.CanExecute(null).Should().BeFalse();
         w.Errors.Should().Contain(e => e.Contains("Koordinat sistemi", StringComparison.Ordinal));
         w.Errors.Should().Contain(e => e.Contains("Tecviz", StringComparison.Ordinal));
-        w.Errors.Should().Contain(e => e.Contains("imar parseli", StringComparison.Ordinal));
+        w.Errors.Should().Contain(WizardViewModel.ImarRoluHatasi);
         w.Errors.Should().NotContain(e => e.Contains("Invalid", StringComparison.Ordinal), "kullaniciya teknik mesaj gosterilmez");
     }
 

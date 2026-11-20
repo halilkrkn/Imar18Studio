@@ -180,6 +180,12 @@ public sealed partial class WizardViewModel : ObservableObject
     [ObservableProperty]
     private string _tecvizKaynakNotu = string.Empty;
 
+    /// <summary>Kadastro rolü eksik hatası.</summary>
+    public const string KadastroRoluHatasi = "En az bir katman 'kadastro parseli (giren)' rolüne atanmalı.";
+
+    /// <summary>SAHA-012: imar rolü eksik hatası — İmar Parseli (Oluşan) veya İmar Adası rollerinden biri yeterlidir.</summary>
+    public const string ImarRoluHatasi = "En az bir katman 'İmar Parseli (Oluşan)' veya 'İmar Adası' rolüne atanmalı.";
+
     public IReadOnlyList<string> Steps { get; } =
         ["1. Girdi & Sınır", "2. Tecviz", "3. DOP & Y1 Dengeleme", "4. Hak Eşleştirme & Hisse", "5. Onay & Çıktı"];
 
@@ -326,7 +332,7 @@ public sealed partial class WizardViewModel : ObservableObject
     {
         if (e.PropertyName == nameof(LayerRoleRow.Role))
         {
-            KatmanRolHatasi = null;
+            KatmanRolHatalariniYenile();
             Invalidate();
             LayerRolesChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -480,24 +486,12 @@ public sealed partial class WizardViewModel : ObservableObject
             }
         }
 
-        var katman = new List<string>();
-        if (!LayerRoles.Any(r => r.Role == CadLayerRole.CadastralParcel))
-        {
-            katman.Add("En az bir katman 'kadastro parseli (giren)' rolüne atanmalı.");
-        }
-
-        // SAHA-010 / SORU-054: İmar Parseli yoksa R2 İmar Adası alanlarından hesaplanır; ikisinden biri yeterlidir.
-        if (!LayerRoles.Any(r => r.Role is CadLayerRole.ZoningParcel or CadLayerRole.ZoningBlock))
-        {
-            katman.Add("En az bir katman 'imar parseli (oluşan)' rolüne atanmalı.");
-        }
-
-        foreach (var k in katman)
+        foreach (var k in KatmanRolHatalari())
         {
             Errors.Add(k);
         }
 
-        KatmanRolHatasi = katman.Count == 0 ? null : string.Join(" ", katman);
+        KatmanRolHatasiniYaz();
 
         IsInputValid = Crs is not null && Tecviz is not null && !Errors.Any(e => !e.StartsWith(UyariOneki, StringComparison.Ordinal));
         OnPropertyChanged(nameof(DogrulamaOzeti));
@@ -507,6 +501,59 @@ public sealed partial class WizardViewModel : ObservableObject
         }
 
         return IsInputValid;
+    }
+
+    /// <summary>Katman–rol eşlemesinin engelleyici hataları (sıra: kadastro, imar).</summary>
+    private List<string> KatmanRolHatalari()
+    {
+        var katman = new List<string>();
+        if (!LayerRoles.Any(r => r.Role == CadLayerRole.CadastralParcel))
+        {
+            katman.Add(KadastroRoluHatasi);
+        }
+
+        // SAHA-010 / SAHA-012: İmar Parseli yoksa R2 İmar Adası alanlarından hesaplanır; ikisinden biri yeterlidir.
+        if (!LayerRoles.Any(r => r.Role is CadLayerRole.ZoningParcel or CadLayerRole.ZoningBlock))
+        {
+            katman.Add(ImarRoluHatasi);
+        }
+
+        return katman;
+    }
+
+    private void KatmanRolHatasiniYaz()
+    {
+        var katman = KatmanRolHatalari();
+        KatmanRolHatasi = katman.Count == 0 ? null : string.Join(" ", katman);
+    }
+
+    /// <summary>
+    /// SAHA-012: doğrulama yapılmışken rol değişirse doğrulama kartındaki katman–rol satırları güncel eşlemeyle yenilenir (eski
+    /// "İmar Parseli" hatası kartta kalıp mühendisi yanıltmaz). Diğer girdi hataları ve doğrulamanın düşmesi değişmez.
+    /// </summary>
+    private void KatmanRolHatalariniYenile()
+    {
+        if (!DogrulamaYapildi)
+        {
+            KatmanRolHatasi = null;
+            return;
+        }
+
+        for (var i = Errors.Count - 1; i >= 0; i--)
+        {
+            if (Errors[i] is KadastroRoluHatasi or ImarRoluHatasi)
+            {
+                Errors.RemoveAt(i);
+            }
+        }
+
+        foreach (var k in KatmanRolHatalari())
+        {
+            Errors.Add(k);
+        }
+
+        KatmanRolHatasiniYaz();
+        OnPropertyChanged(nameof(DogrulamaOzeti));
     }
 
     /// <summary>Tecviz girdisinin boş/geçersiz alanlarını ayrı ayrı işaretler (Domain ilk hatada durur; kullanıcı hepsini görür).</summary>
