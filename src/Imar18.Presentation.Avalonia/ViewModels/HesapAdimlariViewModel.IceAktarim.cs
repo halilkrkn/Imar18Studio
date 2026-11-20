@@ -305,7 +305,10 @@ public sealed partial class HesapAdimlariViewModel
                 () =>
                 {
                     var d = _alan.Onay.Degerlendir();
-                    var girdi = new KrokiEslestirmeGirdisi(okunan.Value, belge.Parseller, d.HakIcinImarParselleri, takbis, belge.MalikRehberi, d.Dop?.Dopo);
+                    // SAHA-014 (SORU-060 varsayımı): kroki 1. adım CAD'i gibi Deprem Öncesi sayılır; .DNS uygulanmışsa aynı katsayılarla
+                    // Deprem Sonrası'na dönüştürülüp aktif parsellerle kesiştirilir (dönüşüm yoksa belge aynen kullanılır).
+                    var kroki = Imar18.Application.Cad.CadBelgesiDonusumu.Uygula(okunan.Value, belge.IleriDonusum);
+                    var girdi = new KrokiEslestirmeGirdisi(kroki, belge.Parseller, d.HakIcinImarParselleri, takbis, belge.MalikRehberi, d.Dop?.Dopo);
                     var e = YaklasikYerKrokisiEslestirici.Eslestir(girdi, kesisim, cancellationToken);
                     return e.IsFailure
                         ? Result<(KrokiEslestirmeSonucu Sonuc, decimal ImarToplami)>.Failure(e.Error)

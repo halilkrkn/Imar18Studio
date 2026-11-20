@@ -28,7 +28,8 @@ public sealed class DonusumGirdisiTests
     private static DonusumOrtakNoktasi Helmert(string no, decimal y1, decimal x1) =>
         new(no, y1, x1, (Ha * y1) + (Hb * x1) + Hty, (-Hb * y1) + (Ha * x1) + Htx);
 
-    // Bağımsız referans Afin: Y2 = A·Y1 + B·X1 + CY ; X2 = C·Y1 + D·X1 + CX.
+    // Bağımsız referans Afin (Netcad .DNS düzeni, SAHA-014): Y2 = A·Y1 + C·X1 + CY ; X2 = B·Y1 + D·X1 + CX
+    // → A = 1.0001, C = 0.0002, B = −0.0003, D = 0.9998 (asimetrik: B/C yer değiştirmesini yakalar).
     private static DonusumOrtakNoktasi Afin(string no, decimal y1, decimal x1) =>
         new(no, y1, x1, (1.0001m * y1) + (0.0002m * x1) - 3m, (-0.0003m * y1) + (0.9998m * x1) + 7m);
 
@@ -44,9 +45,11 @@ public sealed class DonusumGirdisiTests
     {
         var p = Servis.ParametreleriHesapla(new DonusumGirdisi(DonusumModeli.Helmert2B, 0.09m, Dortgen(Helmert))).Value;
 
+        // SAHA-014 gerekçeli beklenti: Netcad düzeninde Y2 = A·Y1 + C·X1 → C = Hb; X2 = B·Y1 + D·X1 → B = −Hb
+        // (P7.3-C2 etiketi B/C'yi yer değiştirmiş yazıyordu; gerçek .DNS ile doğrulandı).
         p.A.Should().BeApproximately(Ha, 1e-12m);
-        p.B.Should().BeApproximately(Hb, 1e-12m);
-        p.C.Should().BeApproximately(-Hb, 1e-12m);
+        p.B.Should().BeApproximately(-Hb, 1e-12m);
+        p.C.Should().BeApproximately(Hb, 1e-12m);
         p.D.Should().BeApproximately(Ha, 1e-12m);
         p.Cy.Should().BeApproximately(Hty, 1e-6m);
         p.Cx.Should().BeApproximately(Htx, 1e-6m);
@@ -61,8 +64,8 @@ public sealed class DonusumGirdisiTests
         var p = Servis.ParametreleriHesapla(new DonusumGirdisi(DonusumModeli.Afin2B, 0.09m, Dortgen(Afin))).Value;
 
         p.A.Should().BeApproximately(1.0001m, 1e-12m);
-        p.B.Should().BeApproximately(0.0002m, 1e-12m);
-        p.C.Should().BeApproximately(-0.0003m, 1e-12m);
+        p.B.Should().BeApproximately(-0.0003m, 1e-12m);
+        p.C.Should().BeApproximately(0.0002m, 1e-12m);
         p.D.Should().BeApproximately(0.9998m, 1e-12m);
         p.Cy.Should().BeApproximately(-3m, 1e-5m);
         p.Cx.Should().BeApproximately(7m, 1e-5m);

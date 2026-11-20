@@ -61,10 +61,17 @@ public sealed class FenKlasoruZipTests
         [new MalikRehberKaydi("MLK-001", "AYŞE ÖRNEKSOY", "İSMAİL", null), new MalikRehberKaydi("MLK-002", "ÇAĞRI DENEMEOĞLU", "ŞÜKRÜ", null)],
         [new KadastroTapuKaydi("K1", "14", "0", null, null, null, "901", "7", 200.00m)]);
 
-    private static async Task<CiktiPaketi> PaketAsync(bool donusum = true, bool rehber = true)
+    /// <summary>SAHA-014 sentetik .DNS katsayıları (gerçek dosyadan alınmadı — AC-PILOT-08) (Netcad düzeni; A = D, C = −B): Y2 = A·Y1 + C·X1 + CY, X2 = B·Y1 + D·X1 + CX.</summary>
+    internal static readonly DonusumKatsayilari DnsK = new(A: 0.999996312345678m, B: -0.00000712345678901234m, C: 0.00000712345678901234m, D: 0.999996312345678m, Cy: -23.4567890123456m, Cx: 17.6543210987654m);
+
+    private static async Task<CiktiPaketi> PaketAsync(bool donusum = true, bool rehber = true, bool dns = false)
     {
         var (yol, _, zaman) = await OrnekProje.TamProjeAsync();
-        if (donusum)
+        if (dns)
+        {
+            (await yol.GonderAsync(new IleriDonusumUygulaKomutu(Donusum(), DnsK), OrnekProje.Muhendis)).IsSuccess.Should().BeTrue();
+        }
+        else if (donusum)
         {
             (await yol.GonderAsync(new DonusumGirdisiAyarlaKomutu(Donusum()), OrnekProje.Muhendis)).IsSuccess.Should().BeTrue();
         }
@@ -430,14 +437,48 @@ public sealed class FenKlasoruZipTests
     }
 
     [Fact]
-    public async Task DonusumParametreleri_Girdi_Yoksa_Anlasilir_Bilgi_Notu_Basilmali()
+    public async Task DonusumParametreleri_Girdi_Yoksa_Kullaniciyi_Zorlamayan_Bilgi_Notu_Ve_Deprem_Etiketsiz_Koordine_Ozet_Basilmali()
     {
+        // SAHA-014 gerekçeli beklenti: .DNS isteğe bağlıdır; dönüşümsüz projede "Deprem Öncesi/Sonrası" başlıkları ve
+        // "girdi yok" uyarısı yerine yumuşak bilgi notu ve tek KOORDİNE ÖZET basılır.
         var p = await PaketAsync(donusum: false);
         var d = Ac(Uret(p));
 
-        Bosluksuz(Metin(d["DÖNÜŞÜM PARAMETRELERİ.pdf"])).Should().Contain("ortaknoktalıdönüşümgirdisiyok").And.Contain("NoktaNo;Y1;X1;Y2;X2");
-        Bosluksuz(Metin(d["KOORDİNE ÖZET.pdf"])).Should().Contain("Dönüşümgirdisiyok");
+        Bosluksuz(Metin(d["DÖNÜŞÜM PARAMETRELERİ.pdf"])).Should().Contain("koordinatdönüşümüuygulanmadı(isteğebağlı)").And.Contain("(.DNS)");
+        var koordine = Bosluksuz(Metin(d["KOORDİNE ÖZET.pdf"]));
+        koordine.Should().Contain("ITRF-96KOORDİNEÖZET").And.NotContain("DEPREM").And.NotContain("Dönüşümgirdisiyok");
+        koordine.Should().Contain(p.Koordinatlar[0].Y.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));
+        Bosluksuz(Metin(d["RÖLÖVE ÖLÇÜ KROKİSİ.pdf"])).Should().Contain("KOORDİNEÖZET").And.NotContain("DEPREM").And.NotContain("Dönüşümgirdisiyok");
         p.Donusum.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DnsIleriDonusum_PDFleri_Katsayilari_Birebir_Ve_Deprem_Oncesi_Orijinal_Sonrasi_Aktif_Koordinatlari_Basmali()
+    {
+        var p = await PaketAsync(dns: true);
+        var d = Ac(Uret(p));
+        string M(string ad) => Bosluksuz(Metin(d[ad]));
+        string F2(decimal v) => v.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+
+        // .DNS katsayıları tam ondalık (8 ondalığa kırpılmadan) ve düzeltilmiş Netcad formülü.
+        M("DÖNÜŞÜM PARAMETRELERİ.pdf").Should().Contain("A=0.999996312345678").And.Contain("B=-0.00000712345678901234")
+            .And.Contain("C=0.00000712345678901234").And.Contain("D=0.999996312345678").And.Contain("CY=-23.4567890123456")
+            .And.Contain("CX=17.6543210987654").And.Contain("Y2=A·Y1+C·X1+CY").And.Contain("X2=B·Y1+D·X1+CX")
+            .And.Contain("ileridönüştürüldü");
+
+        // K1'in ilk köşesi: Deprem Öncesi = CAD (Y0, X0); Deprem Sonrası = bağımsız ileri formül.
+        var sonY = Math.Round((DnsK.A * OrnekProje.Y0) + (DnsK.C * OrnekProje.X0) + DnsK.Cy, 6, MidpointRounding.AwayFromZero);
+        var sonX = Math.Round((DnsK.B * OrnekProje.Y0) + (DnsK.D * OrnekProje.X0) + DnsK.Cx, 6, MidpointRounding.AwayFromZero);
+        var no = p.Koordinatlar.Single(k => k.Y == sonY && k.X == sonX).NoktaNo;
+        p.Donusum!.DepremOncesi.Single(k => k.NoktaNo == no).Should().Be(new KoordinatSatiri(no, OrnekProje.Y0, OrnekProje.X0));
+        var koordine = M("KOORDİNE ÖZET.pdf");
+        koordine.Should().Contain("ITRF-96KOORDİNEÖZET(DEPREMÖNCESİ)").And.Contain("ITRF-96KOORDİNEÖZET(DEPREMSONRASI)")
+            .And.Contain(F2(OrnekProje.Y0)).And.Contain(F2(sonY)).And.Contain(F2(sonX));
+        var onceIdx = koordine.IndexOf("(DEPREMÖNCESİ)", StringComparison.Ordinal);
+        var sonraIdx = koordine.IndexOf("(DEPREMSONRASI)", StringComparison.Ordinal);
+        koordine.IndexOf(F2(OrnekProje.X0), onceIdx, StringComparison.Ordinal).Should().BeLessThan(sonraIdx, "orijinal koordinat Deprem Öncesi bölümünde");
+        koordine.IndexOf(F2(sonX), sonraIdx, StringComparison.Ordinal).Should().BeGreaterThan(sonraIdx, "dönüşmüş koordinat Deprem Sonrası bölümünde");
+        M("RÖLÖVE ÖLÇÜ KROKİSİ.pdf").Should().Contain("(DEPREMÖNCESİ)").And.Contain("(DEPREMSONRASI)").And.Contain(F2(sonX)).And.Contain(F2(OrnekProje.X0));
     }
 
     [Fact]
@@ -446,8 +487,8 @@ public sealed class FenKlasoruZipTests
         var p = await PaketAsync();
         var m = Bosluksuz(Metin(Ac(Uret(p))["DÖNÜŞÜM PARAMETRELERİ.pdf"]));
 
-        // Bağımsız referans: A = 1.00001, B = 0.00002, C = −B, D = A; artıklar sıfır.
-        m.Should().Contain("A=1.00001000").And.Contain("B=0.00002000").And.Contain("C=-0.00002000").And.Contain("D=1.00001000")
+        // Bağımsız referans (Netcad .DNS düzeni, SAHA-014 gerekçeli beklenti): Y2 = A·Y1 + C·X1 → C = 0.00002; X2 = B·Y1 + D·X1 → B = −0.00002.
+        m.Should().Contain("A=1.00001000").And.Contain("B=-0.00002000").And.Contain("C=0.00002000").And.Contain("D=1.00001000")
             .And.Contain("CY=-5.000").And.Contain("CX=10.000");
         var k1 = p.Koordinatlar[0];
         var oncesi = p.Donusum!.DepremOncesi.Single(k => k.NoktaNo == k1.NoktaNo);

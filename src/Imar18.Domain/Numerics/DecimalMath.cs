@@ -45,6 +45,57 @@ public static class DecimalMath
         var dy = b.Y - a.Y;
         return Sqrt((dx * dx) + (dy * dy));
     }
+
+    /// <summary>π (decimal'in 29 anlamlı hanesi).</summary>
+    public const decimal Pi = 3.1415926535897932384626433833m;
+
+    /// <summary>
+    /// SAHA-014: <c>double</c> kullanmadan iki bağımsız değişkenli arktanjant (radyan, (−π, π]). |y| ≤ |x| ise atan(y/x)
+    /// (x &lt; 0'da ±π eklenir), değilse ±π/2 − atan(x/y). <c>atan2(0, 0) = 0</c>. Dönüşüm dönüklüğü (grad) için kullanılır.
+    /// </summary>
+    public static decimal Atan2(decimal y, decimal x)
+    {
+        if (y == 0m && x == 0m)
+        {
+            return 0m;
+        }
+
+        if (Math.Abs(y) <= Math.Abs(x))
+        {
+            var r = AtanBirimAraligi(y / x);
+            return x > 0m ? r : r + (y >= 0m ? Pi : -Pi);
+        }
+
+        return (y > 0m ? Pi / 2m : -Pi / 2m) - AtanBirimAraligi(x / y);
+    }
+
+    /// <summary>|t| ≤ 1 için atan(t): yarım açı indirgemesi t ← t / (1 + √(1 + t²)) (|t| &lt; 0.1 olana dek) ve Taylor serisi.</summary>
+    private static decimal AtanBirimAraligi(decimal t)
+    {
+        var carpan = 1m;
+        while (Math.Abs(t) >= 0.1m)
+        {
+            t /= 1m + Sqrt(1m + (t * t));
+            carpan *= 2m;
+        }
+
+        var toplam = 0m;
+        var us = t;
+        var t2 = t * t;
+        for (var n = 1; n < 200; n += 2)
+        {
+            var terim = us / n;
+            if (terim == 0m)
+            {
+                break;
+            }
+
+            toplam += (n / 2) % 2 == 0 ? terim : -terim;
+            us *= t2;
+        }
+
+        return toplam * carpan;
+    }
 }
 
 /// <summary>

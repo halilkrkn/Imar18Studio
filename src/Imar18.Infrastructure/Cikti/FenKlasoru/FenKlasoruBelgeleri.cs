@@ -161,14 +161,18 @@ internal static class FenKlasoruBelgeleri
         Baslik(col, "DÖNÜŞÜM PARAMETRELERİ");
         if (p.Donusum is not { } d)
         {
-            Not(col, "Bu projede ortak noktalı dönüşüm girdisi yok. 1. adımdaki \"Ortak Noktalar (Dönüşüm)\" bölümüne "
-                + "NoktaNo;Y1;X1;Y2;X2 satırları (I. sistem = deprem öncesi, II. sistem = deprem sonrası) girildiğinde dönüşüm "
-                + "parametreleri, ortak nokta hataları ve proje noktalarının deprem öncesi koordinatları bu belgede listelenir.");
+            // SAHA-014: dönüşüm isteğe bağlıdır (deprem bölgesi dışı / dönüşümsüz projeler); kullanıcı zorlanmaz.
+            Not(col, "Bu projede koordinat dönüşümü uygulanmadı (isteğe bağlı); proje koordinatları CAD dosyasındaki hâliyle "
+                + "kullanıldı. Deprem bölgesindeki projelerde 1. adımda Netcad dönüşüm dosyası (.DNS) yüklenip uygulandığında "
+                + "dönüşüm parametreleri, ortak nokta hataları ve Deprem Öncesi / Deprem Sonrası koordinatlar bu belgede listelenir.");
             return;
         }
 
         var par = d.Parametreler;
-        string P8(decimal v) => v.ToString("0.00000000", Inv);
+
+        // SAHA-014: .DNS katsayıları dosyadaki tam ondalık değerleriyle (birebir) basılır; elle ortak nokta (P7.3-C2) kipi 8 ondalık.
+        string P8(decimal v) => d.IleriDonusum ? v.ToString(Inv) : v.ToString("0.00000000", Inv);
+        string P3(decimal v) => d.IleriDonusum ? v.ToString(Inv) : v.ToString("0.000", Inv);
         col.Item().Row(r =>
         {
             r.RelativeItem(2).Column(sol =>
@@ -187,13 +191,15 @@ internal static class FenKlasoruBelgeleri
                     par.Artiklar.Select(a => new[] { a.NoktaNo, F2(a.Y), F2(a.X), F2(a.Vy), F2(a.Vx) }),
                     [1.3f, 1.4f, 1.4f, 1f, 1f],
                     [new GrupBasligi(string.Empty, 1), new GrupBasligi("II.SİSTEM <KOORDİNATLAR>", 2), new GrupBasligi("HATALAR", 2)], 6.5f);
-                sol.Item().PaddingTop(4).Text("Y2 = A·Y1 + B·X1 + CY ;  X2 = C·Y1 + D·X1 + CX  (V = hesaplanan − II. sistem). "
-                    + "Proje noktaları II. sistem (deprem sonrası) kabul edilir; I. sistem (deprem öncesi) ters dönüşümle hesaplanır.").FontSize(6);
+                sol.Item().PaddingTop(4).Text("Y2 = A·Y1 + C·X1 + CY ;  X2 = B·Y1 + D·X1 + CX  (V = hesaplanan − II. sistem). "
+                    + (d.IleriDonusum
+                        ? "Proje noktaları I. sistemde (Deprem Öncesi) yüklendi ve .DNS katsayılarıyla II. sisteme (Deprem Sonrası) ileri dönüştürüldü; hesaplar Deprem Sonrası koordinatlarla yapıldı."
+                        : "Proje noktaları II. sistem (deprem sonrası) kabul edilir; I. sistem (deprem öncesi) ters dönüşümle hesaplanır.")).FontSize(6);
             });
             r.ConstantItem(10);
             r.RelativeItem(5).Column(sag =>
             {
-                sag.Item().Text(string.Create(Inv, $"A= {P8(par.A)}   B= {P8(par.B)}   C= {P8(par.C)}   D= {P8(par.D)}   CY= {par.Cy:0.000}   CX= {par.Cx:0.000}")).Bold();
+                sag.Item().Text(string.Create(Inv, $"A= {P8(par.A)}   B= {P8(par.B)}   C= {P8(par.C)}   D= {P8(par.D)}   CY= {P3(par.Cy)}   CX= {P3(par.Cx)}")).Bold();
                 var oncesi = d.DepremOncesi.ToDictionary(k => k.NoktaNo);
                 var satirlar = p.Koordinatlar.Select(k => oncesi.TryGetValue(k.NoktaNo, out var o)
                     ? new[] { k.NoktaNo.ToString(Inv), F2(o.Y), F2(o.X), F2(k.Y), F2(k.X) }
@@ -208,20 +214,22 @@ internal static class FenKlasoruBelgeleri
     public static void KoordineOzet(IDocumentContainer c, CiktiPaketi p) => Sayfa(c, p, yatay: false, x => x.Column(col =>
     {
         var datum = DatumBasligi(p);
+        var mk = p.Donusum is { } dd ? dd.Girdi.Mk.ToString("0.00", Inv) : "-";
+        if (p.Donusum is not { } d)
+        {
+            // SAHA-014: dönüşüm yoksa Deprem Öncesi/Sonrası başlıkları basılmaz (kullanıcı zorlanmaz).
+            Baslik(col, datum + " KOORDİNE ÖZET", 11);
+            IkiBloklu(col, ["Nokta No", "Y", "X", "MK"],
+                p.Koordinatlar.Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X), mk }).ToArray(), 30, [1f, 1.5f, 1.6f, 0.6f]);
+            return;
+        }
+
         Baslik(col, datum + " KOORDİNE ÖZET(DEPREM ÖNCESİ)", 11);
-        if (p.Donusum is { } d)
-        {
-            IkiBloklu(col, ["Nokta No", "Y", "X"],
-                d.DepremOncesi.Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X) }).ToArray(), 30);
-        }
-        else
-        {
-            Not(col, "Dönüşüm girdisi yok: deprem öncesi koordinatlar hesaplanmadı (1. adım → Ortak Noktalar).");
-        }
+        IkiBloklu(col, ["Nokta No", "Y", "X"],
+            d.DepremOncesi.Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X) }).ToArray(), 30);
 
         col.Item().PaddingTop(8);
         Baslik(col, datum + " KOORDİNE ÖZET(DEPREM SONRASI)", 11);
-        var mk = p.Donusum is { } dd ? dd.Girdi.Mk.ToString("0.00", Inv) : "-";
         IkiBloklu(col, ["Nokta No", "Y", "X", "MK"],
             p.Koordinatlar.Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X), mk }).ToArray(), 30, [1f, 1.5f, 1.6f, 0.6f]);
     }));
@@ -565,18 +573,16 @@ internal static class FenKlasoruBelgeleri
                 var sonrasi = Noktalar(p, secili);
                 var oncesi = OncesiNoktalar(p, sonrasi);
                 var datum = DatumBasligi(p);
-                sag.Item().PaddingTop(4).Text(datum + " KOORDİNE ÖZET(DEPREM ÖNCESİ)").Bold().FontSize(6.5f);
-                if (oncesi.Count > 0)
+
+                // SAHA-014: dönüşüm yoksa yalnız tek "KOORDİNE ÖZET" basılır (Deprem Öncesi/Sonrası başlıkları zorlanmaz).
+                if (p.Donusum is not null)
                 {
+                    sag.Item().PaddingTop(4).Text(datum + " KOORDİNE ÖZET(DEPREM ÖNCESİ)").Bold().FontSize(6.5f);
                     Tablo(sag.Item(), ["Nokta No", "Y", "X"], oncesi.Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X) }), font: 6f);
-                }
-                else
-                {
-                    sag.Item().Text("Dönüşüm girdisi yok.").FontSize(6);
                 }
 
                 var mk = p.Donusum is { } d ? d.Girdi.Mk.ToString("0.00", Inv) : "-";
-                sag.Item().PaddingTop(4).Text(datum + " KOORDİNE ÖZET(DEPREM SONRASI)").Bold().FontSize(6.5f);
+                sag.Item().PaddingTop(4).Text(datum + (p.Donusum is null ? " KOORDİNE ÖZET" : " KOORDİNE ÖZET(DEPREM SONRASI)")).Bold().FontSize(6.5f);
                 Tablo(sag.Item(), ["Nokta No", "Y", "X", "MK"], sonrasi.Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X), mk }), [1f, 1.4f, 1.5f, 0.6f], font: 6f);
             });
         });

@@ -488,6 +488,39 @@
                   </Expander>
                 </Border>
 
+                <!-- SAHA-014: Netcad .DNS ileri dönüşüm (Deprem Öncesi → Deprem Sonrası); Künye & Dönüşüm kartının hemen üstünde, kart kapalıyken de görünür. -->
+                <Border x:Name="DnsDonusumKarti" Classes="kart" Padding="4" DataContext="{Binding Kunye}"
+                        IsVisible="{Binding Converter={x:Static ObjectConverters.IsNotNull}}">
+                  <StackPanel Spacing="4">
+                  <Button x:Name="DnsYukleDugmesi" Content="📂 Dönüşüm Dosyası (.DNS) Yükle" Command="{Binding DnsDosyasiIsteCommand}"
+                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="Primary" Theme="{DynamicResource SolidButton}"
+                          ToolTip.Tip="Netcad .DNS dosyasını okur: ortak noktalar tabloya, katsayılar önizlemeye gelir. CAD/NCZ koordinatları Deprem Öncesi kabul edilir; .DNS isteğe bağlıdır." />
+                  <TextBlock x:Name="DnsHataMetni" Text="{Binding DnsHatasi}" Classes="hata" TextWrapping="Wrap"
+                             IsVisible="{Binding DnsHatasi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                  <ItemsControl x:Name="DnsParametreOnizlemesi" ItemsSource="{Binding DnsParametreSatirlari}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <SelectableTextBlock Text="{Binding}" Classes="mono" FontSize="11" TextWrapping="Wrap" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Button x:Name="DnsUygulaDugmesi" Content="Dönüşümü Uygula (Deprem Öncesi → Sonrası)" Command="{Binding DnsDonusumunuUygulaCommand}"
+                          IsVisible="{Binding DnsYuklendi}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                          Classes="Primary" Theme="{DynamicResource SolidButton}"
+                          ToolTip.Tip="Tüm parsel köşelerini .DNS katsayılarıyla Deprem Sonrası koordinatlara dönüştürür; orijinaller saklanır (yeniden uygulamada çift kayma olmaz). Değişirse onay düşer." />
+                  <Border x:Name="DnsBasariKarti" Classes="kart basari" IsVisible="{Binding IleriDonusumUygulandi}">
+                    <TextBlock Text="{Binding IleriDurumMetni}" TextWrapping="Wrap" FontWeight="SemiBold" />
+                  </Border>
+                  <TextBlock x:Name="DnsDurumMetni" Text="{Binding DnsDurumu}" Classes="aciklama" TextWrapping="Wrap"
+                             IsVisible="{Binding DnsDurumu, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                  <TextBlock x:Name="DnsBilgiNotuMetni" Text="{Binding DnsBilgiNotu}" Classes="aciklama" TextWrapping="Wrap"
+                             IsVisible="{Binding DnsBilgiNotu, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                  <Button x:Name="DnsKaldirDugmesi" Content="✖ Dönüşümü Kaldır (Deprem Öncesine Dön)" Command="{Binding DonusumuKaldirCommand}"
+                          IsVisible="{Binding KaldirGorunur}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                          ToolTip.Tip="Kayıtlı dönüşümü kaldırır: .DNS ileri dönüşümünde proje CAD dosyasındaki Deprem Öncesi koordinatlarına döner; elle girilen ortak noktalı dönüşümde yalnız ortak noktalar temizlenir." />
+                  </StackPanel>
+                </Border>
+
                 <!-- P7.3-C2 (SAHA-007): Proje Künyesi & Dönüşüm — künye ve ortak noktalar CommandBus ile projeye yazılır (RevisionId'ye dahil). -->
                 <Border x:Name="KunyeDonusumKarti" Classes="kart" Padding="4" DataContext="{Binding Kunye}"
                         IsVisible="{Binding Converter={x:Static ObjectConverters.IsNotNull}}">
@@ -527,7 +560,7 @@
                                  IsVisible="{Binding KunyeDurumu, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
                       <TextBlock Text="ORTAK NOKTALAR (DÖNÜŞÜM)" Classes="etiket" FontWeight="SemiBold" Margin="0,8,0,0" />
-                      <TextBlock Text="I = deprem öncesi, II = deprem sonrası; ondalık ayırıcı '.' veya ',' olabilir. Proje noktaları deprem sonrası kabul edilir; deprem öncesi koordinatlar ters dönüşümle hesaplanır."
+                      <TextBlock Text="I = Deprem Öncesi, II = Deprem Sonrası; ondalık ayırıcı '.' veya ',' olabilir. .DNS yüklenirse tablo dosyadan dolar ve proje ileri dönüştürülür; .DNS olmadan elle girilen ortak noktalarda proje noktaları deprem sonrası kabul edilir (ters dönüşüm)."
                                  Classes="aciklama" TextWrapping="Wrap" />
                       <!-- P7 UX: kutucuklu ortak nokta tablosu (OrtakNoktaMetni ile iki yönlü senkron; hücre düzenlendikçe canlı önizleme) -->
                       <ScrollViewer x:Name="OrtakNoktaTablosu" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">

@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Imar18.Application.Cad;
 using Imar18.Application.Proje;
 using Imar18.Domain.Diagnostics;
+using Imar18.Domain.Geometry;
 using Imar18.Presentation.Avalonia.Canvas;
 using Imar18.Presentation.Avalonia.Gorunum;
 
@@ -169,6 +170,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 () => Hesap.KrokiNczIsteCommand.Execute(null), () => Hesap.KrokiNczIsteCommand.CanExecute(null)));
             Kunye = new KunyeDonusumViewModel(proje);
             Kunye.Uygulandi += (_, _) => LastProjeTask = OnayCikti.YenileAsync();
+
+            // SAHA-014: .DNS uygulanınca/kaldırılınca tuval Deprem Sonrası/Öncesi koordinatlarla yenilenir; 2–4. adım görünümleri tazelenir.
+            Kunye.IleriDonusumDegisti += (_, _) =>
+            {
+                LastReapplyTask = DonusumSahnesiniYenileAsync();
+                LastProjeTask = Hesap.YenileAsync();
+            };
             Hesap.Uygulandi += (_, _) =>
             {
                 Kunye.OneriyiYenile();
@@ -320,7 +328,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
             _importCts.Dispose();
             _importCts = null;
         }
+
+        // SAHA-014 (reviewer M4): içe aktarma sürerken .DNS uygulandı/kaldırıldıysa ertelenen sahne yenilemesi şimdi yapılır.
+        if (_sahneYenilemeBekliyor)
+        {
+            _sahneYenilemeBekliyor = false;
+            LastReapplyTask = DonusumSahnesiniYenileAsync();
+            await LastReapplyTask.ConfigureAwait(true);
+        }
     }
+
+    private bool _sahneYenilemeBekliyor;
 
     [RelayCommand(CanExecute = nameof(IsBusy))]
     private void CancelImport() => _importCts?.Cancel();
@@ -426,24 +444,52 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>P7.3-A: tuvalden rol atama yalnız 1. adımda ve katmanlar yüklüyken açıktır.</summary>
     private void RolAtamaEtkinliginiYenile() => Canvas.RolAtamaEtkin = Wizard.IsStep1 && Wizard.LayerRoles.Count > 0;
 
+    /// <summary>SAHA-014: projede uygulanmış <c>.DNS</c> ileri dönüşüm katsayıları (yoksa null; tuval Deprem Öncesi = CAD gösterilir).</summary>
+    private DonusumKatsayilari? GuncelIleriDonusum => _proje?.Yol.Belge.IleriDonusum;
+
+    /// <summary>
+    /// SAHA-014: <c>.DNS</c> uygulanınca/kaldırılınca tuval ve Parseller tablosu Deprem Sonrası/Öncesi koordinatlarla yenilenir
+    /// (eşleme kaynak CAD'den yeniden kurulur; proje geometrisi değişmediyse komut gönderilmez). İçe aktarma sürüyorsa yenileme
+    /// ertelenir ve içe aktarma bitince yapılır (reviewer M4); ayrıca <see cref="ApplyAsync"/> güncel katsayıları sonuçta yeniden denetler.
+    /// </summary>
+    private async Task DonusumSahnesiniYenileAsync()
+    {
+        if (IsBusy)
+        {
+            _sahneYenilemeBekliyor = true;
+            return;
+        }
+
+        if (_lastDocument is { } d)
+        {
+            await ApplyAsync(d, kameraKoru: true, yalnizDegistiyse: true).ConfigureAwait(true);
+        }
+    }
+
     /// <summary>
     /// Etiket eslestirmesi ve Gauss alanlari (O(poligon·yazi·kose)) arka planda hesaplanir; yalnizca sonuc arayuze
     /// aktarilir (50 ms kurali). Eslestirme rol bazlidir: once imar, sonra kadastro (ust uste binen katmanlar
     /// birbirinin yazisini "paylasilan" saymaz).
     /// </summary>
-    private async Task ApplyAsync(CadLayerDocument document, bool kameraKoru = false)
+    private async Task ApplyAsync(CadLayerDocument document, bool kameraKoru = false, bool yalnizDegistiyse = false)
     {
         // P7.3-A (reviewer H1): art arda rol atamasında arka plan hesapları ters sırada bitebilir; yalnız en son başlatılan
         // eşleme sahneye ve projeye (ParselGeometrileriAyarlaKomutu) yazılır, eskimiş sonuç sessizce atılır.
         var nesil = ++_uygulamaNesli;
         var roles = Wizard.RoleMap;
         var projeli = _proje is not null;
-        var (scene, notlar, format, layerCount, _, geometri) = await Task.Run(() =>
+        var katsayilar = GuncelIleriDonusum;
+        var (scene, notlar, format, layerCount, matched, geometri) = await Task.Run(() =>
         {
             var c = Compute(document, roles);
             // SAHA-010 (architect M6): kabuk/yinelenen denetimi O(n²) olduğundan eşleme de arka planda yapılır (50 ms kuralı).
-            return (c.Scene, c.Notlar, c.Format, c.LayerCount, c.Matched, projeli ? ProjeGeometriEslemesi.Olustur(c.Matched, roles) : null);
+            // SAHA-014: proje geometrisi kaynak CAD'den (Deprem Öncesi) kurulur — komut ileri dönüştürür; tuval sahnesi Deprem Sonrası.
+            return (SahneKur(c.Scene, c.Matched, roles, katsayilar), c.Notlar, c.Format, c.LayerCount, c.Matched,
+                projeli ? ProjeGeometriEslemesi.Olustur(c.Matched, roles) : null);
         }).ConfigureAwait(true);
+
+        // SAHA-014 (architect O3): hesap sürerken .DNS uygulandı/kaldırıldıysa sahne güncel katsayılarla yeniden kurulur.
+        (scene, katsayilar) = await GuncelSahneAsync(nesil, scene, matched, roles, katsayilar).ConfigureAwait(true);
         if (nesil != _uygulamaNesli)
         {
             return;
@@ -456,12 +502,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             (RutinIceAktarmaKodlari.Contains(n.Code) || n.Severity == ErrorSeverity.Info ? BilgiNotlari : Warnings).Add(n.UserMessage);
         }
 
-        Canvas.LoadScene(scene, kameraKoru);
-        Parcels.Clear();
-        foreach (var p in scene.Polylines.Where(p => p.IsClosed))
-        {
-            Parcels.Add(new ParcelRow(p.LayerName, TurkceAdlar.Ad(p.Role), p.Label, p.AreaM2));
-        }
+        SahneyiYukle(scene, kameraKoru);
 
         if (_proje is not null && geometri is not null)
         {
@@ -475,15 +516,64 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 Warnings.Add(u); // SAHA-010: R2 çift sayım önlemleri Uyarı & Denetim sekmesinde
             }
 
-            StatusText = DurumMetni(format, scene, layerCount);
+            StatusText = DurumMetni(format, scene, layerCount)
+                + (katsayilar is null ? string.Empty : " .DNS ileri dönüşümü etkin: CAD koordinatları Deprem Öncesi kabul edildi, tuval ve hesaplar Deprem Sonrası.");
+            var belge = _proje.Yol.Belge;
+            if (yalnizDegistiyse && AyniGeometri(geometri.Parseller, belge.DepremOncesiParseller ?? belge.Parseller))
+            {
+                return;
+            }
+
             LastProjeTask = ProjeyeGonderAsync(new ParselGeometrileriAyarlaKomutu(geometri.Parseller) { CiftSayimHaricSayisi = geometri.CiftSayimHaricSayisi });
             await LastProjeTask.ConfigureAwait(true);
+
+            // SAHA-014 (reviewer M4): proje komutu beklenirken .DNS değiştiyse tuval yine güncel katsayılarla yenilenir.
+            if (nesil == _uygulamaNesli && !Equals(katsayilar, GuncelIleriDonusum))
+            {
+                (scene, _) = await GuncelSahneAsync(nesil, scene, matched, roles, katsayilar).ConfigureAwait(true);
+                if (nesil == _uygulamaNesli)
+                {
+                    SahneyiYukle(scene, kameraKoru: true);
+                }
+            }
         }
         else
         {
             StatusText = DurumMetni(format, scene, layerCount);
         }
     }
+
+    /// <summary>SAHA-014: katsayılar değiştikçe (ve nesil güncelken) sahneyi güncel <c>.DNS</c> katsayılarıyla yeniden kurar.</summary>
+    private async Task<(CanvasScene Sahne, DonusumKatsayilari? Katsayilar)> GuncelSahneAsync(
+        int nesil, CanvasScene scene, CadLayerDocument matched, CadLayerRoleMap roles, DonusumKatsayilari? katsayilar)
+    {
+        while (nesil == _uygulamaNesli && !Equals(katsayilar, GuncelIleriDonusum))
+        {
+            katsayilar = GuncelIleriDonusum;
+            var k = katsayilar;
+            scene = await Task.Run(() => SahneKur(null, matched, roles, k)).ConfigureAwait(true);
+        }
+
+        return (scene, katsayilar);
+    }
+
+    /// <summary>Tuvale sahneyi ve Parseller tablosuna kapalı poligonları yükler.</summary>
+    private void SahneyiYukle(CanvasScene scene, bool kameraKoru)
+    {
+        Canvas.LoadScene(scene, kameraKoru);
+        Parcels.Clear();
+        foreach (var p in scene.Polylines.Where(p => p.IsClosed))
+        {
+            Parcels.Add(new ParcelRow(p.LayerName, TurkceAdlar.Ad(p.Role), p.Label, p.AreaM2));
+        }
+    }
+
+    /// <summary>SAHA-014: tuval sahnesi — dönüşüm yoksa hazır sahne, varsa eşlenmiş CAD belgesinin ileri dönüşümünden (decimal) kurulur.</summary>
+    private static CanvasScene SahneKur(CanvasScene? hazir, CadLayerDocument matched, CadLayerRoleMap roles, DonusumKatsayilari? katsayilar) =>
+        katsayilar is null && hazir is not null ? hazir : CanvasScene.From(CadBelgesiDonusumu.Uygula(matched, katsayilar), roles);
+
+    private static bool AyniGeometri(IReadOnlyList<ParselGeometrisi> a, IReadOnlyList<ParselGeometrisi> b) =>
+        a.Count == b.Count && a.Zip(b).All(x => x.First.ParselId == x.Second.ParselId && x.First.Rol == x.Second.Rol && x.First.Koseler.SequenceEqual(x.Second.Koseler));
 
     private string DurumMetni(CadFormat format, CanvasScene scene, int layerCount) => string.Create(CultureInfo.InvariantCulture,
         $"{TurkceAdlar.Ad(format)}: {scene.Polylines.Count} poligon, {layerCount} katman, {Warnings.Count} uyarı")

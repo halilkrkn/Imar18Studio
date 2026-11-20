@@ -17,4 +17,7 @@ public sealed record ProjeCalismaAlani(ProjeKomutYolu Yol, ApprovalService Onay,
 
     /// <summary>P7.3-C2: ortak noktalı dönüşüm servisi (GeometryEngine portu; yoksa 1. adımdaki dönüşüm önizlemesi pasiftir).</summary>
     public KoordinatDonusumu.DonusumServisi? Donusum { get; init; }
+
+    /// <summary>SAHA-014: Netcad <c>.DNS</c> okuyucusu (Infrastructure; yoksa 1. adımdaki "Dönüşüm Dosyası (.DNS) Yükle" pasiftir).</summary>
+    public KoordinatDonusumu.IDnsDosyaOkuyucu? DnsOkuyucu { get; init; }
 }

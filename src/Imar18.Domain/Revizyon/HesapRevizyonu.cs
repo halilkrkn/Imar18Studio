@@ -113,6 +113,15 @@ public sealed record ProjeRevizyonGirdisi(
     /// belirler; yalnız varsa özete yazılır → şablonsuz projelerin RevisionId'si değişmez.
     /// </summary>
     public string? NczSablonuOzeti { get; init; }
+
+    /// <summary>SAHA-014: <c>.DNS</c> ileri dönüşüm katsayıları. Yalnız doluysa özete yazılır (DNS'siz projelerin RevisionId'si değişmez).</summary>
+    public DonusumKatsayilari? IleriDonusum { get; init; }
+
+    /// <summary>
+    /// SAHA-014: Deprem Öncesi (orijinal CAD) parseller; Fen Klasörü'ne basıldıkları için <see cref="IleriDonusum"/> doluyken özete
+    /// girer (6 ondalık yuvarlama çoka-bir olduğundan aktif geometriden türetilemez).
+    /// </summary>
+    public IReadOnlyList<ParselGeometrisi>? DepremOncesiGeometri { get; init; }
 }
 
 /// <summary>
@@ -160,14 +169,7 @@ public static class ProjeRevizyonu
             .ThenBy(p => string.Join(';', p.Koseler.Select(k => Numerics.Fraction.FromDecimal(k.X) + "," + Numerics.Fraction.FromDecimal(k.Y))), StringComparer.Ordinal)
             .ToArray();
         o.Ekle("geoSayisi", parseller.Length);
-        foreach (var p in parseller)
-        {
-            o.Ekle("g.id", p.ParselId).Ekle("g.rol", p.Rol.ToString()).Ekle("g.koseSayisi", p.Koseler.Count);
-            foreach (var k in p.Koseler)
-            {
-                o.Ekle("g.x", k.X).Ekle("g.y", k.Y);
-            }
-        }
+        GeometriYaz(o, "g", parseller);
 
         o.Ekle("dopVar", girdi.Dop is not null);
         if (girdi.Dop is { } dop)
@@ -197,11 +199,29 @@ public static class ProjeRevizyonu
             }
 
             // Reviewer L10: enum adı yerine sabit kod (enum yeniden adlandırılırsa kimlikler değişmesin).
+            // SAHA-014: PDF katsayı etiketleri Netcad .DNS düzenine (Y2 = A·Y1 + C·X1 + CY) düzeltildi; dönüşümlü projelerin
+            // basılı içeriği değiştiği için onayları bir kez düşer (muhafazakâr, AC-PILOT-06).
+            o.Ekle("donusum.duzen", "netcad-dns");
             o.Ekle("donusum.model", d.Model == DonusumModeli.Helmert2B ? "H2B" : d.Model == DonusumModeli.Afin2B ? "A2B" : "?" + ((int)d.Model).ToString(System.Globalization.CultureInfo.InvariantCulture)).Ekle("donusum.mk", d.Mk).Ekle("donusum.noktaSayisi", d.OrtakNoktalar.Count);
             foreach (var n in d.OrtakNoktalar.OrderBy(n => n.NoktaNo, StringComparer.Ordinal))
             {
                 o.Ekle("dn.no", n.NoktaNo).Ekle("dn.y1", n.Y1).Ekle("dn.x1", n.X1).Ekle("dn.y2", n.Y2).Ekle("dn.x2", n.X2);
             }
+        }
+
+        // SAHA-014: ileri dönüşüm yalnız uygulanmışsa yazılır; yuvarlama kuralı sürümü de parametredir.
+        if (girdi.IleriDonusum is { } ileri)
+        {
+            if (girdi.DepremOncesiGeometri is not { } orj || orj.Any(p => p?.ParselId is null || p.Koseler is null))
+            {
+                throw new ArgumentException("İleri dönüşümde Deprem Öncesi parsel listesi null olamaz.", nameof(girdi));
+            }
+
+            o.Ekle("ileri.surum", "r6-afz").Ekle("ileri.a", ileri.A).Ekle("ileri.b", ileri.B).Ekle("ileri.c", ileri.C)
+                .Ekle("ileri.d", ileri.D).Ekle("ileri.cy", ileri.Cy).Ekle("ileri.cx", ileri.Cx).Ekle("ileri.geoSayisi", orj.Count);
+            GeometriYaz(o, "og", orj.OrderBy(p => p.ParselId, StringComparer.Ordinal).ThenBy(p => p.Rol)
+                .ThenBy(p => string.Join(';', p.Koseler.Select(k => Numerics.Fraction.FromDecimal(k.X) + "," + Numerics.Fraction.FromDecimal(k.Y))), StringComparer.Ordinal)
+                .ToArray());
         }
 
         if (girdi.MalikRehberiOzeti is { } rehber)
@@ -223,5 +243,17 @@ public static class ProjeRevizyonu
         }
 
         return o.Olustur();
+    }
+
+    private static void GeometriYaz(RevizyonOzetiOlusturucu o, string onek, IReadOnlyList<ParselGeometrisi> parseller)
+    {
+        foreach (var p in parseller)
+        {
+            o.Ekle(onek + ".id", p.ParselId).Ekle(onek + ".rol", p.Rol.ToString()).Ekle(onek + ".koseSayisi", p.Koseler.Count);
+            foreach (var k in p.Koseler)
+            {
+                o.Ekle(onek + ".x", k.X).Ekle(onek + ".y", k.Y);
+            }
+        }
     }
 }

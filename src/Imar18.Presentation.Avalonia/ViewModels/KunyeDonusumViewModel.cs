@@ -8,6 +8,7 @@ using Imar18.Application.KoordinatDonusumu;
 using Imar18.Application.Proje;
 using Imar18.Domain.Geometry;
 using Imar18.Domain.Diagnostics;
+using Imar18.Domain.Numerics;
 using Imar18.Domain.Revizyon;
 using Imar18.Presentation.Avalonia.Gorunum;
 
@@ -17,7 +18,9 @@ namespace Imar18.Presentation.Avalonia.ViewModels;
 /// P7.3-C2: 1. adım "Proje Künyesi &amp; Dönüşüm" kartı. Künye (İl, İlçe, Köy/Mahalle, Belediye/İdare, Pafta No(lar),
 /// Kadastro ID, Datum/Projeksiyon) ve ortak noktalar (<c>NoktaNo;Y1;X1;Y2;X2</c>, model Helmert2B / Afin2B, MK) CommandBus
 /// üzerinden projeye yazılır (RevisionId'ye dahil; değişince onay düşer). webtapu yüklendiyse İl/İlçe/Mahalle boş alanlara
-/// otomatik önerilir. Proje noktaları deprem sonrası kabul edilir; deprem öncesi koordinatlar ters dönüşümle hesaplanır.
+/// otomatik önerilir. Elle ortak nokta kipinde (P7.3-C2) proje noktaları deprem sonrası kabul edilir; deprem öncesi koordinatlar ters
+/// dönüşümle hesaplanır. SAHA-014: "📂 Dönüşüm Dosyası (.DNS) Yükle" ile Netcad <c>.DNS</c> okunur (tablo + katsayı önizlemesi) ve
+/// "Dönüşümü Uygula (Deprem Öncesi → Sonrası)" CAD'in Deprem Öncesi koordinatlarını ileri dönüştürür (<see cref="IleriDonusumUygulaKomutu"/>).
 /// P7 UX: ortak noktalar varsayılan olarak kutucuklu tabloda (<see cref="OrtakNoktaSatirlari"/>) düzenlenir; tablo
 /// <see cref="OrtakNoktaMetni"/> ile iki yönlü senkrondur (metin "Metin / Toplu Yapıştır" alanındadır) ve hücre düzenlendikçe
 /// parametre önizlemesi canlı güncellenir. "📄 WebTapu PDF'ten Künye Oku" seçilen PDF'ten yalnız İl / İlçe / Mahalle'yi
@@ -67,11 +70,53 @@ public sealed partial class KunyeDonusumViewModel : ObservableObject
     private string _donusumHatasi = string.Empty;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(KunyeyiKaydetCommand), nameof(DonusumuUygulaCommand), nameof(DonusumuOnizleCommand), nameof(WebtapuKunyeIsteCommand))]
+    [NotifyCanExecuteChangedFor(nameof(KunyeyiKaydetCommand), nameof(DonusumuUygulaCommand), nameof(DonusumuOnizleCommand), nameof(WebtapuKunyeIsteCommand),
+        nameof(DnsDosyasiIsteCommand), nameof(DnsDonusumunuUygulaCommand), nameof(DonusumuKaldirCommand))]
     private bool _isBusy;
+
+    /// <summary>SAHA-014: yüklenmiş, henüz uygulanmamış <c>.DNS</c> (tablo dosyadan dolduruldu; "Dönüşümü Uygula (Deprem Öncesi → Sonrası)" bekliyor).</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DnsDonusumunuUygulaCommand), nameof(DonusumuUygulaCommand))]
+    private bool _dnsYuklendi;
+
+    /// <summary>SAHA-014: projede <c>.DNS</c> ileri dönüşümü uygulanmış (aktif koordinatlar Deprem Sonrası).</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DonusumuKaldirCommand), nameof(DonusumuUygulaCommand))]
+    [NotifyPropertyChangedFor(nameof(KaldirGorunur))]
+    private bool _ileriDonusumUygulandi;
+
+    /// <summary>
+    /// SAHA-014 (reviewer M1): projede P7.3-C2 elle ortak noktalı (ters) dönüşüm kayıtlı; <c>.DNS</c> ileri dönüşümü ancak
+    /// "Dönüşümü Kaldır" sonrası uygulanabilir (sessiz çift kayma yok).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DonusumuKaldirCommand), nameof(DnsDonusumunuUygulaCommand))]
+    [NotifyPropertyChangedFor(nameof(KaldirGorunur))]
+    private bool _elleTersKayitli;
+
+    /// <summary>
+    /// SAHA-014 (reviewer M3): yalnız projede uygulanmış ileri dönüşümün yeşil durum metni
+    /// (<see cref="UygulandiMetni"/>); bekleyen/yeni yüklenen <c>.DNS</c> bilgisi <see cref="DnsDurumu"/>'ndadır.
+    /// </summary>
+    [ObservableProperty]
+    private string _ileriDurumMetni = string.Empty;
+
+    /// <summary>SAHA-014: bekleyen <c>.DNS</c> / tablo durumu bilgi metni (yeşil kartta gösterilmez).</summary>
+    [ObservableProperty]
+    private string _dnsDurumu = string.Empty;
+
+    /// <summary>SAHA-014: <c>.DNS</c> okuma / uygulama hatası (Türkçe).</summary>
+    [ObservableProperty]
+    private string _dnsHatasi = string.Empty;
+
+    /// <summary>SAHA-014: dönüşüm alanları değiştirdiğinde 2–4. adım girdilerinin yeniden uygulanması gerektiğini söyleyen bilgi notu.</summary>
+    [ObservableProperty]
+    private string _dnsBilgiNotu = string.Empty;
 
     private readonly TabloMetinSenkronu<OrtakNoktaSatirVm> _ortakSenkron;
     private bool _yenileniyor;
+    private DnsDosyasi? _dns;
+    private bool _dnsYukleniyor;
 
     public KunyeDonusumViewModel(ProjeCalismaAlani alan)
     {
@@ -93,7 +138,66 @@ public sealed partial class KunyeDonusumViewModel : ObservableObject
     /// <summary>webtapu PDF okuyucusu bağlı mı (değilse "WebTapu PDF'ten Künye Oku" pasif).</summary>
     public bool WebtapuOkuyucuVar => _alan.TapuOkuyucu is not null;
 
-    partial void OnOrtakNoktaMetniChanged(string value) => _ortakSenkron?.MetindenYukle(value);
+    /// <summary>SAHA-014: görünüm <c>.dns</c> filtreli dosya seçicisini açar ve <see cref="DnsYukleAsync"/> çağırır.</summary>
+    public event EventHandler? DnsDosyasiIstendi;
+
+    /// <summary>SAHA-014: <c>.DNS</c> ileri dönüşümü uygulandı veya kaldırıldı (tuval Deprem Sonrası/Öncesi koordinatlarla yenilenir).</summary>
+    public event EventHandler? IleriDonusumDegisti;
+
+    /// <summary>SAHA-014: <c>.DNS</c> okuyucusu bağlı mı (değilse "Dönüşüm Dosyası (.DNS) Yükle" pasif).</summary>
+    public bool DnsOkuyucuVar => _alan.DnsOkuyucu is not null;
+
+    /// <summary>SAHA-014: <c>.DNS</c> parametre önizlemesi (A, B, C, D, CY, CX birebir; ölçek, dönüklük, ortalama hata, en büyük |V|).</summary>
+    public ObservableCollection<string> DnsParametreSatirlari { get; } = [];
+
+    /// <summary>SAHA-014: "✖ Dönüşümü Kaldır" görünür mü (ileri dönüşüm veya elle ters dönüşüm kayıtlı).</summary>
+    public bool KaldirGorunur => IleriDonusumUygulandi || ElleTersKayitli;
+
+    /// <summary>SAHA-014: ileri dönüşüm uygulandığında gösterilen yeşil durum metni.</summary>
+    public static string UygulandiMetni(int ortakNokta) =>
+        "✅ Dönüşüm uygulandı (" + ortakNokta.ToString(CultureInfo.InvariantCulture) + " ortak nokta) — Proje Deprem Sonrası koordinatlarla devam ediyor.";
+
+    partial void OnOrtakNoktaMetniChanged(string value)
+    {
+        _ortakSenkron?.MetindenYukle(value);
+        DnsTablosunuDenetle();
+    }
+
+    /// <summary>
+    /// SAHA-014: yüklenmiş (uygulanmamış) <c>.DNS</c> varken tablo/metin elle değiştirilirse dosyanın katsayıları artık bu noktalara
+    /// ait değildir: <c>.DNS</c> bırakılır ve elle ortak nokta kipine dönülür (birebir basım ilkesi).
+    /// </summary>
+    private void DnsTablosunuDenetle()
+    {
+        if (_dnsYukleniyor || _yenileniyor)
+        {
+            return;
+        }
+
+        var tablo = DonusumMetni.Ayristir(OrtakNoktaMetni);
+        if (_dns is null)
+        {
+            // Reviewer M3/L3: ileri dönüşüm uygulanmışken tablo elle değişirse proje sessizce ayrışmaz; kayıtlı dönüşüm aynen kalır.
+            if (IleriDonusumUygulandi && _alan.Yol.Belge.Donusum is { } kayitli)
+            {
+                DnsDurumu = tablo.IsSuccess && tablo.Value.SequenceEqual(kayitli.OrtakNoktalar)
+                    ? string.Empty
+                    : "Ortak nokta tablosu projede kayıtlı .DNS noktalarından farklı; kayıtlı dönüşüm değişmedi (değiştirmek için .DNS'i yeniden yükleyip uygulayın).";
+            }
+
+            return;
+        }
+
+        if (tablo.IsSuccess && tablo.Value.SequenceEqual(_dns.OrtakNoktalar))
+        {
+            return;
+        }
+
+        _dns = null;
+        DnsYuklendi = false;
+        DnsParametreSatirlari.Clear();
+        DnsDurumu = "Ortak nokta tablosu değiştirildi; yüklenen .DNS katsayıları kullanılmıyor (elle ortak nokta kipi). Dosyayı yeniden yükleyebilirsiniz.";
+    }
 
     public IReadOnlyList<DonusumModeli> Modeller { get; } = Enum.GetValues<DonusumModeli>();
 
@@ -148,8 +252,247 @@ public sealed partial class KunyeDonusumViewModel : ObservableObject
 
         ParametreSatirlari.Clear();
         DonusumHatasi = string.Empty;
-        DonusumDurumu = b.Donusum is null ? "Dönüşüm girdisi yok (isteğe bağlı)." : $"Kayıtlı: {b.Donusum.OrtakNoktalar.Count} ortak nokta · {ModelAdi(b.Donusum.Model)}";
+        DonusumDurumu = b.Donusum is null
+            ? "Dönüşüm girdisi yok (isteğe bağlı)."
+            : $"Kayıtlı: {b.Donusum.OrtakNoktalar.Count} ortak nokta · {ModelAdi(b.Donusum.Model)}" + (b.IleriDonusum is null ? string.Empty : " · .DNS ileri dönüşüm");
+        IleriDonusumDurumunuYenile();
         OnPropertyChanged(nameof(WebtapuOnerisiVar));
+    }
+
+    /// <summary>SAHA-014: <c>.DNS</c> kart durumunu projedeki ileri dönüşümden yeniler (yüklenmiş, uygulanmamış DNS bırakılır).</summary>
+    private void IleriDonusumDurumunuYenile()
+    {
+        var b = _alan.Yol.Belge;
+        _dns = null;
+        DnsYuklendi = false;
+        DnsHatasi = string.Empty;
+        DnsBilgiNotu = string.Empty;
+        DnsParametreSatirlari.Clear();
+        DnsDurumu = string.Empty;
+        IleriDonusumUygulandi = b.IleriDonusum is not null;
+        ElleTersKayitli = b.DonusumKipi == DonusumKipi.ElleTers;
+        if (b.IleriDonusum is { } k && b.Donusum is { } g)
+        {
+            DnsParametreleriniYaz(DonusumParametreleri.Katsayilardan(k, g.OrtakNoktalar));
+            IleriDurumMetni = UygulandiMetni(g.OrtakNoktalar.Count);
+        }
+        else
+        {
+            IleriDurumMetni = string.Empty;
+        }
+    }
+
+    /// <summary>Okunmuş <c>.DNS</c>'i bekleyen duruma alır: tablo, model ve önizleme dosyadan dolar (projeye yazılmaz).</summary>
+    private void DnsBekleyeneAl(DnsDosyasi d)
+    {
+        _dnsYukleniyor = true;
+        _yenileniyor = true;
+        try
+        {
+            Model = d.Parametreler.Model;
+            OrtakNoktaMetni = DonusumMetni.Yaz(d.OrtakNoktalar);
+        }
+        finally
+        {
+            _yenileniyor = false;
+            _dnsYukleniyor = false;
+        }
+
+        _dns = d;
+        ParametreSatirlari.Clear();
+        DonusumHatasi = string.Empty;
+        DnsParametreleriniYaz(d.Parametreler);
+        DnsYuklendi = true;
+        DnsBilgiNotu = string.Empty;
+        DnsDurumu = ElleTersKayitli
+            ? $"📄 .DNS okundu: {d.OrtakNoktalar.Count} ortak nokta — projede elle girilmiş ortak noktalı (ters) dönüşüm kayıtlı; uygulamak için önce \"Dönüşümü Kaldır\"."
+            : $"📄 .DNS okundu: {d.OrtakNoktalar.Count} ortak nokta · {ModelAdi(d.Parametreler.Model)} — projeye uygulamak için \"Dönüşümü Uygula (Deprem Öncesi → Sonrası)\".";
+    }
+
+    private void DnsParametreleriniYaz(DonusumParametreleri p)
+    {
+        var inv = CultureInfo.InvariantCulture;
+        DnsParametreSatirlari.Clear();
+        DnsParametreSatirlari.Add("A= " + p.A.ToString(inv) + "   B= " + p.B.ToString(inv));
+        DnsParametreSatirlari.Add("C= " + p.C.ToString(inv) + "   D= " + p.D.ToString(inv));
+        DnsParametreSatirlari.Add("CY= " + p.Cy.ToString(inv) + "   CX= " + p.Cx.ToString(inv));
+        DnsParametreSatirlari.Add("Ölçek katsayısı = " + (p.OlcekKatsayisi is { } o ? o.ToString("0.000000000000", inv) : "— (Afin)"));
+        DnsParametreSatirlari.Add("Dönüklük = " + (p.DonuklukGrad is { } d ? d.ToString("0.000000000", inv) + " grad" : "— (Afin)"));
+        DnsParametreSatirlari.Add("Ortalama hata = " + (p.OrtalamaHataM is { } m ? m.ToString("0.000", inv) + " m" : "— (serbestlik 0)"));
+        var enBuyuk = p.Artiklar.Select(a => DecimalMath.Sqrt((a.Vy * a.Vy) + (a.Vx * a.Vx))).DefaultIfEmpty(0m).Max();
+        DnsParametreSatirlari.Add(string.Create(inv, $"{p.Artiklar.Count} ortak nokta · {ModelAdi(p.Model)} · en büyük |V| = {enBuyuk:0.000} m"));
+    }
+
+    private bool DnsIstenebilir() => DnsOkuyucuVar && !IsBusy;
+
+    [RelayCommand(CanExecute = nameof(DnsIstenebilir))]
+    private void DnsDosyasiIste() => DnsDosyasiIstendi?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// SAHA-014: <c>.DNS</c>'i arka planda okur; başarılıysa ortak nokta tablosu <c>$NOK</c> noktalarıyla, model katsayı biçimiyle
+    /// dolar ve parametre önizlemesi (katsayılar birebir) gösterilir. Projeye henüz yazılmaz ("Dönüşümü Uygula (Deprem Öncesi →
+    /// Sonrası)" gerekir). Okuyucunun beklenmeyen istisnası ERR-GIRD-011 sayılır; hata Türkçe <see cref="DnsHatasi"/>'na yazılır.
+    /// </summary>
+    public async Task DnsYukleAsync(Stream akis, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(akis);
+        if (_alan.DnsOkuyucu is not { } okuyucu || IsBusy)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        DnsHatasi = string.Empty;
+        Result<DnsDosyasi> sonuc;
+        try
+        {
+            sonuc = await Task.Run(() => okuyucu.Oku(akis, cancellationToken), cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+#pragma warning disable CA1031 // async void dosya seçici işleyicisine istisna sızarsa uygulama çöker; katalog hatasına çevrilir.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            sonuc = Result<DnsDosyasi>.Failure(ErrorCatalog.Get(ErrorCodes.GirdProjeGirdisiGecersiz) with
+            {
+                UserMessage = "Netcad dönüşüm dosyası (.DNS) okunamadı.",
+            });
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        if (sonuc.IsFailure)
+        {
+            DnsHatasi = sonuc.Error.UserMessage;
+            return;
+        }
+
+        DnsBekleyeneAl(sonuc.Value);
+    }
+
+    private bool DnsUygulanabilir() => DnsYuklendi && !IsBusy && !ElleTersKayitli;
+
+    /// <summary>
+    /// SAHA-014: yüklenen <c>.DNS</c>'i CommandBus ile projeye uygular (<see cref="IleriDonusumUygulaKomutu"/>): tüm parsel köşeleri
+    /// Deprem Öncesi → Deprem Sonrası dönüştürülür, orijinaller saklanır (tekrar uygulamada çift kayma yok), RevisionId değişir.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(DnsUygulanabilir))]
+    private async Task DnsDonusumunuUygulaAsync()
+    {
+        if (_dns is not { } dns)
+        {
+            return;
+        }
+
+        if (!SayiGirdiAyristirici.TryParseDecimal(MkMetni, out var mk, out _) || mk <= 0m || mk > DonusumGirdisi.MaxMk)
+        {
+            DnsHatasi = "MK değeri 0'dan büyük ve en çok 10 olmalı; ondalık ayırıcı '.' veya ',' olabilir (ör. 0.09).";
+            return;
+        }
+
+        var b = _alan.Yol.Belge;
+        var bayatAlanVar = b.TecvizParselleri.Count > 0 || b.Dop is not null || b.HakEslestirme is not null;
+        IsBusy = true;
+        Result<ProjeBelgesi> r;
+        try
+        {
+            r = await _alan.Yol.GonderAsync(new IleriDonusumUygulaKomutu(dns.Girdi(mk), dns.Katsayilar), _alan.KullaniciId).ConfigureAwait(true);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        if (r.IsFailure)
+        {
+            DnsHatasi = r.Error.UserMessage;
+            return;
+        }
+
+        _yenileniyor = true;
+        try
+        {
+            OrtakNoktaMetni = DonusumMetni.Yaz(r.Value.Donusum!.OrtakNoktalar);
+            MkMetni = mk.ToString("0.00###", CultureInfo.InvariantCulture);
+        }
+        finally
+        {
+            _yenileniyor = false;
+        }
+
+        IleriDonusumDurumunuYenile();
+        DonusumDurumu = $"Kayıtlı: {dns.OrtakNoktalar.Count} ortak nokta · {ModelAdi(dns.Parametreler.Model)} · .DNS ileri dönüşüm";
+        DnsBilgiNotu = bayatAlanVar
+            ? "Dönüşüm parsel alanlarını yeniden hesapladı; 2–4. adımlardaki tecviz / DOP / hak eşleştirme alanlarını yeniden uygulayın."
+            : string.Empty;
+        Uygulandi?.Invoke(this, EventArgs.Empty);
+        IleriDonusumDegisti?.Invoke(this, EventArgs.Empty);
+    }
+
+    private bool Kaldirilabilir() => (IleriDonusumUygulandi || ElleTersKayitli) && !IsBusy;
+
+    /// <summary>
+    /// SAHA-014: kayıtlı dönüşümü kaldırır — ileri kipte aktif geometri Deprem Öncesi (CAD) koordinatlarına döner; elle ters kipte
+    /// yalnız ortak noktalar temizlenir (koordinatlar zaten değişmemişti). Bekleyen (yüklenmiş) <c>.DNS</c> korunur.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(Kaldirilabilir))]
+    private async Task DonusumuKaldirAsync()
+    {
+        var ileriydi = IleriDonusumUygulandi;
+        var bekleyen = _dns;
+        IsBusy = true;
+        Result<ProjeBelgesi> r;
+        try
+        {
+            r = await _alan.Yol.GonderAsync(new DonusumGirdisiAyarlaKomutu(null), _alan.KullaniciId).ConfigureAwait(true);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        if (r.IsFailure)
+        {
+            DnsHatasi = r.Error.UserMessage;
+            return;
+        }
+
+        _yenileniyor = true;
+        try
+        {
+            OrtakNoktaMetni = string.Empty;
+        }
+        finally
+        {
+            _yenileniyor = false;
+        }
+
+        IleriDonusumDurumunuYenile();
+        ParametreSatirlari.Clear();
+        DonusumDurumu = "Dönüşüm girdisi yok (isteğe bağlı).";
+        var kaldirildi = ileriydi
+            ? "Dönüşüm kaldırıldı — proje Deprem Öncesi (CAD dosyası) koordinatlarına döndü."
+            : "Elle girilen ortak noktalı (ters) dönüşüm kaldırıldı; proje koordinatları değişmedi.";
+        if (bekleyen is not null)
+        {
+            DnsBekleyeneAl(bekleyen);
+            DnsDurumu = kaldirildi + " " + DnsDurumu;
+        }
+        else
+        {
+            DnsDurumu = kaldirildi;
+        }
+
+        Uygulandi?.Invoke(this, EventArgs.Empty);
+        if (ileriydi)
+        {
+            IleriDonusumDegisti?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     /// <summary>
@@ -490,7 +833,13 @@ public sealed partial class KunyeDonusumViewModel : ObservableObject
         }
     }
 
-    [RelayCommand(CanExecute = nameof(Bos))]
+    /// <summary>
+    /// SAHA-014 (architect K1): elle ortak nokta "✔ Dönüşümü Uygula" yalnız <c>.DNS</c> yüklenmemiş/uygulanmamışken açıktır; ileri
+    /// dönüşüm etkinken önce "Dönüşümü Kaldır" gerekir (CommandBus da reddeder).
+    /// </summary>
+    private bool ElleUygulanabilir() => !IsBusy && !DnsYuklendi && !IleriDonusumUygulandi;
+
+    [RelayCommand(CanExecute = nameof(ElleUygulanabilir))]
     private async Task DonusumuUygulaAsync()
     {
         var (gecerli, girdi) = GirdiOku();
@@ -522,6 +871,7 @@ public sealed partial class KunyeDonusumViewModel : ObservableObject
             IsBusy = false;
         }
 
+        ElleTersKayitli = _alan.Yol.Belge.DonusumKipi == DonusumKipi.ElleTers;
         Uygulandi?.Invoke(this, EventArgs.Empty);
     }
 }

@@ -116,6 +116,12 @@ public sealed class ProjeKomutYolu : IDisposable
                 sonuc = KomutHatasi.Gecersiz(komut.Ad, "approval may only be changed through ApprovalService");
             }
 
+            // SAHA-014 (architect K2): Parseller = İleri(DepremOncesiParseller) değişmezi her komuttan sonra tek merkezde denetlenir.
+            if (sonuc.IsSuccess && IleriDonusumDegismezi.Dogrula(sonuc.Value) is { IsFailure: true } bozuk)
+            {
+                sonuc = bozuk;
+            }
+
             if (sonuc.IsFailure)
             {
                 var red = Yeni(kullaniciId, komut.Ad, AuditSonucu.Reddedildi, sonuc.Error.Code, mevcut.Revizyon.Deger, mevcut.Revizyon.Deger, komut.Ayrinti, mevcut.Kayit.Denetim);
