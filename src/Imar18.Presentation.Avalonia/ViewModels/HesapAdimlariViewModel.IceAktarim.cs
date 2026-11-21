@@ -298,6 +298,12 @@ public sealed partial class HesapAdimlariViewModel
             return;
         }
 
+        if (!KrokiBaslangicAdaNoOku(out var baslangicAdaNo))
+        {
+            DurumMetni = KrokiHatasi = KrokiBaslangicAdaNoHatasi;
+            return;
+        }
+
         IsBusy = true;
         try
         {
@@ -325,7 +331,8 @@ public sealed partial class HesapAdimlariViewModel
                     if (bolucu is not null && KrokiParselasyonMotoru.ParselasyonaUygun(kroki, belge.Parseller))
                     {
                         var p = KrokiParselasyonMotoru.Olustur(
-                            new KrokiParselasyonGirdisi(kroki, belge.Parseller, takbis, belge.MalikRehberi, d.Dop?.Dopo), bolucu, cancellationToken);
+                            new KrokiParselasyonGirdisi(kroki, belge.Parseller, takbis, belge.MalikRehberi, d.Dop?.Dopo) { BaslangicAdaNo = baslangicAdaNo },
+                            bolucu, cancellationToken);
                         if (p.IsSuccess)
                         {
                             return Result<KrokiYuklemeSonucu>.Success(new KrokiYuklemeSonucu(null, p.Value, 0m, null, belge.RevizyonKimligi()));

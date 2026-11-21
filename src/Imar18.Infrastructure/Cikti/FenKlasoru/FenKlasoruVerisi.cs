@@ -187,42 +187,145 @@ internal static class FenKlasoruVerisi
     }
 
     /// <summary>
-    /// SAHA-017: Koordine Özet / Rölöve nokta grupları. <c>Olusan</c> = seçili yeni (TK_Oluşan: imar, yol, kamu) parsellerin köşeleri;
-    /// <c>Kadastro</c> = kadastro (TK_PARSEL) parsellerinin köşeleri — <paramref name="adaKapsami"/> açıksa yalnız sınır kutusu seçili
-    /// parsellerinkiyle kesişen kadastro parselleri. Ortak köşe (Netcad'de iki ayrı adlı nokta) her iki grupta da listelenir.
+    /// SAHA-017 / SAHA-021: Koordine Özet / Rölöve nokta grupları. <c>Olusan</c> = seçili yeni (TK_Oluşan: imar, yol, kamu) parsellerin
+    /// köşelerinden kadastro köşesi OLMAYANLAR; <c>Kadastro</c> = kadastro (TK_PARSEL) parsellerinin köşeleri — <paramref name="adaKapsami"/>
+    /// açıksa yalnız sınır kutusu seçili parsellerinkiyle kesişen kadastro parselleri. Kadastro köşesiyle çakışan (≤ 0.02 m; paket
+    /// üretiminde aynı nokta no'ya bağlanır) TK_Oluşan köşesi yalnız kadastro grubunda, arşiv no'suyla bir kez listelenir (SORU-075,
+    /// SORU-078 kapandı).
     /// </summary>
     public static (IReadOnlyList<KoordinatSatiri> Olusan, IReadOnlyList<KoordinatSatiri> Kadastro) NoktaGruplari(
         CiktiPaketi p, IReadOnlyList<ParselCetvelSatiri> secili, bool adaKapsami)
     {
-        var kadastro = p.Parseller.Where(s => s.Rol == ParselRolu.Kadastro);
+        var tumKadastro = p.Parseller.Where(s => s.Rol == ParselRolu.Kadastro).ToArray();
+        IEnumerable<ParselCetvelSatiri> kadastro = tumKadastro;
         if (adaKapsami)
         {
             var k = secili.SelectMany(s => s.Koseler).ToArray();
+            var seciliNolar = secili.SelectMany(s => s.NoktaNolari).ToHashSet();
+            // Reviewer O3: sınır kutusuyla kesişen VEYA seçili parsellerle ortak nokta no taşıyan (≤ 0.02 m oturtulmuş köşe) kadastro
+            // parselleri — ortak köşe hiçbir tablodan düşmez.
             kadastro = k.Length == 0
                 ? []
-                : kadastro.Where(s => s.Koseler.Max(v => v.X) >= k.Min(v => v.X) && s.Koseler.Min(v => v.X) <= k.Max(v => v.X)
-                    && s.Koseler.Max(v => v.Y) >= k.Min(v => v.Y) && s.Koseler.Min(v => v.Y) <= k.Max(v => v.Y));
+                : kadastro.Where(s => (s.Koseler.Max(v => v.X) >= k.Min(v => v.X) && s.Koseler.Min(v => v.X) <= k.Max(v => v.X)
+                    && s.Koseler.Max(v => v.Y) >= k.Min(v => v.Y) && s.Koseler.Min(v => v.Y) <= k.Max(v => v.Y))
+                    || s.NoktaNolari.Any(seciliNolar.Contains));
         }
 
-        return (Noktalar(p, secili.Where(s => s.Rol != ParselRolu.Kadastro)), Noktalar(p, kadastro));
+        // SORU-078: satırlar basılan ada göre (arşiv no / sıralı no; sayısal) dizilir, iç nokta sırasına göre değil.
+        var kadastroNolari = tumKadastro.SelectMany(s => s.NoktaNolari).ToHashSet();
+        var olusan = Noktalar(p, secili.Where(s => s.Rol != ParselRolu.Kadastro)).Where(k => !kadastroNolari.Contains(k.NoktaNo)).ToArray();
+        return (AdaGoreSirala(p, olusan), AdaGoreSirala(p, Noktalar(p, kadastro)));
     }
 
+    /// <summary>SORU-078: nokta satırlarını basılan nokta adına göre (sayısal karşılaştırma; eşitte iç nokta no) sıralar.</summary>
+    private static KoordinatSatiri[] AdaGoreSirala(CiktiPaketi p, IEnumerable<KoordinatSatiri> noktalar) =>
+        noktalar.OrderBy(k => p.NoktaAdi(k.NoktaNo), ParselNoKarsilastirici.Instance).ThenBy(k => k.NoktaNo).ToArray();
+
     /// <summary>
-    /// SAHA-017: Deprem Öncesi tablosu — yalnız kadastro köşelerinin dönüşüm öncesi koordinatları (MK yok). SAHA-020: arşiv noktası
-    /// eşlenen köşede arşiv onaylı koordinat.
+    /// SAHA-021: KOORDİNE ÖZET / RÖLÖVE iki tabloyla mı basılır — <c>.DNS</c> / ortak noktalı dönüşüm VEYA mühendisin girdiği arşiv onaylı
+    /// kadastro noktaları varsa "DEPREM ÖNCESİ / ARŞİV ONAYLI" + "DEPREM SONRASI"; aksi halde tek "KOORDİNE ÖZET".
+    /// </summary>
+    public static bool IkiTabloMu(CiktiPaketi p) => p.Donusum is not null || p.ArsivNoktalariVar;
+
+    /// <summary>SAHA-021: üst tablo başlığı (datum ile).</summary>
+    public static string OncesiBasligi(CiktiPaketi p) => DatumBasligi(p) + " KOORDİNE ÖZET (DEPREM ÖNCESİ / ARŞİV ONAYLI)";
+
+    /// <summary>SAHA-021: alt tablo başlığı (iki tabloda Deprem Sonrası, aksi halde tek tablo).</summary>
+    public static string SonrasiBasligi(CiktiPaketi p) => DatumBasligi(p) + (IkiTabloMu(p) ? " KOORDİNE ÖZET (DEPREM SONRASI)" : " KOORDİNE ÖZET");
+
+    /// <summary>
+    /// SAHA-017 / SAHA-021: Deprem Öncesi / Arşiv Onaylı tablosu — yalnız kadastro köşeleri (MK yok). Arşiv noktası eşlenen köşede
+    /// mühendisin arşiv onaylı Y, X'i; diğerlerinde dönüşüm öncesi koordinat (dönüşüm yoksa CAD köşesinin kendisi — deprem kayması
+    /// verilmemiştir). İki tablo basılmıyorsa boş.
     /// </summary>
     public static IReadOnlyList<KoordinatSatiri> OncesiNoktalar(CiktiPaketi p, IReadOnlyList<KoordinatSatiri> kadastro)
     {
-        if (p.Donusum is null)
+        if (!IkiTabloMu(p))
         {
             return [];
         }
 
-        // SAHA-020: arşiv noktası verilen kadastro köşesinde mühendisin arşiv onaylı Y, X'i basılır.
-        var nolar = kadastro.Select(k => k.NoktaNo).ToHashSet();
-        return p.Donusum.DepremOncesi.Where(k => nolar.Contains(k.NoktaNo))
-            .Select(k => p.ArsivKoordinatlari.TryGetValue(k.NoktaNo, out var a) ? a : k)
-            .OrderBy(k => k.NoktaNo).ToArray();
+        var oncesi = p.Donusum?.DepremOncesi.ToDictionary(k => k.NoktaNo);
+        return kadastro
+            .Select(k => p.ArsivKoordinatlari.TryGetValue(k.NoktaNo, out var a) ? a
+                : oncesi is null ? k
+                : oncesi.TryGetValue(k.NoktaNo, out var o) ? o : null)
+            .OfType<KoordinatSatiri>()
+            .ToArray(); // kadastro listesi NoktaGruplari'nda basılan ada göre sıralıdır (SORU-078)
+    }
+
+    /// <summary>
+    /// SAHA-021: çizim etiketleri (RÖLÖVE / PARSELASYON HARİTASI). Yola terk parselleri tescil sırasıyla <c>Y1</c>, <c>Y2</c>…; ada/parsel
+    /// kodlu imar parseli yalnız parsel no (<c>1</c>, <c>2</c>…; ada no adada bir kez ayrıca basılır); diğerleri gösterim kimliği.
+    /// Anahtar geçici kod.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> CizimEtiketleri(CiktiPaketi p)
+    {
+        var sonuc = new Dictionary<string, string>(StringComparer.Ordinal);
+        var yol = 0;
+        foreach (var s in HesapParselleri(p))
+        {
+            var kimlik = Kimlik(s);
+            sonuc[s.GeciciKod] = s.Rol switch
+            {
+                ParselRolu.YolTerk => "Y" + (++yol).ToString(Inv),
+                ParselRolu.Imar when AdaParselli(kimlik) => ParselNo(kimlik),
+                _ => kimlik,
+            };
+        }
+
+        return sonuc;
+    }
+
+    /// <summary>
+    /// SAHA-021: imar adası → etiket noktası (ada parsellerinin alan ağırlıklı merkezi; adanın hiçbir parselinin içine düşmüyorsa
+    /// en büyük parselin iç noktası). Ada no bu noktaya büyük ve kalın, tek kez yazılır.
+    /// </summary>
+    public static IReadOnlyList<(string Ada, GeodeticPoint Nokta)> AdaEtiketNoktalari(IEnumerable<ParselCetvelSatiri> parseller)
+    {
+        var sonuc = new List<(string, GeodeticPoint)>();
+        foreach (var g in parseller.Where(s => s.Rol == ParselRolu.Imar && AdaParselli(Kimlik(s)) && s.Koseler.Count >= 3)
+                     .GroupBy(s => AdaNo(Kimlik(s)), StringComparer.Ordinal).OrderBy(g => g.Key, ParselNoKarsilastirici.Instance))
+        {
+            decimal toplam = 0m, n = 0m, e = 0m;
+            foreach (var s in g)
+            {
+                var (a, m) = AlanMerkezi(s.Koseler);
+                toplam += a;
+                n += a * m.X;
+                e += a * m.Y;
+            }
+
+            var nokta = toplam == 0m ? IcNokta(g.First().Koseler) : new GeodeticPoint(n / toplam, e / toplam);
+            if (!g.Any(s => Icinde(s.Koseler, nokta.X, nokta.Y)))
+            {
+                nokta = IcNokta(g.OrderByDescending(s => Math.Abs(AlanMerkezi(s.Koseler).Alan)).First().Koseler);
+            }
+
+            sonuc.Add((g.Key, nokta));
+        }
+
+        return sonuc;
+    }
+
+    /// <summary>Mutlak alan ve alan ağırlık merkezi (decimal; dejenere poligonda köşe ortalaması).</summary>
+    private static (decimal Alan, GeodeticPoint Merkez) AlanMerkezi(IReadOnlyList<GeodeticPoint> v)
+    {
+        var (n0, e0) = (v[0].X, v[0].Y);
+        decimal a2 = 0m, cn = 0m, ce = 0m;
+        for (var i = 0; i < v.Count; i++)
+        {
+            var (n1, e1) = (v[i].X - n0, v[i].Y - e0);
+            var (n2, e2) = (v[(i + 1) % v.Count].X - n0, v[(i + 1) % v.Count].Y - e0);
+            var c = (e1 * n2) - (e2 * n1);
+            a2 += c;
+            ce += (e1 + e2) * c;
+            cn += (n1 + n2) * c;
+        }
+
+        return a2 == 0m
+            ? (0m, new GeodeticPoint(v.Average(k => k.X), v.Average(k => k.Y)))
+            : (Math.Abs(a2 / 2m), new GeodeticPoint(n0 + (cn / (3m * a2)), e0 + (ce / (3m * a2))));
     }
 
     /// <summary>SAHA-017: Deprem Sonrası / tek tablo satırları — önce TK_Oluşan (MK dolu), altına kadastro (MK boş, tire de yok).</summary>

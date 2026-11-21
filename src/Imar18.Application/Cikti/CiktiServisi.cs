@@ -69,17 +69,39 @@ public static class CiktiPaketiOlusturucu
         var noktalar = new Dictionary<GeodeticPoint, int>();
         var koordinatlar = new List<KoordinatSatiri>();
         var parseller = new List<ParselCetvelSatiri>();
+        var kadastroKoseleri = new List<(GeodeticPoint Kose, int No)>();
+        var oturtulan = new List<string>();
         foreach (var p in degerlendirme.Parseller.OrderBy(p => p.Geometri.Rol).ThenBy(p => p.Geometri.ParselId, StringComparer.Ordinal))
         {
             var v = p.Halka.Vertices;
             var nolar = new int[v.Count];
+            var kadastro = p.Geometri.Rol == ParselRolu.Kadastro;
             for (var i = 0; i < v.Count; i++)
             {
+                // SAHA-021: kadastro (TK_PARSEL) köşesiyle ≤ 0.02 m çakışan TK_Oluşan köşesi ayrı nokta değildir — kadastro köşesinin
+                // numarasını (arşiv no'sunu) taşır; KOORDİNE ÖZET / RÖLÖVE'de iki kez yazılmaz (SORU-075, SORU-078).
                 if (!noktalar.TryGetValue(v[i], out var no))
                 {
-                    no = noktalar.Count + 1;
-                    noktalar.Add(v[i], no);
-                    koordinatlar.Add(new KoordinatSatiri(no, v[i].Y, v[i].X));
+                    if (!kadastro && KadastroKosesineCakisir(kadastroKoseleri, v[i], out no))
+                    {
+                        noktalar.Add(v[i], no); // yalnız arama önbelleği; koordinat satırı kadastro köşesininkidir
+
+                        // Reviewer Y1: birebir olmayan (mm kaymış) çakışmada alan ve cephe gerçek köşeyle, KOORDİNE ÖZET kadastro köşesiyle
+                        // hesaplanır; fark ≤ 0.02 m'dir ama mühendis CAD'de köşeyi oturtsun diye uyarılır (sessiz geçilmez).
+                        var k = koordinatlar[no - 1];
+                        oturtulan.Add(string.Create(CultureInfo.InvariantCulture,
+                            $"{p.Geometri.ParselId} ({ArsivNoktalari.Uzaklik(new GeodeticPoint(k.X, k.Y), v[i]):0.000} m)"));
+                    }
+                    else
+                    {
+                        no = koordinatlar.Count + 1;
+                        noktalar.Add(v[i], no);
+                        koordinatlar.Add(new KoordinatSatiri(no, v[i].Y, v[i].X));
+                        if (kadastro)
+                        {
+                            kadastroKoseleri.Add((v[i], no));
+                        }
+                    }
                 }
 
                 nolar[i] = no;
@@ -199,6 +221,16 @@ public static class CiktiPaketiOlusturucu
             }
         }
 
+        if (oturtulan.Count > 0)
+        {
+            uyarilar.Add("TK_Oluşan köşesi kadastro (TK_PARSEL) köşesine ≤ " + ArsivNoktalari.CakismaToleransiM.ToString("0.00", CultureInfo.InvariantCulture)
+                + " m yakın, birebir değil; aynı nokta sayılıp kadastro nokta no'su ve KOORDİNE ÖZET'te kadastro koordinatı basıldı (alan / cephe CAD köşesiyle hesaplandı). CAD'de köşeyi kadastro köşesine oturtun: "
+                + string.Join(", ", oturtulan.Distinct(StringComparer.Ordinal).Take(10))
+                + (oturtulan.Distinct(StringComparer.Ordinal).Count() > 10
+                    ? string.Create(CultureInfo.InvariantCulture, $" (+{oturtulan.Distinct(StringComparer.Ordinal).Count() - 10})")
+                    : string.Empty));
+        }
+
         var (noktaAdlari, arsivKoordinatlari) = ArsivNoktaAdlari(belge, parseller, koordinatlar, donusum, uyarilar);
 
         var crs = belge.Crs;
@@ -229,18 +261,49 @@ public static class CiktiPaketiOlusturucu
             NczSablonIleriDonusumu = nczSablonIleri,
             NoktaAdlari = noktaAdlari,
             ArsivKoordinatlari = arsivKoordinatlari,
+            ArsivNoktalariVar = noktaAdlari.Count > 0, // reviewer D4: yalnız en az bir arşiv kaydı köşeye eşlendiyse
         });
+    }
+
+    /// <summary>
+    /// SAHA-021: köşe bir kadastro köşesiyle <see cref="ArsivNoktalari.CakismaToleransiM"/> (0.02 m) içinde çakışıyor mu; çakışıyorsa
+    /// en yakın (eşitte ilk kaydedilen) kadastro köşesinin nokta no'su döner.
+    /// </summary>
+    public static bool KadastroKosesineCakisir(IReadOnlyList<(GeodeticPoint Kose, int No)> kadastro, GeodeticPoint v, out int no)
+    {
+        ArgumentNullException.ThrowIfNull(kadastro);
+        no = 0;
+        var enYakin = decimal.MaxValue;
+        foreach (var (k, n) in kadastro)
+        {
+            if (Math.Abs(k.X - v.X) > ArsivNoktalari.CakismaToleransiM || Math.Abs(k.Y - v.Y) > ArsivNoktalari.CakismaToleransiM)
+            {
+                continue;
+            }
+
+            var d = ArsivNoktalari.Uzaklik(k, v);
+            if (d <= ArsivNoktalari.CakismaToleransiM && d < enYakin)
+            {
+                (enYakin, no) = (d, n);
+            }
+        }
+
+        return no > 0;
     }
 
     /// <summary>SAHA-020 (reviewer Y4): arşiv koordinatı ile Deprem Öncesi köşe arasındaki uyarı eşiği (m).</summary>
     public const decimal ArsivSapmaUyarisiM = 0.50m;
 
     /// <summary>
-    /// SAHA-020: arşiv onaylı kadastro noktalarını iç nokta numaralarına eşler. Her kadastro köşesinin kaynak koordinatı (<c>.DNS</c>
-    /// ileri dönüşümünde Deprem Öncesi orijinali, aksi halde aktif köşe) kaydın eşleme anahtarıyla (<see cref="ArsivNoktaKaydi.Kose"/>)
-    /// birebir karşılaştırılır. Eşlenen köşe arşiv no'sunu ve arşiv koordinatını alır (elle ters kipte yalnız mühendis girdiyse); kalan
-    /// noktalar iç sırayla <c>1, 2, 3…</c> numaralanır (arşiv no'suyla çakışan sıra atlanır). Eşlenmeyen kayıt (geometri değişmiş) ve
-    /// Deprem Öncesi köşeden <see cref="ArsivSapmaUyarisiM"/>'den fazla sapan arşiv koordinatı uyarılır. Kayıt yoksa boş sözlükler.
+    /// SAHA-020 / SAHA-021: arşiv onaylı kadastro noktalarını iç nokta numaralarına eşler. Her kadastro köşesinin kaynak koordinatı
+    /// (<c>.DNS</c> ileri dönüşümünde Deprem Öncesi orijinal CAD köşesi — dönüşüm özetinin hesaplanıp hesaplanamamasından bağımsız olarak
+    /// <see cref="ProjeBelgesi.DepremOncesiParseller"/>'in ileri dönüşümünden kurulan sözlükle; aksi halde aktif köşe) önce kaydın eşleme
+    /// anahtarıyla (<see cref="ArsivNoktaKaydi.Kose"/>) birebir, eşleşmeyenler sonra <see cref="ArsivNoktalari.CakismaToleransiM"/> (0.02 m)
+    /// içinde en yakın kullanılmamış kayıtla eşlenir. Eşlenen köşe mühendisin arşiv no'sunu ve arşiv koordinatını alır (elle ters kipte
+    /// yalnız mühendis girdiyse) — hiçbir zaman otomatik numara / CAD koordinatıyla ezilmez. Kalan noktalar sıralı <c>1, 2, 3…</c>
+    /// numaralanır: önce yeni (TK_Oluşan) köşeler, sonra arşiv kaydı olmayan kadastro köşeleri (arşiv no'suyla çakışan sıra atlanır).
+    /// Eşlenmeyen kayıt (geometri değişmiş) ve Deprem Öncesi köşeden <see cref="ArsivSapmaUyarisiM"/>'den fazla sapan arşiv koordinatı
+    /// uyarılır. Kayıt yoksa boş sözlükler.
     /// </summary>
     private static (IReadOnlyDictionary<int, string>, IReadOnlyDictionary<int, KoordinatSatiri>) ArsivNoktaAdlari(
         ProjeBelgesi belge, IReadOnlyList<ParselCetvelSatiri> parseller, IReadOnlyList<KoordinatSatiri> koordinatlar,
@@ -253,38 +316,59 @@ public static class CiktiPaketiOlusturucu
             return (adlar, arsiv);
         }
 
-        var kaynak = (belge.IleriDonusum is not null && donusum is { IleriDonusum: true } ? donusum.DepremOncesi : koordinatlar)
-            .ToDictionary(k => k.NoktaNo);
+        var kaynak = KaynakKoseler(belge, koordinatlar);
         var kayitlar = new Dictionary<GeodeticPoint, ArsivNoktaKaydi>();
         foreach (var k in belge.ArsivKadastroNoktalari)
         {
             kayitlar.TryAdd(k.Kose, k);
         }
 
+        // 1. geçiş: birebir anahtar; 2. geçiş: ≤ 0.02 m en yakın kullanılmamış kayıt (en yakın çiftler önce; deterministik).
+        var kadastroNolari = parseller.Where(x => x.Rol == ParselRolu.Kadastro).SelectMany(x => x.NoktaNolari).Distinct().Order().ToList();
+        var eslesme = new Dictionary<int, ArsivNoktaKaydi>();
         var eslenen = new HashSet<ArsivNoktaKaydi>();
+        foreach (var no in kadastroNolari)
+        {
+            if (kaynak.TryGetValue(no, out var k) && kayitlar.TryGetValue(k, out var kayit) && eslenen.Add(kayit))
+            {
+                eslesme[no] = kayit;
+            }
+        }
+
+        var adaylar = kadastroNolari.Where(no => !eslesme.ContainsKey(no) && kaynak.ContainsKey(no))
+            .SelectMany(no => belge.ArsivKadastroNoktalari.Where(r => !eslenen.Contains(r))
+                .Select(r => (No: no, Kayit: r, Uzaklik: ArsivNoktalari.Uzaklik(kaynak[no], r.Kose))))
+            .Where(x => x.Uzaklik <= ArsivNoktalari.CakismaToleransiM)
+            .OrderBy(x => x.Uzaklik).ThenBy(x => x.No).ThenBy(x => x.Kayit.Sira)
+            .ToList();
+        foreach (var (no, kayit, _) in adaylar)
+        {
+            if (!eslesme.ContainsKey(no) && eslenen.Add(kayit))
+            {
+                eslesme[no] = kayit;
+            }
+        }
+
         var sapmali = new List<string>();
         var elleTers = belge.IleriDonusum is null && belge.Donusum is not null;
-        foreach (var no in parseller.Where(x => x.Rol == ParselRolu.Kadastro).SelectMany(x => x.NoktaNolari).Distinct().Order())
+        foreach (var (no, kayit) in eslesme.OrderBy(x => x.Key))
         {
-            if (kaynak.TryGetValue(no, out var k) && kayitlar.TryGetValue(new GeodeticPoint(k.X, k.Y), out var kayit) && eslenen.Add(kayit))
+            adlar[no] = kayit.NoktaNo;
+
+            // Reviewer Y1: elle ortak noktalı (ters) kipte anahtar Deprem Sonrası köşedir; arşiv Y, X anahtarla aynıysa (mühendis
+            // girmediyse; ≤ 1 mm gösterim yuvarlaması payıyla) Deprem Öncesi ters dönüşümle hesaplanan değer korunur — Deprem Sonrası
+            // koordinat "Öncesi"ne basılmaz.
+            if (elleTers && ArsivNoktalari.Uzaklik(new GeodeticPoint(kayit.ArsivX, kayit.ArsivY), kayit.Kose) <= ArsivNoktalari.AyniKoordinatToleransiM)
             {
-                adlar[no] = kayit.NoktaNo;
+                continue;
+            }
 
-                // Reviewer Y1: elle ortak noktalı (ters) kipte anahtar Deprem Sonrası köşedir; arşiv Y, X anahtarla aynıysa (mühendis
-                // girmediyse; ≤ 1 mm gösterim yuvarlaması payıyla) Deprem Öncesi ters dönüşümle hesaplanan değer korunur — Deprem Sonrası
-                // koordinat "Öncesi"ne basılmaz.
-                if (elleTers && ArsivNoktalari.Uzaklik(new GeodeticPoint(kayit.ArsivX, kayit.ArsivY), kayit.Kose) <= ArsivNoktalari.AyniKoordinatToleransiM)
-                {
-                    continue;
-                }
-
-                arsiv[no] = new KoordinatSatiri(no, kayit.ArsivY, kayit.ArsivX);
-                var referans = donusum?.DepremOncesi.FirstOrDefault(d => d.NoktaNo == no) ?? k;
-                var sapma = ArsivNoktalari.Uzaklik(new GeodeticPoint(kayit.ArsivX, kayit.ArsivY), new GeodeticPoint(referans.X, referans.Y));
-                if (sapma > ArsivSapmaUyarisiM)
-                {
-                    sapmali.Add(string.Create(CultureInfo.InvariantCulture, $"{kayit.NoktaNo} ({sapma:0.00} m)"));
-                }
+            arsiv[no] = new KoordinatSatiri(no, kayit.ArsivY, kayit.ArsivX);
+            var referans = donusum?.DepremOncesi.FirstOrDefault(d => d.NoktaNo == no) is { } r ? new GeodeticPoint(r.X, r.Y) : kaynak[no];
+            var sapma = ArsivNoktalari.Uzaklik(new GeodeticPoint(kayit.ArsivX, kayit.ArsivY), referans);
+            if (sapma > ArsivSapmaUyarisiM)
+            {
+                sapmali.Add(string.Create(CultureInfo.InvariantCulture, $"{kayit.NoktaNo} ({sapma:0.00} m)"));
             }
         }
 
@@ -307,10 +391,12 @@ public static class CiktiPaketiOlusturucu
                 + " m'den fazla farklı (rakam veya Y/X hatası olabilir; mühendis kontrol etmeli): " + string.Join(", ", sapmali));
         }
 
-        // Reviewer Y2: yeni (TK_Oluşan) noktalar sıralı 1, 2, 3… numaralanır; bir arşiv no'suyla çakışan sıra atlanır (iki nokta aynı adı taşımaz).
+        // Reviewer Y2 / SAHA-021: önce yeni (TK_Oluşan) noktalar, sonra arşiv kaydı olmayan kadastro köşeleri sıralı 1, 2, 3…
+        // numaralanır; bir arşiv no'suyla çakışan sıra atlanır (iki nokta aynı adı taşımaz).
         var arsivNolari = adlar.Values.ToHashSet(StringComparer.Ordinal);
+        var kadastroKume = kadastroNolari.ToHashSet();
         var sira = 0;
-        foreach (var k in koordinatlar.OrderBy(k => k.NoktaNo).Where(k => !adlar.ContainsKey(k.NoktaNo)))
+        foreach (var k in koordinatlar.Where(k => !adlar.ContainsKey(k.NoktaNo)).OrderBy(k => kadastroKume.Contains(k.NoktaNo)).ThenBy(k => k.NoktaNo))
         {
             string ad;
             do
@@ -323,6 +409,41 @@ public static class CiktiPaketiOlusturucu
         }
 
         return (adlar, arsiv);
+    }
+
+    /// <summary>
+    /// SAHA-021: nokta no → arşiv eşleme koordinatı. <c>.DNS</c> ileri dönüşümünde aktif (Deprem Sonrası) nokta, Deprem Öncesi
+    /// parsellerin <see cref="DonusumKatsayilari.Uygula"/> ile ileri dönüşümünden kurulan sözlükle orijinal CAD köşesine geri bulunur
+    /// (dönüşüm özeti hesaplanamasa da arşiv numaraları kaybolmaz); aksi halde aktif köşenin kendisidir.
+    /// </summary>
+    private static Dictionary<int, GeodeticPoint> KaynakKoseler(ProjeBelgesi belge, IReadOnlyList<KoordinatSatiri> koordinatlar)
+    {
+        var sonuc = new Dictionary<int, GeodeticPoint>();
+        if (belge.IleriDonusum is { } ik && belge.DepremOncesiParseller is { } orj)
+        {
+            var eslem = new Dictionary<GeodeticPoint, GeodeticPoint>();
+            foreach (var o in orj.SelectMany(p => p.Koseler))
+            {
+                eslem.TryAdd(ik.Uygula(o), o);
+            }
+
+            foreach (var k in koordinatlar)
+            {
+                if (eslem.TryGetValue(new GeodeticPoint(k.X, k.Y), out var o))
+                {
+                    sonuc[k.NoktaNo] = o;
+                }
+            }
+
+            return sonuc;
+        }
+
+        foreach (var k in koordinatlar)
+        {
+            sonuc[k.NoktaNo] = new GeodeticPoint(k.X, k.Y);
+        }
+
+        return sonuc;
     }
 
     /// <summary>SAHA-017: <c>"1/1"</c>, <c>" 2 / 3 "</c> gibi rakamlardan oluşan ada/parsel kodu mu?</summary>

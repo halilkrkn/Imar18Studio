@@ -86,7 +86,7 @@ public sealed class Saha017FenKlasoruTests
 
         var metin = Metin(Ac(Uret(p))["KOORDİNE ÖZET.pdf"]);
         var b = Bosluksuz(metin);
-        var once = b.IndexOf("(DEPREMÖNCESİ)", StringComparison.Ordinal);
+        var once = b.IndexOf("(DEPREMÖNCESİ/ARŞİVONAYLI)", StringComparison.Ordinal);
         var sonra = b.IndexOf("(DEPREMSONRASI)", StringComparison.Ordinal);
         once.Should().BeGreaterThan(-1);
         sonra.Should().BeGreaterThan(once);
@@ -106,14 +106,15 @@ public sealed class Saha017FenKlasoruTests
             onceBolum.Should().Contain(no + F2(o.Y) + F2(o.X), "kadastro köşesi Deprem Öncesi'nde");
         }
 
-        // Deprem Sonrası: 6 TK_Oluşan satırı MK = 0.09, ardından 4 kadastro satırı MK boş (tire yok).
+        // SAHA-021 (SORU-075 kapandı): Deprem Sonrası'nda yalnız kadastroyla çakışmayan 2 TK_Oluşan satırı MK = 0.09, ardından 4 kadastro
+        // satırı MK boş (tire yok); ortak köşe yalnız kadastro grubunda.
         var kelimeler = metin.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var sonraKelime = kelimeler.SkipWhile(k => !k.Contains("SONRASI", StringComparison.Ordinal)).ToArray();
-        sonraKelime.Count(k => k == "0.09").Should().Be(6);
-        kelimeler.Count(k => k == "0.09").Should().Be(6, "MK yalnız TK_Oluşan noktalarındadır");
+        sonraKelime.Count(k => k == "0.09").Should().Be(2);
+        kelimeler.Count(k => k == "0.09").Should().Be(2, "MK yalnız yeni TK_Oluşan noktalarındadır");
         kelimeler.Should().NotContain("-", "kadastro MK hücresi boştur");
         var ilkKadastro = p.Koordinatlar.Single(k => k.NoktaNo == kadastroNo.Min());
-        var sonOlusan = p.Koordinatlar.Single(k => k.NoktaNo == olusanNo.Max());
+        var sonOlusan = p.Koordinatlar.Single(k => k.NoktaNo == araNokta.Max());
         sonraBolum.Should().Contain(sonOlusan.NoktaNo + F2(sonOlusan.Y) + F2(sonOlusan.X) + "0.09");
         sonraBolum.LastIndexOf(ilkKadastro.NoktaNo + F2(ilkKadastro.Y) + F2(ilkKadastro.X), StringComparison.Ordinal)
             .Should().BeGreaterThan(sonraBolum.IndexOf(sonOlusan.NoktaNo + F2(sonOlusan.Y) + F2(sonOlusan.X) + "0.09", StringComparison.Ordinal),
@@ -128,9 +129,10 @@ public sealed class Saha017FenKlasoruTests
 
         var k = Kelimeler(d["KOORDİNE ÖZET.pdf"]);
 
-        k.Count(w => w == "0.09").Should().Be(6, "dönüşüm yokken de TK_Oluşan noktalarında MK = 0.09 (DonusumGirdisi.VarsayilanMk)");
+        // SAHA-021: kadastro köşesiyle ortak 4 köşe yalnız kadastro grubunda (MK boş); 2 yeni köşe MK 0.09.
+        k.Count(w => w == "0.09").Should().Be(2, "dönüşüm yokken de TK_Oluşan noktalarında MK = 0.09 (DonusumGirdisi.VarsayilanMk)");
         k.Should().NotContain("-");
-        Kelimeler(d["RÖLÖVE ÖLÇÜ KROKİSİ.pdf"]).Count(w => w == "0.09").Should().Be(6);
+        Kelimeler(d["RÖLÖVE ÖLÇÜ KROKİSİ.pdf"]).Count(w => w == "0.09").Should().Be(2);
     }
 
     [Fact]
@@ -142,9 +144,9 @@ public sealed class Saha017FenKlasoruTests
         var metin = Metin(d["RÖLÖVE-1.pdf"]);
         var k = metin.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-        k.Count(w => w == "0.09").Should().Be(4, "RÖLÖVE-1: yalnız 101/1'in 4 köşesi TK_Oluşan (MK)");
+        k.Count(w => w == "0.09").Should().Be(2, "RÖLÖVE-1: 101/1'in kadastroyla çakışmayan 2 köşesi TK_Oluşan (MK) — SAHA-021");
         var b = Bosluksuz(metin);
-        var once = b.IndexOf("(DEPREMÖNCESİ)", StringComparison.Ordinal);
+        var once = b.IndexOf("(DEPREMÖNCESİ/ARŞİVONAYLI)", StringComparison.Ordinal);
         var sonra = b.IndexOf("(DEPREMSONRASI)", StringComparison.Ordinal);
         var onceBolum = b[once..sonra];
         foreach (var no in p.Parseller.Single(s => s.Rol == ParselRolu.Kadastro).NoktaNolari)
@@ -154,7 +156,7 @@ public sealed class Saha017FenKlasoruTests
         }
 
         var genel = Bosluksuz(Metin(d["RÖLÖVE ÖLÇÜ KROKİSİ.pdf"]));
-        var go = genel.IndexOf("(DEPREMÖNCESİ)", StringComparison.Ordinal);
+        var go = genel.IndexOf("(DEPREMÖNCESİ/ARŞİVONAYLI)", StringComparison.Ordinal);
         genel[go..genel.IndexOf("(DEPREMSONRASI)", StringComparison.Ordinal)].Should().Contain("NoktaNoYX").And.NotContain("MK", "Deprem Öncesi'nde MK sütunu yok");
     }
 
@@ -225,8 +227,8 @@ public sealed class Saha017FenKlasoruTests
     {
         var (svg, _) = FenKlasoruBelgeleri.HaritaSvg(await PaketAsync());
 
-        svg.Should().Contain("stroke=\"#6b6b6b\"").And.Contain("stroke-dasharray").And.Contain("<rect").And.Contain("fill=\"#ffffff\"").And.Contain(">YOL</text>");
-        System.Text.RegularExpressions.Regex.Matches(svg, ">YOL</text>").Count.Should().Be(1, "etiket tek kez basılır (PDF metni temiz)");
+        svg.Should().Contain("stroke=\"#6b6b6b\"").And.Contain("stroke-dasharray").And.Contain("<rect").And.Contain("fill=\"#ffffff\"").And.Contain(">Y1</text>");
+        System.Text.RegularExpressions.Regex.Matches(svg, ">Y1</text>").Count.Should().Be(1, "SAHA-021: yola terk etiketi Y1, tek kez basılır (PDF metni temiz)");
     }
 
     [Fact]

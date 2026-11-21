@@ -76,7 +76,7 @@ public sealed class Saha020ArsivNoktaTests
     {
         var (p, kayitlar) = await ArsivliPaketAsync(dns: true);
         var b = Bosluksuz(Metin(Ac(Uret(p))["KOORDİNE ÖZET.pdf"]));
-        var once = b.IndexOf("(DEPREMÖNCESİ)", StringComparison.Ordinal);
+        var once = b.IndexOf("(DEPREMÖNCESİ/ARŞİVONAYLI)", StringComparison.Ordinal);
         var sonra = b.IndexOf("(DEPREMSONRASI)", StringComparison.Ordinal);
         sonra.Should().BeGreaterThan(once).And.BeGreaterThan(-1);
         var onceBolum = b[once..sonra];
@@ -91,8 +91,9 @@ public sealed class Saha020ArsivNoktaTests
             var s = p.Koordinatlar.Single(k => k.NoktaNo == no);
             var satir = kayit.NoktaNo + F2(s.Y) + F2(s.X);
             sonraBolum.Should().Contain(satir, "Deprem Sonrası = arşiv no + ileri dönüşmüş Y, X");
-            // SORU-075 (SAHA-017 kararı): TK_Oluşan ile ortak köşe Oluşan grubunda da (MK 0.09) listelenir; kadastro satırı tam bir kez, MK boş.
-            (Say(sonraBolum, satir) - Say(sonraBolum, satir + "0.09")).Should().Be(1, "kadastro grubunda tek satır, MK boş");
+            // SAHA-021 (SORU-075 / SORU-078 kapandı): TK_Oluşan ile ortak köşe yalnız kadastro grubunda, tam bir kez ve MK boş.
+            Say(sonraBolum, satir).Should().Be(1, "ortak köşe iki kez yazılmaz");
+            Say(sonraBolum, satir + "0.09").Should().Be(0, "kadastro grubunda MK boş");
         }
 
         var ara = p.Parseller.Where(x => x.Rol != ParselRolu.Kadastro).SelectMany(x => x.NoktaNolari)
@@ -174,7 +175,7 @@ public sealed class Saha020ArsivNoktaTests
         p.Donusum!.IleriDonusum.Should().BeFalse();
 
         var b = Bosluksuz(Metin(Ac(Uret(p))["KOORDİNE ÖZET.pdf"]));
-        var onceBolum = b[b.IndexOf("(DEPREMÖNCESİ)", StringComparison.Ordinal)..b.IndexOf("(DEPREMSONRASI)", StringComparison.Ordinal)];
+        var onceBolum = b[b.IndexOf("(DEPREMÖNCESİ/ARŞİVONAYLI)", StringComparison.Ordinal)..b.IndexOf("(DEPREMSONRASI)", StringComparison.Ordinal)];
         foreach (var no in p.Parseller.Single(s => s.Rol == ParselRolu.Kadastro).NoktaNolari)
         {
             var aktif = p.Koordinatlar.Single(k => k.NoktaNo == no);

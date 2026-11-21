@@ -919,6 +919,13 @@
                       <Button x:Name="TakbiseAktarDugmesi" Content="TAKBİS'e Aktar" Command="{Binding TakbiseAktarCommand}"
                               IsVisible="{Binding WebtapuOnizlemesiVar}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                               Classes="Primary" Theme="{DynamicResource SolidButton}" />
+                      <!-- SAHA-021: etiketi boş veya 100'den küçük blokların yeni imar ada numarası (101/1, 102/1…) -->
+                      <Grid ColumnDefinitions="Auto,6,90" Margin="0,4,0,0">
+                        <TextBlock Text="Başlangıç Ada No" Classes="etiket" VerticalAlignment="Center"
+                                   ToolTip.Tip="Kroki bloğunun etiketi boş veya 100'den küçük bir sıra numarasıysa (1, 2…) yeni imar adaları bu numaradan başlar (101/1, 102/1…). 100 ve üzeri ada etiketleri aynen korunur." />
+                        <TextBox x:Name="KrokiBaslangicAdaNoKutusu" Grid.Column="2" Text="{Binding KrokiBaslangicAdaNo}" Watermark="101"
+                                 Classes.hatali="{Binding KrokiBaslangicAdaNoHatali}" HorizontalContentAlignment="Right" />
+                      </Grid>
                       <Button x:Name="KrokiNczYukleDugmesi" Content="📐 Yaklaşık Yer Krokisi (.NCZ) Yükle" Command="{Binding KrokiNczIsteCommand}"
                               HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,4,0,0"
                               ToolTip.Tip="Malik kullanım alanları krokisi; blok içinde bölme çizgileri ve malik yazıları varsa kesin alanlı parselasyon taslağı tuvalde çizilir, yoksa TAKBİS hisseleriyle Kroki satırları üretilir." />

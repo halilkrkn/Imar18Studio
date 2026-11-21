@@ -313,7 +313,7 @@ public sealed class FenKlasoruZipTests
             .And.Contain("ÖLÇEKKATSAYISI").And.Contain("DÖNÜKLÜK").And.Contain("ORTALAMAHATA").And.Contain("ORTAKNOKTALARINDÖNÜŞÜMSONRASIKOORDİNATLARI")
             .And.Contain("HATALAR").And.Contain("Vy").And.Contain("Vx").And.Contain("A=").And.Contain("CY=").And.Contain("CX=")
             .And.Contain("Noktano").And.Contain("DönüşecekY").And.Contain("DönüşmüşX");
-        M("KOORDİNE ÖZET.pdf").Should().Contain("ITRF-96KOORDİNEÖZET(DEPREMÖNCESİ)").And.Contain("ITRF-96KOORDİNEÖZET(DEPREMSONRASI)")
+        M("KOORDİNE ÖZET.pdf").Should().Contain("ITRF-96KOORDİNEÖZET(DEPREMÖNCESİ/ARŞİVONAYLI)").And.Contain("ITRF-96KOORDİNEÖZET(DEPREMSONRASI)")
             .And.Contain("NoktaNoYXMK");
         M("ALAN HESABI.pdf").Should().Contain("DENGELEMEALANHESABI").And.Contain("AdaParselAlanDüzeltmeDeng.AlanPafta").And.Contain("TOPLAM")
             .And.Contain("TapuAlanı").And.Contain("HESAPLANAN").And.Contain("FARK").And.Contain("TECVİZ")
@@ -335,7 +335,7 @@ public sealed class FenKlasoruZipTests
         M("TESCİL SAYFASI-1.pdf").Should().Contain("TESCİLSAYFASI").And.Contain("PAFTANO:N99-X-01").And.Contain("SAYFANO:1").And.Contain("ADANO:101")
             .And.Contain("CltSyfParNoHe.M2Dm2CinsiHisseKAdaKParCiltSyf.MalikiBabası").And.Contain("ARSA");
         M("RÖLÖVE ÖLÇÜ KROKİSİ.pdf").Should().Contain("EK-17/FR.521").And.Contain("ID:99999").And.Contain("Datum:ITRF-96")
-            .And.Contain("(DEPREMÖNCESİ)").And.Contain("(DEPREMSONRASI)").And.Contain("DÜZENLEYEN").And.Contain("UYGUNDUR")
+            .And.Contain("(DEPREMÖNCESİ/ARŞİVONAYLI)").And.Contain("(DEPREMSONRASI)").And.Contain("DÜZENLEYEN").And.Contain("UYGUNDUR")
             .And.Contain("KONTROLEDEN").And.Contain("ONAYLAYAN").And.Contain("KADASTROMÜDÜRLÜĞÜ").And.Contain("ADA/PARSELNO");
         M("PARSELASYON HARİTASI.pdf").Should().Contain("PARSELASYONHARİTASI").And.Contain("Ölçek1/").And.Contain("İliSENTETİKİL")
             .And.Contain("DÜZENLEYEN").And.Contain("UYGUNDUR").And.Contain("KONTROLEDİLMİŞTİR");
@@ -480,13 +480,13 @@ public sealed class FenKlasoruZipTests
         var no = p.Koordinatlar.Single(k => k.Y == sonY && k.X == sonX).NoktaNo;
         p.Donusum!.DepremOncesi.Single(k => k.NoktaNo == no).Should().Be(new KoordinatSatiri(no, OrnekProje.Y0, OrnekProje.X0));
         var koordine = M("KOORDİNE ÖZET.pdf");
-        koordine.Should().Contain("ITRF-96KOORDİNEÖZET(DEPREMÖNCESİ)").And.Contain("ITRF-96KOORDİNEÖZET(DEPREMSONRASI)")
+        koordine.Should().Contain("ITRF-96KOORDİNEÖZET(DEPREMÖNCESİ/ARŞİVONAYLI)").And.Contain("ITRF-96KOORDİNEÖZET(DEPREMSONRASI)")
             .And.Contain(F2(OrnekProje.Y0)).And.Contain(F2(sonY)).And.Contain(F2(sonX));
-        var onceIdx = koordine.IndexOf("(DEPREMÖNCESİ)", StringComparison.Ordinal);
+        var onceIdx = koordine.IndexOf("(DEPREMÖNCESİ/ARŞİVONAYLI)", StringComparison.Ordinal);
         var sonraIdx = koordine.IndexOf("(DEPREMSONRASI)", StringComparison.Ordinal);
         koordine.IndexOf(F2(OrnekProje.X0), onceIdx, StringComparison.Ordinal).Should().BeLessThan(sonraIdx, "orijinal koordinat Deprem Öncesi bölümünde");
         koordine.IndexOf(F2(sonX), sonraIdx, StringComparison.Ordinal).Should().BeGreaterThan(sonraIdx, "dönüşmüş koordinat Deprem Sonrası bölümünde");
-        M("RÖLÖVE ÖLÇÜ KROKİSİ.pdf").Should().Contain("(DEPREMÖNCESİ)").And.Contain("(DEPREMSONRASI)").And.Contain(F2(sonX)).And.Contain(F2(OrnekProje.X0));
+        M("RÖLÖVE ÖLÇÜ KROKİSİ.pdf").Should().Contain("(DEPREMÖNCESİ/ARŞİVONAYLI)").And.Contain("(DEPREMSONRASI)").And.Contain(F2(sonX)).And.Contain(F2(OrnekProje.X0));
     }
 
     [Fact]
@@ -636,7 +636,7 @@ public sealed class FenKlasoruZipTests
         var (svg, olcek) = FenKlasoruBelgeleri.HaritaSvg(await PaketAsync());
 
         olcek.Should().Be(100, "20 m × 10 m çizim 250 × 120 mm alana 1/100'de sığar");
-        svg.Should().Contain("stroke-dasharray").And.Contain(">K</text>").And.Contain("Y=").And.Contain("X=").And.Contain("101/1");
+        svg.Should().Contain("stroke-dasharray").And.Contain(">K</text>").And.Contain("Y=").And.Contain("X=").And.Contain(">101</text>").And.NotContain("101/1");
     }
 
     [Fact]

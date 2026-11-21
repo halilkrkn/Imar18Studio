@@ -75,22 +75,27 @@ public static class ArsivNoktalari
     {
         ArgumentNullException.ThrowIfNull(belge);
         ArgumentNullException.ThrowIfNull(cadNoktalari);
-        var mevcut = new Dictionary<GeodeticPoint, ArsivNoktaKaydi>();
-        foreach (var k in belge.ArsivKadastroNoktalari)
-        {
-            mevcut.TryAdd(k.Kose, k);
-        }
+        var koseler = Koseler(belge);
+        var korunan = KayitliEslesme(belge.ArsivKadastroNoktalari, koseler);
 
         // Reviewer O5: yalnız geçerli nokta no biçimindeki adlar (Uygula'da reddedilecek varsayılan üretilmez).
         var adli = cadNoktalari.Where(n => NoktaNoGecerli(n.Name)).ToList();
-        var kullanilan = new HashSet<string>(StringComparer.Ordinal);
+        var kullanilan = korunan.Values.Select(k => k.NoktaNo).ToHashSet(StringComparer.Ordinal);
         var sonuc = new List<ArsivNoktaKaydi>();
-        foreach (var k in Koseler(belge))
+        foreach (var k in koseler)
         {
-            if (mevcut.TryGetValue(k.Kose, out var kayit))
+            if (korunan.TryGetValue(k.Sira, out var kayit))
             {
-                sonuc.Add(kayit with { Sira = k.Sira, KadastroParselId = k.KadastroParselId });
-                kullanilan.Add(kayit.NoktaNo);
+                // SAHA-021: mühendisin kayıtlı arşiv no'su ve arşiv Y, X'i hiçbir zaman CAD / sıra varsayılanıyla ezilmez; köşe ≤ 0.02 m
+                // kaydıysa (CAD yeniden yüklendi) eşleme anahtarı yeni köşeye taşınır.
+                // Reviewer O2: mühendisin girmediği (anahtarla ≤ 1 mm aynı) varsayılan arşiv Y, X de yeni köşeye taşınır — elle ters
+                // kipte "girilmemiş" ayrımı bozulmaz; girilmiş arşiv Y, X aynen kalır.
+                var girilmemis = Uzaklik(new GeodeticPoint(kayit.ArsivX, kayit.ArsivY), kayit.Kose) <= AyniKoordinatToleransiM;
+                sonuc.Add(kayit with
+                {
+                    Sira = k.Sira, KadastroParselId = k.KadastroParselId, KoseY = k.Kose.Y, KoseX = k.Kose.X,
+                    ArsivY = girilmemis ? k.Kose.Y : kayit.ArsivY, ArsivX = girilmemis ? k.Kose.X : kayit.ArsivX,
+                });
                 continue;
             }
 
@@ -109,6 +114,46 @@ public static class ArsivNoktalari
         }
 
         return sonuc.AsReadOnly();
+    }
+
+    /// <summary>
+    /// SAHA-021: kayıtlı arşiv noktalarının köşelere eşlemesi (köşe sırası → kayıt). Önce eşleme anahtarı birebir aynı köşe, kalanlar
+    /// <see cref="CakismaToleransiM"/> içindeki en yakın köşe (en yakın çiftler önce; her kayıt ve köşe bir kez).
+    /// </summary>
+    public static IReadOnlyDictionary<int, ArsivNoktaKaydi> KayitliEslesme(IReadOnlyList<ArsivNoktaKaydi> kayitlar, IReadOnlyList<KadastroKosesi> koseler)
+    {
+        ArgumentNullException.ThrowIfNull(kayitlar);
+        ArgumentNullException.ThrowIfNull(koseler);
+        var sonuc = new Dictionary<int, ArsivNoktaKaydi>();
+        var kullanilan = new HashSet<ArsivNoktaKaydi>();
+        var anahtar = new Dictionary<GeodeticPoint, ArsivNoktaKaydi>();
+        foreach (var k in kayitlar)
+        {
+            anahtar.TryAdd(k.Kose, k);
+        }
+
+        foreach (var k in koseler)
+        {
+            if (anahtar.TryGetValue(k.Kose, out var kayit) && kullanilan.Add(kayit))
+            {
+                sonuc[k.Sira] = kayit;
+            }
+        }
+
+        var adaylar = koseler.Where(k => !sonuc.ContainsKey(k.Sira))
+            .SelectMany(k => kayitlar.Where(r => !kullanilan.Contains(r)).Select(r => (Kose: k, Kayit: r, Uzaklik: Uzaklik(k.Kose, r.Kose))))
+            .Where(x => x.Uzaklik <= CakismaToleransiM)
+            .OrderBy(x => x.Uzaklik).ThenBy(x => x.Kose.Sira).ThenBy(x => x.Kayit.Sira)
+            .ToList();
+        foreach (var (k, kayit, _) in adaylar)
+        {
+            if (!sonuc.ContainsKey(k.Sira) && kullanilan.Add(kayit))
+            {
+                sonuc[k.Sira] = kayit;
+            }
+        }
+
+        return sonuc;
     }
 
     /// <summary>

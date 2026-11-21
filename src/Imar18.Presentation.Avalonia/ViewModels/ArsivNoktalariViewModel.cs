@@ -47,14 +47,46 @@ public sealed partial class ArsivNoktaSatirVm : ObservableObject
 
     public bool NoHatali => !ArsivNoktalari.NoktaNoGecerli(NoktaNo.Trim());
 
-    partial void OnNoktaNoChanged(string value) => OnPropertyChanged(nameof(NoHatali));
+    private bool _yukleniyor;
 
-    internal void Yukle(ArsivNoktaKaydi k)
+    /// <summary>
+    /// SAHA-021: mühendis bu satırda projeye henüz uygulanmamış değişiklik yaptı (elle veya toplu yapıştır / <c>.NCN</c>). Satırlar
+    /// yeniden kurulurken (CAD yeniden yüklendi) bu değerler varsayılan numara / köşe koordinatıyla ezilmez.
+    /// </summary>
+    internal bool Duzenlendi { get; set; }
+
+    partial void OnNoktaNoChanged(string value)
     {
-        NoktaNo = k.NoktaNo;
+        OnPropertyChanged(nameof(NoHatali));
+        Duzenlendi |= !_yukleniyor;
+    }
+
+    partial void OnArsivYChanged(string value) => Duzenlendi |= !_yukleniyor;
+
+    partial void OnArsivXChanged(string value) => Duzenlendi |= !_yukleniyor;
+
+    internal void Yukle(ArsivNoktaKaydi k, bool duzenleme = false)
+    {
         // Reviewer: tam hassasiyet (köşe 6+ ondalık taşıyabilir; yuvarlanırsa "girilmemiş varsayılan" ayrımı bozulmasın).
-        ArsivY = k.ArsivY.ToString("0.00##########", CultureInfo.InvariantCulture);
-        ArsivX = k.ArsivX.ToString("0.00##########", CultureInfo.InvariantCulture);
+        Yukle(k.NoktaNo, k.ArsivY.ToString("0.00##########", CultureInfo.InvariantCulture), k.ArsivX.ToString("0.00##########", CultureInfo.InvariantCulture), duzenleme);
+    }
+
+    /// <summary>Metin değerlerini olduğu gibi yükler (kaydedilmemiş düzenleme korunurken kullanıcının yazdığı metin değişmez).</summary>
+    internal void Yukle(string noktaNo, string arsivY, string arsivX, bool duzenleme)
+    {
+        _yukleniyor = true;
+        try
+        {
+            NoktaNo = noktaNo;
+            ArsivY = arsivY;
+            ArsivX = arsivX;
+        }
+        finally
+        {
+            _yukleniyor = false;
+        }
+
+        Duzenlendi = duzenleme;
     }
 }
 
@@ -116,10 +148,12 @@ public sealed partial class ArsivNoktalariViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Satırları projeden kurar. <paramref name="zorla"/> false ise köşe listesi değişmediyse kaydedilmemiş düzenlemeler korunur
-    /// (her proje komutundan sonra çağrılır).
+    /// Satırları projeden kurar. <paramref name="zorla"/> false ise köşe listesi değişmediyse satırlara dokunulmaz (her proje
+    /// komutundan sonra çağrılır). SAHA-021: satırlar yeniden kurulsa da (<paramref name="zorla"/> veya köşe listesi değişti) mühendisin
+    /// kaydedilmemiş düzenlemeleri aynı (≤ 0.02 m) köşede korunur; yalnız <paramref name="duzenlemeleriKoru"/> false (Kaldır / Sıfırla)
+    /// iken bırakılır. Kayıtlı arşiv noktaları <see cref="ArsivNoktalari.Varsayilan"/> ile her zaman korunur.
     /// </summary>
-    public void Yenile(bool zorla = false)
+    public void Yenile(bool zorla = false, bool duzenlemeleriKoru = true)
     {
         var b = _alan.Yol.Belge;
         var koseler = ArsivNoktalari.Koseler(b);
@@ -130,6 +164,7 @@ public sealed partial class ArsivNoktalariViewModel : ObservableObject
             return;
         }
 
+        var duzenlenen = duzenlemeleriKoru ? Satirlar.Where(s => s.Duzenlendi).ToList() : [];
         foreach (var s in Satirlar)
         {
             s.PropertyChanged -= SatirDegisti;
@@ -140,7 +175,25 @@ public sealed partial class ArsivNoktalariViewModel : ObservableObject
         foreach (var k in koseler)
         {
             var s = new ArsivNoktaSatirVm(k);
-            s.Yukle(varsayilan[k.Sira]);
+            var onceki = duzenlenen.Where(d => ArsivNoktalari.Uzaklik(d.Kose.Kose, k.Kose) <= ArsivNoktalari.CakismaToleransiM)
+                .OrderBy(d => ArsivNoktalari.Uzaklik(d.Kose.Kose, k.Kose)).FirstOrDefault();
+            if (onceki is not null)
+            {
+                duzenlenen.Remove(onceki);
+
+                // Reviewer O2: köşe kaydıysa ve arşiv Y, X eski köşenin kendisiyse (≤ 1 mm; mühendis girmedi) yeni köşe koordinatı alınır.
+                var girilmemis = SayiGirdiAyristirici.TryParseDecimal(onceki.ArsivY, out var y) && SayiGirdiAyristirici.TryParseDecimal(onceki.ArsivX, out var x)
+                    && ArsivNoktalari.Uzaklik(new GeodeticPoint(x, y), onceki.Kose.Kose) <= ArsivNoktalari.AyniKoordinatToleransiM;
+                var (ay, ax) = girilmemis && onceki.Kose.Kose != k.Kose
+                    ? (k.Kose.Y.ToString("0.00##########", CultureInfo.InvariantCulture), k.Kose.X.ToString("0.00##########", CultureInfo.InvariantCulture))
+                    : (onceki.ArsivY, onceki.ArsivX);
+                s.Yukle(onceki.NoktaNo, ay, ax, duzenleme: true);
+            }
+            else
+            {
+                s.Yukle(varsayilan[k.Sira]);
+            }
+
             s.PropertyChanged += SatirDegisti;
             Satirlar.Add(s);
         }
@@ -156,7 +209,7 @@ public sealed partial class ArsivNoktalariViewModel : ObservableObject
     {
         _cadNoktalari = [];
         TopluMetin = string.Empty;
-        Yenile(zorla: true);
+        Yenile(zorla: true, duzenlemeleriKoru: false);
     }
 
     private bool Bos() => !IsBusy && Satirlar.Count > 0;
@@ -210,7 +263,8 @@ public sealed partial class ArsivNoktalariViewModel : ObservableObject
         var sonuc = ArsivNoktalari.TopluAktar(mevcut, girdiler);
         for (var i = 0; i < Satirlar.Count; i++)
         {
-            Satirlar[i].Yukle(sonuc.Kayitlar[i]);
+            // SAHA-021: aktarılan satır kaydedilmemiş düzenlemedir (CAD yeniden yüklense de korunur).
+            Satirlar[i].Yukle(sonuc.Kayitlar[i], duzenleme: Satirlar[i].Duzenlendi || sonuc.Kayitlar[i] != mevcut[i]);
         }
 
         var notlar = new List<string>(hatalar.Take(5));
@@ -246,6 +300,11 @@ public sealed partial class ArsivNoktalariViewModel : ObservableObject
             }
 
             Hata = string.Empty;
+            foreach (var s in Satirlar)
+            {
+                s.Duzenlendi = false; // projeye yazıldı; artık Varsayilan kayıtlı değeri korur
+            }
+
             DurumuYaz();
             Durum = string.Create(CultureInfo.InvariantCulture,
                 $"✅ {kayitlar.Count} arşiv onaylı kadastro noktası projeye kaydedildi; KOORDİNE ÖZET, RÖLÖVE ve ALAN HESABI bu numaralarla basılır.");
@@ -276,7 +335,7 @@ public sealed partial class ArsivNoktalariViewModel : ObservableObject
             IsBusy = false;
         }
 
-        Yenile(zorla: true);
+        Yenile(zorla: true, duzenlemeleriKoru: false);
         Durum = "Arşiv noktaları kaldırıldı; çıktılarda otomatik nokta numaraları basılır.";
         Uygulandi?.Invoke(this, EventArgs.Empty);
     }
