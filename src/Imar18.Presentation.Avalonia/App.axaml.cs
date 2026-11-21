@@ -1,5 +1,7 @@
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
+using Avalonia.Controls;
 using Imar18.Presentation.Avalonia.ViewModels;
 using Imar18.Presentation.Avalonia.Views;
 
@@ -20,9 +22,46 @@ public sealed partial class App : global::Avalonia.Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && MainViewModelFactory is not null)
         {
-            desktop.MainWindow = new MainWindow { DataContext = MainViewModelFactory() };
+            // SAHA-018: önce açılış ekranı; ana pencere kurulurken ilerleme güncellenir (en az ~1,2 sn akıcı geçiş).
+            var splash = new SplashWindow();
+            desktop.MainWindow = splash;
+            splash.Show();
+            _ = AcilisAsync(desktop, splash);
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static async Task AcilisAsync(IClassicDesktopStyleApplicationLifetime desktop, SplashWindow splash)
+    {
+        var onceki = desktop.ShutdownMode;
+        desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        try
+        {
+            var adimlar = SplashWindow.DurumAdimlari;
+            splash.Ilerle(adimlar[0], 0);
+            await splash.IlerleAsync(35, 400);
+
+            splash.Ilerle(adimlar[1], 35);
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render); // açılış ekranı boyansın
+            var vm = MainViewModelFactory!();
+            await splash.IlerleAsync(70, 400);
+
+            splash.Ilerle(adimlar[2], 70);
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
+            var mainWindow = new MainWindow { DataContext = vm };
+            await splash.IlerleAsync(100, 400);
+
+            desktop.MainWindow = mainWindow;
+            mainWindow.Show();
+            splash.Close();
+            desktop.ShutdownMode = onceki;
+        }
+        catch (Exception)
+        {
+            splash.Close();
+            desktop.Shutdown(1);
+            throw;
+        }
     }
 }
