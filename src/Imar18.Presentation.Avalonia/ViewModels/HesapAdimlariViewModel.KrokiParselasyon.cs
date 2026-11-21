@@ -20,7 +20,9 @@ namespace Imar18.Presentation.Avalonia.ViewModels;
 /// (reviewer M3); uygulanmış katman, proje parselleri artık o kodları taşımıyorsa kalkar ve alanları her yenilemede projeden hesaplanır.
 /// SAHA-016: önizleme kartı her parselin <b>Müstakil (TAM)</b> / <b>Müşterek (pay/payda + hissedarlar)</b> dağılımını
 /// (<see cref="KrokiParselDagilimi"/>), tuval etiketleri <c>TAM</c> / <c>Müşterek</c> durumunu gösterir; onaydan sonra dağılım
-/// uygulanan parselasyon için kalır.
+/// uygulanan parselasyon için kalır. SAHA-019: <b>✏️ Müşterek Dağıtımı Düzenle</b> paneliyle mühendis dağılımı elle düzenleyip
+/// önizlemeye uygulayabilir (<see cref="KrokiDagilimDuzenleyici"/>); onay bu düzenlenmiş dağılımı (Kroki satırları + hak eşleştirmesi)
+/// projeye yazar. <b>🔄 Otomatik Dağıtıma Dön</b> otomatik sonuca geri döner.
 /// </summary>
 public sealed partial class HesapAdimlariViewModel
 {
@@ -28,6 +30,10 @@ public sealed partial class HesapAdimlariViewModel
     private RevisionId? _parselasyonRevizyonu;
     private IReadOnlyDictionary<string, (string Malik, string Durum)>? _onayliMalikler;
     private bool _onaylaniyor;
+
+    /// <summary>SAHA-019 (reviewer O3): düzenleme panelinde önizlemeye uygulanmamış değişiklik varken onay reddi.</summary>
+    public const string MusterekBekleyenDuzenlemeUyarisi =
+        "Müşterek dağılım panelinde önizlemeye uygulanmamış değişiklik var; önce \"✅ Düzenlemeyi Önizlemeye Uygula\" veya \"🔄 Otomatik Dağıtıma Dön\" deyin.";
 
     /// <summary>Tuvalde çizilecek parselasyon katmanı (taslak veya uygulanmış; yoksa null). Ana pencere tuvale aktarır.</summary>
     [ObservableProperty]
@@ -62,6 +68,13 @@ public sealed partial class HesapAdimlariViewModel
     {
         if (_parselasyonOnizleme is not { } o || _parselasyonRevizyonu is not { } revizyon || IsBusy)
         {
+            return;
+        }
+
+        if (MusterekBekleyenDuzenlemeVar())
+        {
+            DurumMetni = KrokiHatasi = MusterekBekleyenDuzenlemeUyarisi;
+            MusterekDurumu = "⚠ " + MusterekBekleyenDuzenlemeUyarisi;
             return;
         }
 
@@ -124,10 +137,18 @@ public sealed partial class HesapAdimlariViewModel
         DurumMetni = "Parselasyon taslağı iptal edildi; proje geometrisi değişmedi.";
     }
 
-    /// <summary>Taslağı önizleme kartına, uyarılara ve tuval katmanına yükler (proje değişmez).</summary>
-    private void ParselasyonTaslaginiGoster(KrokiParselasyonOnizleme o)
+    /// <summary>
+    /// Taslağı önizleme kartına, uyarılara ve tuval katmanına yükler (proje değişmez). <paramref name="otomatik"/>: motorun yeni ürettiği
+    /// taslak (SAHA-019 düzenleme durumu bu taslaktan kurulur); false ise elle düzenlenmiş / otomatiğe dönülen taslak gösterilir.
+    /// </summary>
+    private void ParselasyonTaslaginiGoster(KrokiParselasyonOnizleme o, bool otomatik = true)
     {
         _parselasyonOnizleme = o;
+        if (otomatik)
+        {
+            MusterekOtomatikAyarla(o);
+        }
+
         KrokiOzeti = "📐 Parselasyon taslağı: " + o.Ozet();
         KrokiUyarilari.Clear();
         foreach (var u in o.Uyarilar)
@@ -159,6 +180,7 @@ public sealed partial class HesapAdimlariViewModel
 
         _parselasyonOnizleme = null;
         _parselasyonRevizyonu = null;
+        MusterekOtomatikAyarla(null);
         KrokiParselasyonOzeti = string.Empty;
         ParselasyonKatmani = null;
         DagilimiGoster([]);
@@ -261,6 +283,7 @@ public sealed partial class HesapAdimlariViewModel
         _parselasyonOnizleme = null;
         _parselasyonRevizyonu = null;
         _onayliMalikler = null;
+        MusterekOtomatikAyarla(null);
         ParselasyonKatmani = null;
         KrokiParselasyonOzeti = string.Empty;
         DagilimiGoster([]);

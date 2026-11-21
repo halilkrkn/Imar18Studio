@@ -8,7 +8,8 @@ namespace Imar18.Infrastructure.Cad.Ncz;
 
 /// <summary>
 /// Birincil Netcad 8.5 <c>.NCZ</c> okuyucusu (spec 2.1, D14, P4.0 spike). Katman tablosunu, poligon/coklu cizgi (tip 7; acik
-/// bolme cizgileri dahil) ve SAHA-015'ten itibaren standart (<c>0x15</c>) tip 5 yazi varliklarini okur; diger varliklar atlanip
+/// bolme cizgileri dahil), SAHA-015'ten itibaren standart (<c>0x15</c>) tip 5 yazi ve SAHA-020'den itibaren tip 1 nokta (ad + konum;
+/// arsiv nokta no eslemesi) varliklarini okur; diger varliklar atlanip
 /// sayilir. Gomulu <c>&lt;NetmapManager&gt;</c> XML ust verisi (kisi/kurum/adres alanlari) ve PNG onizleme hic ayristirilmaz
 /// (KVKK, AC-PILOT-08); yazi metni (malik adi olabilir) yalniz bellekte tasinir, hata mesajina yazilmaz.
 /// Ikili yerlesim: docs/spikes/P4.0_NCZ_Fizibilite_Raporu.md §2, docs/spikes/P7.3_NCZ_Yazici_Spike.md §2.4.
@@ -73,6 +74,7 @@ internal static class NczParser
     private const byte ViewRecordB = 0x1D; // gorunum/kapsam kaydi (P4.0 gozlem)
     internal const byte PolylineType = 7;
     internal const byte TextType = 5;
+    internal const byte PointType = 1;
     private const int CancellationCheckInterval = 256;
 
     // ---- Tip 5 yazi yuku (P7.3 spike §2.4; yalniz 0x15 kayit, yuk = 93 + metin uzunlugu) ----
@@ -80,6 +82,11 @@ internal static class NczParser
     internal const int TextBoundsOffset = 45;
     internal const int TextLengthOffset = 92;
     internal const int TextFixedSize = 93;
+
+    // ---- Tip 1 nokta yuku (P7.3 spike §2.2; 104 bayt: konum 3..18, 15 baytlik Pascal ad 81..95, kot 96..103) ----
+    internal const int PointNameOffset = 81;
+    internal const int PointNameSize = 15;
+    internal const int PointMinSize = PointNameOffset + PointNameSize;
 
     /// <summary>Ekleme noktasının yazı sınır kutusu dışında kalabileceği pay (m; float yuvarlaması, uygulama eşiği).</summary>
     private const decimal KutuPayiM = 0.5m;
@@ -153,6 +160,7 @@ internal static class NczParser
 
         var polylines = new List<CadPolyline>();
         var texts = new List<CadText>();
+        var points = new List<CadPoint>();
         var gate = new CadNormalizationGate("NCZ");
         var skipped = 0;
         var unrecognized = 0;
@@ -211,6 +219,21 @@ internal static class NczParser
                 continue;
             }
 
+            if (payload[0] == PointType)
+            {
+                // SAHA-020: nokta (ör. arsiv nokta no) yardimci veridir; cozulemeyen nokta dosyayi dusurmez, atlanan sayilir.
+                if (ReadPoint(payload, layers) is { } point)
+                {
+                    points.Add(point);
+                }
+                else
+                {
+                    skipped++;
+                }
+
+                continue;
+            }
+
             if (payload[0] != PolylineType)
             {
                 skipped++;
@@ -236,7 +259,10 @@ internal static class NczParser
             skipped,
             unrecognized,
             gate.OffGridVertexCount,
-            gate.Warnings()));
+            gate.Warnings())
+        {
+            Points = points.AsReadOnly(),
+        });
     }
 
     private static string? ReadLayers(ReadOnlySpan<byte> data, int tableOffset, int declaredEnd, out IReadOnlyList<CadLayer> layers)
@@ -394,6 +420,27 @@ internal static class NczParser
 
         var text = Turkish.GetString(p.Slice(TextFixedSize, p[TextLengthOffset])).Trim();
         return new CadText(layers[layerIndex].Name, text, position) { Merkez = merkez };
+    }
+
+    /// <summary>
+    /// SAHA-020: tip 1 nokta kaydi (spike §2.2). Yuk en az 96 bayt olmali; katman indeksi (ofset 30) aralikta, konum (3..18: Kuzey,
+    /// Dogu) sonlu ve 81'deki 15 baytlik Pascal ad gecerli olmali — aksi halde null (kayit atlanir). Ad bas/son boslugundan arindirilir.
+    /// </summary>
+    private static CadPoint? ReadPoint(ReadOnlySpan<byte> p, IReadOnlyList<CadLayer> layers)
+    {
+        if (p.Length < PointMinSize)
+        {
+            return null;
+        }
+
+        int layerIndex = BinaryPrimitives.ReadInt16LittleEndian(p[PolylineLayerOffset..]);
+        if (layerIndex < 0 || layerIndex >= layers.Count || !TryReadPoint(p[TextInsertionOffset..], out var position)
+            || ReadPascal(p.Slice(PointNameOffset, PointNameSize)) is not { } name)
+        {
+            return null;
+        }
+
+        return new CadPoint(layers[layerIndex].Name, name.Trim(), position);
     }
 
     /// <summary>(Kuzey, Dogu) <c>double</c> ciftini jeodezik noktaya cevirir (X = Kuzey, Y = Dogu); sonlu degilse false.</summary>

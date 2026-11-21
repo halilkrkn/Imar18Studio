@@ -155,6 +155,19 @@ public sealed record CiktiPaketi(
     /// korur ve şablon kayıtlarını bu katsayılarla (<see cref="DonusumKatsayilari.Uygula"/>) Deprem Sonrası'na taşır (iskelet moduna düşülmez).
     /// </summary>
     public DonusumKatsayilari? NczSablonIleriDonusumu { get; init; }
+
+    /// <summary>
+    /// SAHA-020: nokta no → basılacak nokta adı. Arşiv noktası verilmişse kadastro köşeleri mühendisin arşiv nokta no'sunu, diğer
+    /// (TK_Oluşan) noktalar sıralı <c>1, 2, 3…</c> numarayı taşır; arşiv noktası yoksa boştur ve iç nokta no basılır.
+    /// </summary>
+    public IReadOnlyDictionary<int, string> NoktaAdlari { get; init; } = new Dictionary<int, string>();
+
+    /// <summary>SAHA-020: arşiv noktası eşlenen kadastro köşelerinin arşiv onaylı (Deprem Öncesi) koordinatı (nokta no → Y, X).</summary>
+    public IReadOnlyDictionary<int, KoordinatSatiri> ArsivKoordinatlari { get; init; } = new Dictionary<int, KoordinatSatiri>();
+
+    /// <summary>SAHA-020: basılacak nokta adı (arşiv no, sıralı yeni no veya iç nokta no).</summary>
+    public string NoktaAdi(int noktaNo) =>
+        NoktaAdlari.TryGetValue(noktaNo, out var ad) ? ad : noktaNo.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
 
 /// <summary>Taslak çıktı üreticisi (Infrastructure: ClosedXML, QuestPDF, CKS). Hata durumunda istisna yerine Result döner.</summary>

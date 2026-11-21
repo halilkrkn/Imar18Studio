@@ -212,7 +212,7 @@ public sealed class QuestPdfFenKlasoruUretici : ICiktiUretici
         Tablo(col.Item(), ["Nokta No", "Y (Sağa)", "X (Yukarı)"],
             p.Koordinatlar.Select(k => new[]
             {
-                k.NoktaNo.ToString(CultureInfo.InvariantCulture), k.Y.ToString("0.000", CultureInfo.InvariantCulture), k.X.ToString("0.000", CultureInfo.InvariantCulture),
+                p.NoktaAdi(k.NoktaNo), k.Y.ToString("0.000", CultureInfo.InvariantCulture), k.X.ToString("0.000", CultureInfo.InvariantCulture),
             }));
     });
 

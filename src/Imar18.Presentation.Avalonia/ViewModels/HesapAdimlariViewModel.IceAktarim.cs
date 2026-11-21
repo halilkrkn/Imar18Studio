@@ -513,6 +513,7 @@ public sealed partial class HesapAdimlariViewModel
         KrokiOnizlemesiniKaldirCommand.NotifyCanExecuteChanged();
         ParselasyonCiziminiOnaylaCommand.NotifyCanExecuteChanged();
         ParselasyonTaslaginiIptalEtCommand.NotifyCanExecuteChanged();
+        MusterekKomutlariniBildir();
         OnPropertyChanged(nameof(KrokiParselasyonTaslagiVar));
         OnPropertyChanged(nameof(KrokiEslestirmeOnizlemesiVar));
     }

@@ -61,6 +61,34 @@ internal sealed class NczSentetikDosya
         return this;
     }
 
+    /// <summary>
+    /// SAHA-020: gercek Netcad duzeninde tip 1 nokta kaydi (P7.3 spike §2.2, 104 bayt): 3..18 konum (Kuzey, Dogu), 30 int16 katman,
+    /// 45..76 sinir kutusu min = max = konum, 81 15 baytlik Pascal nokta adi, 96 double kot. <paramref name="boyut"/> kisa kayit icin.
+    /// </summary>
+    public NczSentetikDosya Nokta(int katman, string ad, (double Kuzey, double Dogu) konum, int boyut = 104)
+    {
+        var yuk = new byte[boyut];
+        yuk[0] = 1;
+        yuk[1] = 1;
+        yuk[2] = (byte)katman;
+        Double(yuk, 3, konum.Kuzey);
+        Double(yuk, 11, konum.Dogu);
+        BinaryPrimitives.WriteInt16LittleEndian(yuk.AsSpan(30), (short)katman);
+        if (boyut >= 104)
+        {
+            Double(yuk, 45, konum.Kuzey);
+            Double(yuk, 53, konum.Dogu);
+            Double(yuk, 61, konum.Kuzey);
+            Double(yuk, 69, konum.Dogu);
+            var b = Turkce.GetBytes(ad);
+            yuk[81] = (byte)b.Length;
+            b.CopyTo(yuk, 82);
+        }
+
+        _kayitlar.Add(Kayit(0x15, yuk));
+        return this;
+    }
+
     /// <summary>Yazi (tip 5) kaydi benzetimi: metin yukte duz durur (anonimlestiricide atlanmalidir).</summary>
     public NczSentetikDosya Yazi(int katman, string metin)
     {

@@ -632,6 +632,63 @@
                   </Expander>
                 </Border>
 
+                <!-- SAHA-020: Arşiv onaylı kadastro (TK_PARSEL) köşe nokta numaraları ve koordinatları (KOORDİNE ÖZET / RÖLÖVE / ALAN HESABI). -->
+                <Border x:Name="ArsivNoktalariKarti" Classes="kart" Padding="4" DataContext="{Binding Arsiv}"
+                        IsVisible="{Binding Converter={x:Static ObjectConverters.IsNotNull}}">
+                  <Expander Classes="bolum" IsExpanded="False" Header="📌 Arşiv Onaylı Kadastro Noktaları (TK_PARSEL)">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="Kadastro köşelerinin resmî arşiv nokta no'su ve arşiv onaylı Y, X'i. Yüklenen .NCZ'de köşeyle ≤ 0.02 m çakışan nokta adı varsayılan no'dur. Fen Klasörü KOORDİNE ÖZET (Deprem Öncesi / Sonrası), RÖLÖVE ve ALAN HESABI'na aynen basılır."
+                                 Classes="aciklama" TextWrapping="Wrap" />
+                      <SelectableTextBlock x:Name="ArsivDurumMetni" Text="{Binding Durum}" Classes="ozet" TextWrapping="Wrap"
+                                           IsVisible="{Binding Durum, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                      <StackPanel Spacing="2" IsVisible="{Binding SatirVar}">
+                        <Grid ColumnDefinitions="64,4,*,4,*,4,*">
+                          <TextBlock Text="Köşe #" Classes="etiket" />
+                          <TextBlock Grid.Column="2" Text="Arşiv Nokta No" Classes="etiket" />
+                          <TextBlock Grid.Column="4" Text="Arşiv Y" Classes="etiket" />
+                          <TextBlock Grid.Column="6" Text="Arşiv X" Classes="etiket" />
+                        </Grid>
+                        <ScrollViewer MaxHeight="260" HorizontalScrollBarVisibility="Disabled">
+                          <ItemsControl x:Name="ArsivNoktaTablosu" ItemsSource="{Binding Satirlar}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <Grid ColumnDefinitions="64,4,*,4,*,4,*" Margin="0,1">
+                                  <TextBlock Text="{Binding KoseEtiketi}" Classes="mono" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                             ToolTip.Tip="{Binding KadastroParselId, StringFormat='Kadastro parseli {0}'}" />
+                                  <TextBox Grid.Column="2" Classes="hucre" Classes.hatali="{Binding NoHatali}" Text="{Binding NoktaNo}" Watermark="2652001" />
+                                  <TextBox Grid.Column="4" Classes="hucre" Classes.hatali="{Binding YHatali}" Text="{Binding ArsivY}" g:SayiKutusu.Normalize="True" />
+                                  <TextBox Grid.Column="6" Classes="hucre" Classes.hatali="{Binding XHatali}" Text="{Binding ArsivX}" g:SayiKutusu.Normalize="True" />
+                                </Grid>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </ScrollViewer>
+                      </StackPanel>
+                      <Expander x:Name="ArsivTopluAlani" Classes="bolum" IsExpanded="False" Header="📋 Toplu Yapıştır / .NCN Yükle">
+                        <StackPanel Spacing="4">
+                          <TextBlock Text="Satır biçimi: NoktaNo Y X · NoktaNo;Y;X · Netcad .ncn (fazla kot/kod alanları yok sayılır). Satır, koordinatı ≤ 0.02 m olan köşeye, yoksa aynı nokta no'lu köşeye aktarılır. Ondalık ',' veya '.'."
+                                     Classes="aciklama" TextWrapping="Wrap" />
+                          <TextBox x:Name="ArsivTopluKutusu" Text="{Binding TopluMetin}" AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="80" MaxHeight="200"
+                                   FontFamily="Consolas, Menlo, monospace" FontSize="11" Watermark="2652001 500000.00 4000000.00" />
+                          <Grid ColumnDefinitions="*,6,*">
+                            <Button x:Name="ArsivTopluAktarDugmesi" Content="📋 Tabloya Aktar" Command="{Binding TopluAktarCommand}"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                            <Button x:Name="ArsivNcnYukleDugmesi" Grid.Column="2" Content="📂 .NCN Yükle" Command="{Binding NcnIsteCommand}"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                          </Grid>
+                        </StackPanel>
+                      </Expander>
+                      <SelectableTextBlock x:Name="ArsivHataMetni" Text="{Binding Hata}" Classes="hata" TextWrapping="Wrap"
+                                           IsVisible="{Binding Hata, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                      <Button x:Name="ArsivUygulaDugmesi" Content="📌 Arşiv Noktalarını Uygula" Command="{Binding UygulaCommand}"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="Primary" Theme="{DynamicResource SolidButton}"
+                              ToolTip.Tip="Arşiv nokta no ve Y, X'i projeye kaydeder (RevisionId'ye dahil; değişirse onay düşer)." />
+                      <Button x:Name="ArsivKaldirDugmesi" Content="✖ Arşiv Noktalarını Kaldır" Command="{Binding KaldirCommand}"
+                              IsVisible="{Binding KayitliVar}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                    </StackPanel>
+                  </Expander>
+                </Border>
+
                 <!-- Doğrulama sonucu: başarı (yeşil) veya hata/uyarı (rozetli, ikonlu) kartı -->
                 <Border x:Name="DogrulamaBasariKarti" Classes="kart basari" IsVisible="{Binding Wizard.DogrulamaBasarili}">
                   <Grid ColumnDefinitions="Auto,*">
@@ -889,9 +946,93 @@
                         </Grid>
                         <!-- SAHA-015: kroki parselasyon taslağı (tuvalde kesikli önizleme) → onay / iptal -->
                         <StackPanel x:Name="ParselasyonOnayPaneli" Spacing="4" IsVisible="{Binding KrokiParselasyonTaslagiVar}">
-                          <Button x:Name="ParselasyonOnaylaDugmesi" Content="✅ Parselasyon Çizimini Onayla ve Uygula" Command="{Binding ParselasyonCiziminiOnaylaCommand}"
-                                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="Primary" Theme="{DynamicResource SolidButton}"
-                                  ToolTip.Tip="Taslak parselleri projenin kesin TK_Oluşan parselleri yapar; Kroki satırlarını doldurur. 5. adım çıktıları bu çizimden üretilir." />
+                          <Grid ColumnDefinitions="*,6,Auto">
+                            <Button x:Name="ParselasyonOnaylaDugmesi" Content="✅ Parselasyon Çizimini Onayla ve Uygula" Command="{Binding ParselasyonCiziminiOnaylaCommand}"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="Primary" Theme="{DynamicResource SolidButton}"
+                                    ToolTip.Tip="Taslak parselleri projenin kesin TK_Oluşan parselleri yapar; Kroki satırlarını doldurur. 5. adım çıktıları bu çizimden üretilir." />
+                            <!-- SAHA-019: müşterek / müstakil dağılımı elle düzenleme -->
+                            <Button x:Name="MusterekDuzenleDugmesi" Grid.Column="2" Content="✏️ Müşterek Dağıtımı Düzenle" Command="{Binding MusterekDuzenleCommand}"
+                                    Classes="Warning" Theme="{DynamicResource SolidButton}"
+                                    ToolTip.Tip="Otomatik TAM / Müşterek dağıtımı beğenmezseniz hangi malikin hangi parselde kimle ve kaç m² olacağını düzenleyin." />
+                          </Grid>
+                          <Border x:Name="MusterekDuzenlemePaneli" Classes="kart" IsVisible="{Binding MusterekDuzenlemeAcik}" Margin="0,2">
+                            <StackPanel Spacing="4">
+                              <TextBlock Text="✏️ Müşterek / Müstakil Dağılım Düzenleme" Classes="bolum" />
+                              <TextBlock Text="Hak sahibi özeti (DOP sonrası dengelenmiş net hak) — fark 0.00 olunca yeşil." Classes="aciklama" TextWrapping="Wrap" />
+                              <Grid ColumnDefinitions="*,70,70,70" Margin="0,2,0,0">
+                                <TextBlock Text="Malik · Kadastro" Classes="etiket" />
+                                <TextBlock Grid.Column="1" Text="Net Hak (m²)" Classes="etiket" HorizontalAlignment="Right" />
+                                <TextBlock Grid.Column="2" Text="Dağıtılan" Classes="etiket" HorizontalAlignment="Right" />
+                                <TextBlock Grid.Column="3" Text="Kalan Fark" Classes="etiket" HorizontalAlignment="Right" />
+                              </Grid>
+                              <ItemsControl x:Name="MusterekHakOzetiListesi" ItemsSource="{Binding MusterekHakOzetleri}">
+                                <ItemsControl.ItemTemplate>
+                                  <DataTemplate>
+                                    <Grid ColumnDefinitions="*,70,70,70">
+                                      <TextBlock Text="{Binding Etiket}" TextTrimming="CharacterEllipsis" FontSize="11" />
+                                      <TextBlock Grid.Column="1" Text="{Binding NetHakMetni}" FontFamily="Consolas" FontSize="11" HorizontalAlignment="Right" />
+                                      <TextBlock Grid.Column="2" Text="{Binding DagitilanMetni}" FontFamily="Consolas" FontSize="11" HorizontalAlignment="Right" />
+                                      <TextBlock Grid.Column="3" Text="{Binding FarkMetni}" FontFamily="Consolas" FontSize="11" FontWeight="Bold" HorizontalAlignment="Right"
+                                                 Foreground="#16a34a" IsVisible="{Binding Dengeli}" />
+                                      <TextBlock Grid.Column="3" Text="{Binding FarkMetni}" FontFamily="Consolas" FontSize="11" FontWeight="Bold" HorizontalAlignment="Right"
+                                                 Foreground="#ea580c" IsVisible="{Binding !Dengeli}" />
+                                    </Grid>
+                                  </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                              </ItemsControl>
+                              <Grid ColumnDefinitions="62,4,*,4,70,4,62,4,26" Margin="0,4,0,0">
+                                <TextBlock Text="İmar Parseli" Classes="etiket" />
+                                <TextBlock Grid.Column="2" Text="Malik" Classes="etiket" />
+                                <TextBlock Grid.Column="4" Text="Kadastro Kaynağı" Classes="etiket" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="6" Text="Alan (m²)" Classes="etiket" />
+                              </Grid>
+                              <ItemsControl x:Name="MusterekSatirTablosu" ItemsSource="{Binding MusterekSatirlari}">
+                                <ItemsControl.ItemTemplate>
+                                  <DataTemplate>
+                                    <StackPanel Margin="0,1">
+                                      <Grid ColumnDefinitions="62,4,*,4,70,4,62,4,26">
+                                        <ComboBox ItemsSource="{Binding $parent[ItemsControl].DataContext.MusterekParselSecenekleri}" SelectedItem="{Binding ImarParseli}"
+                                                  HorizontalAlignment="Stretch" PlaceholderText="parsel" FontSize="11" />
+                                        <ComboBox Grid.Column="2" ItemsSource="{Binding $parent[ItemsControl].DataContext.MusterekMalikSecenekleri}" SelectedItem="{Binding Malik}"
+                                                  HorizontalAlignment="Stretch" PlaceholderText="malik" FontSize="11" />
+                                        <ComboBox Grid.Column="4" ItemsSource="{Binding KadastroSecenekleri}" SelectedItem="{Binding KadastroKaynagi}"
+                                                  HorizontalAlignment="Stretch" PlaceholderText="kaynak" FontSize="11" />
+                                        <TextBox Grid.Column="6" Classes="hucre" Classes.hatali="{Binding AlanHatali}"
+                                                 Text="{Binding AlanMetni}" g:SayiKutusu.Normalize="True" Watermark="0.00" />
+                                        <Button Grid.Column="8" Classes="satirSil" Content="✕" ToolTip.Tip="Hissedar satırını sil"
+                                                Command="{Binding $parent[ItemsControl].DataContext.MusterekSatirSilCommand}" CommandParameter="{Binding}" />
+                                      </Grid>
+                                      <SelectableTextBlock Text="{Binding Hata}" Classes="hata" TextWrapping="Wrap"
+                                                           IsVisible="{Binding AlanHatali}" />
+                                    </StackPanel>
+                                  </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                              </ItemsControl>
+                              <Button x:Name="MusterekSatirEkleDugmesi" Content="+ Hissedar Satırı Ekle" Command="{Binding MusterekSatirEkleCommand}"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                              <TextBlock Text="Parsel kontrolü (Parsel Alanı = Σ Hisseler)" Classes="etiket" Margin="0,2,0,0" />
+                              <ItemsControl x:Name="MusterekParselKontrolListesi" ItemsSource="{Binding MusterekParselKontrolleri}">
+                                <ItemsControl.ItemTemplate>
+                                  <DataTemplate>
+                                    <Panel>
+                                      <TextBlock Text="{Binding Metin}" FontFamily="Consolas" FontSize="11" Foreground="#16a34a" IsVisible="{Binding Dengeli}" TextWrapping="Wrap" />
+                                      <TextBlock Text="{Binding Metin}" FontFamily="Consolas" FontSize="11" Foreground="#dc2626" IsVisible="{Binding !Dengeli}" TextWrapping="Wrap" />
+                                    </Panel>
+                                  </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                              </ItemsControl>
+                              <SelectableTextBlock Text="{Binding MusterekDurumu}" Classes="ozet" TextWrapping="Wrap"
+                                                   IsVisible="{Binding MusterekDurumu, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                              <Grid ColumnDefinitions="*,6,*">
+                                <Button x:Name="MusterekUygulaDugmesi" Content="✅ Düzenlemeyi Önizlemeye Uygula" Command="{Binding MusterekDuzenlemeyiUygulaCommand}"
+                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="Primary" Theme="{DynamicResource SolidButton}"
+                                        ToolTip.Tip="Dağılımı taslağa yazar; TAM / Müşterek etiketleri ve tuval anında güncellenir. Projeye yazmak için ardından Parselasyon Çizimini Onaylayın." />
+                                <Button x:Name="OtomatikDagitimaDonDugmesi" Grid.Column="2" Content="🔄 Otomatik Dağıtıma Dön" Command="{Binding OtomatikDagitimaDonCommand}"
+                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                        ToolTip.Tip="Elle değişiklikleri iptal eder; otomatik müstakil / müşterek dağıtım sonucuna döner." />
+                              </Grid>
+                            </StackPanel>
+                          </Border>
                           <Button x:Name="ParselasyonIptalDugmesi" Content="✕ Taslağı İptal Et" Command="{Binding ParselasyonTaslaginiIptalEtCommand}"
                                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                   ToolTip.Tip="Önizleme çizimini tuvalden kaldırır; proje geometrisine dokunmaz." />

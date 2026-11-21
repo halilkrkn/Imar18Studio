@@ -81,6 +81,7 @@ public sealed record ProjeyiSifirlaKomutu : IProjeKomutu
             NczSablonu = null,
             IleriDonusum = null,
             DepremOncesiParseller = null,
+            ArsivKadastroNoktalari = [],
         });
     }
 }

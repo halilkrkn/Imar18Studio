@@ -55,6 +55,23 @@ public sealed class AtomikJsonProjeDeposuTests : IDisposable
     }
 
     [Fact]
+    public async Task AtomikKayit_Arsiv_Noktalari_Gidis_Donus_Korunmali_RevisionId_Ayni_Kalmali_Sifirla_Temizlemeli_SAHA_020()
+    {
+        var yol = await TamProjeyiDiskeYazAsync(new AtomikJsonProjeDeposu(Yol));
+        var bos = yol.Belge.RevizyonKimligi();
+        var arsiv = ArsivNoktalari.Varsayilan(yol.Belge, []).Select(k => k with { NoktaNo = "90100" + k.Sira, ArsivY = k.KoseY + 0.01m }).ToList();
+        (await yol.GonderAsync(new ArsivNoktalariAyarlaKomutu(arsiv), OrnekProje.Muhendis)).IsSuccess.Should().BeTrue();
+        yol.Belge.RevizyonKimligi().Should().NotBe(bos, "arşiv noktaları çıktıya basıldığından RevisionId'ye girer");
+
+        var yuklenen = (await new AtomikJsonProjeDeposu(Yol).YukleAsync()).Value;
+
+        yuklenen.Belge.ArsivKadastroNoktalari.Should().Equal(arsiv);
+        yuklenen.Belge.RevizyonKimligi().Should().Be(yol.Belge.RevizyonKimligi());
+        (await yol.GonderAsync(new ProjeyiSifirlaKomutu(), OrnekProje.Muhendis)).IsSuccess.Should().BeTrue();
+        (await new AtomikJsonProjeDeposu(Yol).YukleAsync()).Value.Belge.ArsivKadastroNoktalari.Should().BeEmpty("Projeyi Sıfırla temizler");
+    }
+
+    [Fact]
     public async Task AtomikKayit_Donusum_Ve_Kunye_Gidis_Donus_Korunmali_RevisionId_Ayni_Kalmali_P73_C2()
     {
         var yol = await TamProjeyiDiskeYazAsync(new AtomikJsonProjeDeposu(Yol));

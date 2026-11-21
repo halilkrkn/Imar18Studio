@@ -81,6 +81,9 @@ public sealed record KrokiParselasyonOnizleme(
     IReadOnlyList<KrokiFarki> Farklar,
     IReadOnlyList<string> Uyarilar)
 {
+    /// <summary>SAHA-019: müstakil / müşterek dağılım mühendis tarafından elle düzenlendi (<see cref="KrokiDagilimDuzenleyici"/>).</summary>
+    public bool ElleDuzenlendi { get; init; }
+
     /// <summary>Yeni parsellerin hedef alan toplamı (= bölünen blokların Gauss toplamı).</summary>
     public decimal ToplamAlanM2 => Parseller.Sum(p => p.HedefAlanM2);
 
@@ -92,7 +95,7 @@ public sealed record KrokiParselasyonOnizleme(
 
     /// <summary>Kısa özet: blok/parsel sayısı, alan toplamı, en büyük sapma ve müstakil/müşterek sayıları.</summary>
     public string Ozet() => string.Create(CultureInfo.InvariantCulture,
-        $"{BolunenBloklar.Count} blok · {Parseller.Count} parsel · Σ {ToplamAlanM2:0.00} m² · en büyük sapma {Parseller.Select(p => Math.Abs(p.GaussAlanM2 - p.HedefAlanM2)).DefaultIfEmpty(0m).Max():0.00} m² · {MustakilSayisi} müstakil (TAM) · {MusterekSayisi} müşterek (pay/payda)");
+        $"{BolunenBloklar.Count} blok · {Parseller.Count} parsel · Σ {ToplamAlanM2:0.00} m² · en büyük sapma {Parseller.Select(p => Math.Abs(p.GaussAlanM2 - p.HedefAlanM2)).DefaultIfEmpty(0m).Max():0.00} m² · {MustakilSayisi} müstakil (TAM) · {MusterekSayisi} müşterek (pay/payda){(ElleDuzenlendi ? " · ✏️ elle düzenlendi" : string.Empty)}");
 
     /// <summary>Önizleme kartının parsel dağılım satırları (<see cref="KrokiParseli.DagilimSatiri"/>).</summary>
     public IReadOnlyList<string> DagilimSatirlari() => [.. Parseller.Select(p => p.DagilimSatiri())];
@@ -937,7 +940,7 @@ public sealed record KrokiParselasyonuUygulaKomutu(KrokiParselasyonOnizleme Oniz
 
     public string? Ayrinti => Onizleme is null
         ? null
-        : string.Create(CultureInfo.InvariantCulture, $"parselSayisi={Onizleme.Parseller.Count};blokSayisi={Onizleme.BolunenBloklar.Count};kaynak=yaklasikYerKrokisi");
+        : string.Create(CultureInfo.InvariantCulture, $"parselSayisi={Onizleme.Parseller.Count};blokSayisi={Onizleme.BolunenBloklar.Count};kaynak=yaklasikYerKrokisi{(Onizleme.ElleDuzenlendi ? ";dagilim=elle" : string.Empty)}");
 
     public Result<ProjeBelgesi> Uygula(ProjeBelgesi mevcut)
     {

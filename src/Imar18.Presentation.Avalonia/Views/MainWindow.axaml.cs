@@ -56,6 +56,11 @@ public sealed partial class MainWindow : Window
                 eskiKunye.WebtapuKunyeDosyasiIstendi -= OnWebtapuKunyeDosyasiIstendi;
                 eskiKunye.DnsDosyasiIstendi -= OnDnsDosyasiIstendi;
             }
+
+            if (_vm.Arsiv is { } eskiArsiv)
+            {
+                eskiArsiv.NcnDosyasiIstendi -= OnNcnDosyasiIstendi;
+            }
         }
 
         _vm = DataContext as MainWindowViewModel;
@@ -81,6 +86,11 @@ public sealed partial class MainWindow : Window
             {
                 kunye.WebtapuKunyeDosyasiIstendi += OnWebtapuKunyeDosyasiIstendi;
                 kunye.DnsDosyasiIstendi += OnDnsDosyasiIstendi;
+            }
+
+            if (_vm.Arsiv is { } arsiv)
+            {
+                arsiv.NcnDosyasiIstendi += OnNcnDosyasiIstendi;
             }
 
             TemayiUygula(_vm.AcikStudyo);
@@ -408,6 +418,41 @@ public sealed partial class MainWindow : Window
         catch (UnauthorizedAccessException)
         {
             kunye.DnsHatasi = "Dosyaya erişim izni yok.";
+        }
+    }
+
+    /// <summary>SAHA-020: 1. adım "📂 .NCN Yükle" — arşiv noktaları için Netcad .ncn / düz metin; ayrıştırma ViewModel'dedir.</summary>
+    private async void OnNcnDosyasiIstendi(object? sender, EventArgs e)
+    {
+        if (_vm?.Arsiv is not { } arsiv)
+        {
+            return;
+        }
+
+        var dosyalar = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Arşiv noktaları dosyasını seçin (.NCN / .TXT — NoktaNo Y X)",
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("Netcad nokta dosyası (.ncn, .txt)") { Patterns = ["*.ncn", "*.NCN", "*.txt", "*.TXT"] }],
+        });
+        if (dosyalar.Count == 0)
+        {
+            return;
+        }
+
+        using var dosya = dosyalar[0];
+        try
+        {
+            await using var akis = await dosya.OpenReadAsync();
+            await arsiv.NcnYukleAsync(akis);
+        }
+        catch (IOException)
+        {
+            arsiv.Hata = "Dosya okunamadı (erişim veya disk hatası).";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            arsiv.Hata = "Dosyaya erişim izni yok.";
         }
     }
 

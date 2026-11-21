@@ -183,7 +183,10 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
                 b.IleriDonusum is { } ik
                     ? new IleriDonusumDto(ik.A, ik.B, ik.C, ik.D, ik.Cy, ik.Cx,
                         (b.DepremOncesiParseller ?? []).Select(p => new ParselDto(p.ParselId, p.Rol.ToString(), p.Koseler.Select(v => new[] { v.X, v.Y }).ToList())).ToList())
-                    : null),
+                    : null,
+                b.ArsivKadastroNoktalari.Count == 0
+                    ? null
+                    : b.ArsivKadastroNoktalari.Select(a => new ArsivNoktaDto(a.Sira, a.NoktaNo, a.ArsivY, a.ArsivX, a.KadastroParselId, a.KoseY, a.KoseX)).ToList()),
             k.Denetim.ToList());
     }
 
@@ -322,6 +325,15 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
             belge = belge with { NczSablonu = sablon.Value };
         }
 
+        if (b.Arsiv is { } ad)
+        {
+            belge = belge with
+            {
+                ArsivKadastroNoktalari = ad.Select(a => new ArsivNoktaKaydi(a.Sira, a.No ?? throw new FormatException("archive point number"), a.ArsivY, a.ArsivX,
+                    a.Kadastro ?? throw new FormatException("archive point parcel"), a.KoseY, a.KoseX)).ToArray(),
+            };
+        }
+
         ParselGeometrisi[]? oncesi = null;
         if (b.Ileri is { } id)
         {
@@ -374,6 +386,11 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
             kontroller.Add(new NczSablonuAyarlaKomutu(belge.NczSablonu.Icerik.ToArray()));
         }
 
+        if (belge.ArsivKadastroNoktalari.Count > 0)
+        {
+            kontroller.Add(new ArsivNoktalariAyarlaKomutu(belge.ArsivKadastroNoktalari));
+        }
+
         // Not: Result<T> bir struct'tır; default değeri başarısız sayılır — FirstOrDefault yerine hata nesnesi aranır.
         if (kontroller.Select(k => k.Uygula(bos)).Where(r => r.IsFailure).Select(r => r.Error).FirstOrDefault() is { } red)
         {
@@ -407,7 +424,11 @@ public sealed class AtomikJsonProjeDeposu : IProjeDeposu
         KunyeDto? Kunye = null,
         DonusumDto? Donusum = null,
         NczSablonuDto? Ncz = null,
-        IleriDonusumDto? Ileri = null);
+        IleriDonusumDto? Ileri = null,
+        List<ArsivNoktaDto>? Arsiv = null);
+
+    /// <summary>SAHA-020: arşiv onaylı kadastro noktası (yalnız doluysa yazılır; eski kayıtlarda yoktur).</summary>
+    private sealed record ArsivNoktaDto(int Sira, string No, decimal ArsivY, decimal ArsivX, string Kadastro, decimal KoseY, decimal KoseX);
 
     /// <summary>SAHA-014: .DNS katsayıları (Netcad düzeni) ve Deprem Öncesi (orijinal CAD) parseller; yalnız v2 şemasında bulunur.</summary>
     private sealed record IleriDonusumDto(decimal A, decimal B, decimal C, decimal D, decimal Cy, decimal Cx, List<ParselDto>? Oncesi);

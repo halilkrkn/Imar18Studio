@@ -64,7 +64,8 @@ public sealed class FenKlasoruZipTests
     /// <summary>SAHA-014 sentetik .DNS katsayıları (gerçek dosyadan alınmadı — AC-PILOT-08) (Netcad düzeni; A = D, C = −B): Y2 = A·Y1 + C·X1 + CY, X2 = B·Y1 + D·X1 + CX.</summary>
     internal static readonly DonusumKatsayilari DnsK = new(A: 0.999996312345678m, B: -0.00000712345678901234m, C: 0.00000712345678901234m, D: 0.999996312345678m, Cy: -23.4567890123456m, Cx: 17.6543210987654m);
 
-    internal static async Task<CiktiPaketi> PaketAsync(bool donusum = true, bool rehber = true, bool dns = false)
+    internal static async Task<CiktiPaketi> PaketAsync(bool donusum = true, bool rehber = true, bool dns = false,
+        Func<ProjeBelgesi, IReadOnlyList<ArsivNoktaKaydi>>? arsiv = null)
     {
         var (yol, _, zaman) = await OrnekProje.TamProjeAsync();
         if (dns)
@@ -80,6 +81,12 @@ public sealed class FenKlasoruZipTests
         if (rehber)
         {
             (await yol.GonderAsync(new MalikRehberiAyarlaKomutu(Rehber), OrnekProje.Muhendis)).IsSuccess.Should().BeTrue();
+        }
+
+        if (arsiv is not null)
+        {
+            // SAHA-020: arşiv onaylı kadastro noktaları onaydan önce projeye yazılır (RevisionId'ye girer).
+            (await yol.GonderAsync(new ArsivNoktalariAyarlaKomutu(arsiv(yol.Belge)), OrnekProje.Muhendis)).IsSuccess.Should().BeTrue();
         }
 
         (await new ApprovalService(yol, zaman, OrnekProje.Topoloji).OnaylaAsync(OrnekProje.Muhendis, ApprovalService.OnayMetni)).IsSuccess.Should().BeTrue();
