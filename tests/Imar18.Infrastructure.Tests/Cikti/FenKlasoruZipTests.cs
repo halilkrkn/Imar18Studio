@@ -64,7 +64,7 @@ public sealed class FenKlasoruZipTests
     /// <summary>SAHA-014 sentetik .DNS katsayıları (gerçek dosyadan alınmadı — AC-PILOT-08) (Netcad düzeni; A = D, C = −B): Y2 = A·Y1 + C·X1 + CY, X2 = B·Y1 + D·X1 + CX.</summary>
     internal static readonly DonusumKatsayilari DnsK = new(A: 0.999996312345678m, B: -0.00000712345678901234m, C: 0.00000712345678901234m, D: 0.999996312345678m, Cy: -23.4567890123456m, Cx: 17.6543210987654m);
 
-    private static async Task<CiktiPaketi> PaketAsync(bool donusum = true, bool rehber = true, bool dns = false)
+    internal static async Task<CiktiPaketi> PaketAsync(bool donusum = true, bool rehber = true, bool dns = false)
     {
         var (yol, _, zaman) = await OrnekProje.TamProjeAsync();
         if (dns)
@@ -97,7 +97,7 @@ public sealed class FenKlasoruZipTests
         return p with { Parseller = p.Parseller.Append(a2).ToArray(), ImarSirali = p.ImarSirali.Concat(dagitim).ToArray() };
     }
 
-    private static Dictionary<string, byte[]> Ac(byte[] zip)
+    internal static Dictionary<string, byte[]> Ac(byte[] zip)
     {
         using var arsiv = new ZipArchive(new MemoryStream(zip), ZipArchiveMode.Read);
         return arsiv.Entries.ToDictionary(e => e.FullName, e =>
@@ -109,22 +109,22 @@ public sealed class FenKlasoruZipTests
         });
     }
 
-    private static List<string> Adlar(byte[] zip)
+    internal static List<string> Adlar(byte[] zip)
     {
         using var arsiv = new ZipArchive(new MemoryStream(zip), ZipArchiveMode.Read);
         return arsiv.Entries.Select(e => e.FullName).ToList();
     }
 
-    private static string Bosluksuz(string s) => new(s.Where(c => !char.IsWhiteSpace(c)).ToArray());
+    internal static string Bosluksuz(string s) => new(s.Where(c => !char.IsWhiteSpace(c)).ToArray());
 
     /// <summary>Tüm sayfaların kelimeleri (boşlukla).</summary>
-    private static string Metin(byte[] pdf)
+    internal static string Metin(byte[] pdf)
     {
         using var d = PdfDocument.Open(pdf);
         return string.Join(" ", d.GetPages().SelectMany(s => s.GetWords()).Select(w => w.Text));
     }
 
-    private static byte[] Uret(CiktiPaketi p)
+    internal static byte[] Uret(CiktiPaketi p)
     {
         var r = new FenKlasoruZipUretici().Uret(p);
         r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.TechnicalMessage : string.Empty);
@@ -319,11 +319,12 @@ public sealed class FenKlasoruZipTests
         M("ÖZET CETVELİ.pdf").Should().Contain("ÖZETCETVELİ").And.Contain("İLİ:SENTETİKİL").And.Contain("İLÇESİ:ÖRNEKİLÇE")
             .And.Contain("KÖY/MAHALLESİ:DENEMEMAH.").And.Contain("BELEDİYESİ:ÖRNEKBELEDİYESİ")
             .And.Contain("Ada/ParAlanKamu.Y.TerkD.GirmeyenDopalDopalmaDopİ.TahsisAdaNoAlan").And.Contain("KADASTROTOPLAMLARI")
-            .And.Contain("PARSELASYONHARİTASI.NCZ");
+            .And.NotContain("PARSELASYONHARİTASI.NCZ", "SAHA-017: resmî cetvele geliştirici notu basılmaz");
         M("MAL SAHİPLERİ ARAŞTIRMA VE ÖZET FORMU.pdf").Should().Contain("MALSAHİPLERİARAŞTIRMAVEÖZETFORMU").And.Contain("(KADASTROPARSELİNESIRALI)")
             .And.Contain("SNoPaftaAda/ParAlan/PayHisseMalik/BabaAdıKamuDop/İThAda/ParAlanHissePay").And.Contain("TOPLAMADAALANI")
             .And.Contain("O.KATILIMORANI").And.Contain("D.O.PAYIORANI").And.Contain("SAYFANO");
-        M("TESCİLE ESAS DAĞITIM CETVELİ.pdf").Should().Contain("(İMARPARSELİNESIRALI)").And.Contain("101/1");
+        M("TESCİLE ESAS DAĞITIM CETVELİ.pdf").Should().Contain("TESCİLEESASDAĞITIMCETVELİ").And.Contain("(İMARPARSELİNESIRALI)").And.Contain("101/1")
+            .And.NotContain("MALSAHİPLERİARAŞTIRMAVEÖZETFORMU", "SAHA-017: başlık belgenin kendi adıdır");
         M("TESCİL SAYFASI-1.pdf").Should().Contain("TESCİLSAYFASI").And.Contain("PAFTANO:N99-X-01").And.Contain("SAYFANO:1").And.Contain("ADANO:101")
             .And.Contain("CltSyfParNoHe.M2Dm2CinsiHisseKAdaKParCiltSyf.MalikiBabası").And.Contain("ARSA");
         M("RÖLÖVE ÖLÇÜ KROKİSİ.pdf").Should().Contain("EK-17/FR.521").And.Contain("ID:99999").And.Contain("Datum:ITRF-96")
@@ -523,8 +524,8 @@ public sealed class FenKlasoruZipTests
         d.Keys.Should().NotContain(FenKlasoruZipUretici.CksDosyaAdi);
         var dop = Bosluksuz(Metin(d["DOP.pdf"]));
         dop.Should().Contain("DOP.CKSüretilmedi");
-        dop.Should().Contain("D1—EskiDOPO>ProjeDOPOOlanAlanlar1.00").And.Contain("D2—EskiDOPO>ProjeDOPOOlanTahsisler0.00")
-            .And.Contain("ToplamKamulaştırılanAlan—").And.Contain("ToplamBağışlananAlan—", "modelde karşılığı olmayan alan 0 diye basılmaz (reviewer M2)");
+        dop.Should().Contain("D1—EskiDOPO>ProjeDOPOOlanAlanlar=1.00").And.Contain("D2—EskiDOPO>ProjeDOPOOlanTahsisler=0.00")
+            .And.Contain("ToplamKamulaştırılanAlan=—").And.Contain("ToplamBağışlananAlan=—", "modelde karşılığı olmayan alan 0 diye basılmaz (reviewer M2)");
     }
 
     [Fact]

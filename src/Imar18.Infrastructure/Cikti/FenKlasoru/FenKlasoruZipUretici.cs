@@ -27,7 +27,7 @@ internal sealed record FenKlasoruDosyasi(string Ad, Func<byte[]> Uret);
 /// </summary>
 public sealed class FenKlasoruZipUretici : ICiktiUretici
 {
-    /// <summary>NCZ bilgi notu (ZIP açıklaması ve Özet Cetveli dipnotu).</summary>
+    /// <summary>NCZ bilgi notu (yalnız ZIP açıklaması; SAHA-017: resmî cetvellere basılmaz).</summary>
     public const string NczNotu =
         "Not: PARSELASYON HARİTASI.NCZ deneysel Netcad çıktısıdır; Netcad 8.5'te manuel açılış teyidi bekleniyor (SORU-042).";
 

@@ -31,6 +31,14 @@ internal sealed class NczSentetikDosya
     /// <summary>Null ise gercek dosya uzunlugu yazilir.</summary>
     public int? BildirilenUzunluk { get; set; }
 
+    /// <summary>
+    /// SAHA-017: gercek Netcad 8.5 blok duzeni — h[3]'te [0x06][int32 uzunluk = 13 + 29n][13 bayt on baslik (16: sayac)]
+    /// [n x (FD 80 12 00 + 21 bayt Pascal ad + 4 bayt renk)], blok sonunda (= h[7]) font blogu [0x0B][84]["ARIAL.NCF"],
+    /// h[8] = h[7] + 89'da sembol blogu [0x0C]["PLAN.NCS"], sonra <see cref="KatmanSonrasiBolge"/>, h[10]'da [0x0D][0] ve h[11]'de [0x17][0].
+    /// Varsayilan (false) eski sentetik duzendir (diger P4/P6 testlerinin baytlari degismez).
+    /// </summary>
+    public bool NetcadBloklari { get; set; }
+
     public NczSentetikDosya Katman(string ad)
     {
         _katmanlar.Add(ad);
@@ -166,20 +174,49 @@ internal sealed class NczSentetikDosya
         dosya.AddRange(OnBolge ?? new byte[200]); // onizleme/cizgi tipi bolgesi yerine sentetik dolgu
 
         var katmanOfseti = dosya.Count;
-        var katmanBasligi = new byte[22];
-        BinaryPrimitives.WriteInt16LittleEndian(katmanBasligi.AsSpan(16), (short)_katmanlar.Count);
-        dosya.AddRange(katmanBasligi);
-        foreach (var ad in _katmanlar)
+        int katmanSonu;
+        var sembolOfseti = 0;
+        if (NetcadBloklari)
         {
-            var kayit = new byte[29];
-            var b = Turkce.GetBytes(ad);
-            kayit[0] = (byte)b.Length;
-            b.CopyTo(kayit, 1);
-            dosya.AddRange(kayit);
-        }
+            dosya.Add(0x06);
+            dosya.AddRange(BitConverter.GetBytes(13 + (29 * _katmanlar.Count)));
+            dosya.AddRange(new byte[] { 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0 });
+            dosya.AddRange(BitConverter.GetBytes((short)_katmanlar.Count));
+            foreach (var ad in _katmanlar)
+            {
+                var kayit = new byte[29];
+                new byte[] { 0xFD, 0x80, 0x12, 0x00 }.CopyTo(kayit, 0);
+                var b = Turkce.GetBytes(ad);
+                kayit[4] = (byte)b.Length;
+                b.CopyTo(kayit, 5);
+                new byte[] { 0x01, 0x00, 0x01, 0x00 }.CopyTo(kayit, 25);
+                dosya.AddRange(kayit);
+            }
 
-        var katmanSonu = dosya.Count - 4;
-        dosya.AddRange(KatmanSonrasiBolge ?? new byte[64]); // diger bolumler yerine sentetik dolgu
+            katmanSonu = dosya.Count;
+            dosya.AddRange(Blok(0x0B, 84, [1, 0, 0, 0, 9, .. Encoding.ASCII.GetBytes("ARIAL.NCF")]));
+            sembolOfseti = dosya.Count;
+            dosya.AddRange(Blok(0x0C, 16, [3, 0, 0, 0, 8, .. Encoding.ASCII.GetBytes("PLAN.NCS")]));
+            dosya.AddRange(KatmanSonrasiBolge ?? new byte[64]);
+            dosya.AddRange(new byte[] { 0x0D, 0, 0, 0, 0 });
+        }
+        else
+        {
+            var katmanBasligi = new byte[22];
+            BinaryPrimitives.WriteInt16LittleEndian(katmanBasligi.AsSpan(16), (short)_katmanlar.Count);
+            dosya.AddRange(katmanBasligi);
+            foreach (var ad in _katmanlar)
+            {
+                var kayit = new byte[29];
+                var b = Turkce.GetBytes(ad);
+                kayit[0] = (byte)b.Length;
+                b.CopyTo(kayit, 1);
+                dosya.AddRange(kayit);
+            }
+
+            katmanSonu = dosya.Count - 4;
+            dosya.AddRange(KatmanSonrasiBolge ?? new byte[64]); // diger bolumler yerine sentetik dolgu
+        }
 
         var varlikOfseti = dosya.Count;
         dosya.Add(0x17);
@@ -190,13 +227,23 @@ internal sealed class NczSentetikDosya
         }
 
         var bayt = dosya.ToArray();
-        int[] baslik = [Baslik0, BildirilenUzunluk ?? bayt.Length, Baslik2, katmanOfseti, 0, 0, 0, katmanSonu, 0, 562, varlikOfseti - 5, varlikOfseti];
+        int[] baslik = [Baslik0, BildirilenUzunluk ?? bayt.Length, Baslik2, katmanOfseti, 0, 0, 0, katmanSonu, sembolOfseti, 562, varlikOfseti - 5, varlikOfseti];
         for (var i = 0; i < baslik.Length; i++)
         {
             BinaryPrimitives.WriteInt32LittleEndian(bayt.AsSpan(1 + (4 * i)), baslik[i]);
         }
 
         return kirpilacakBayt == 0 ? bayt : bayt[..^kirpilacakBayt];
+    }
+
+    /// <summary>[tip][int32 uzunluk][icerik + sifir dolgu] blogu.</summary>
+    private static byte[] Blok(byte tip, int uzunluk, byte[] icerik)
+    {
+        var b = new byte[5 + uzunluk];
+        b[0] = tip;
+        BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan(1), uzunluk);
+        icerik.CopyTo(b, 5);
+        return b;
     }
 
     /// <summary>Uretilen dosyanin baslik int32 alanini (h[k]) degistirir.</summary>

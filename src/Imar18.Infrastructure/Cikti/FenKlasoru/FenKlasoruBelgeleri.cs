@@ -24,7 +24,8 @@ internal readonly record struct GrupBasligi(string Metin, int Sutun);
 /// </summary>
 internal static class FenKlasoruBelgeleri
 {
-    private const float Ince = 0.4f;
+    /// <summary>SAHA-017: resmî TKGM/Netcad estetiği — tüm tablo ve çerçeve çizgileri 0.5 pt.</summary>
+    private const float Ince = 0.5f;
 
     /// <summary>Alt bilgi damgası (RevisionId'nin ilk 16 onaltılık hanesi).</summary>
     public static string AltDamga(CiktiPaketi p) =>
@@ -211,27 +212,31 @@ internal static class FenKlasoruBelgeleri
 
     // ------------------------------------------------------------------ 2. KOORDİNE ÖZET
 
+    /// <summary>
+    /// SAHA-017 (mühendis teyidi, gerçek KOORDİNE ÖZET / RÖLÖVE-1 ile aynı): Deprem Öncesi = yalnız kadastro köşeleri, MK sütunu
+    /// yok; Deprem Sonrası (veya dönüşümsüz tek tablo) = önce TK_Oluşan köşeleri (MK = proje MK'si / 0.09), altına kadastro köşeleri
+    /// (dönüşmüş koordinat, MK boş).
+    /// </summary>
     public static void KoordineOzet(IDocumentContainer c, CiktiPaketi p) => Sayfa(c, p, yatay: false, x => x.Column(col =>
     {
         var datum = DatumBasligi(p);
-        var mk = p.Donusum is { } dd ? dd.Girdi.Mk.ToString("0.00", Inv) : "-";
-        if (p.Donusum is not { } d)
+        var (olusan, kadastro) = NoktaGruplari(p, HesapParselleri(p), adaKapsami: false);
+        var sonrasi = SonrasiSatirlari(p, olusan, kadastro);
+        if (p.Donusum is null)
         {
             // SAHA-014: dönüşüm yoksa Deprem Öncesi/Sonrası başlıkları basılmaz (kullanıcı zorlanmaz).
             Baslik(col, datum + " KOORDİNE ÖZET", 11);
-            IkiBloklu(col, ["Nokta No", "Y", "X", "MK"],
-                p.Koordinatlar.Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X), mk }).ToArray(), 30, [1f, 1.5f, 1.6f, 0.6f]);
+            IkiBloklu(col, ["Nokta No", "Y", "X", "MK"], sonrasi, 30, [1f, 1.5f, 1.6f, 0.6f]);
             return;
         }
 
         Baslik(col, datum + " KOORDİNE ÖZET(DEPREM ÖNCESİ)", 11);
         IkiBloklu(col, ["Nokta No", "Y", "X"],
-            d.DepremOncesi.Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X) }).ToArray(), 30);
+            OncesiNoktalar(p, kadastro).Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X) }).ToArray(), 30);
 
         col.Item().PaddingTop(8);
         Baslik(col, datum + " KOORDİNE ÖZET(DEPREM SONRASI)", 11);
-        IkiBloklu(col, ["Nokta No", "Y", "X", "MK"],
-            p.Koordinatlar.Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X), mk }).ToArray(), 30, [1f, 1.5f, 1.6f, 0.6f]);
+        IkiBloklu(col, ["Nokta No", "Y", "X", "MK"], sonrasi, 30, [1f, 1.5f, 1.6f, 0.6f]);
     }));
 
     // ------------------------------------------------------------------ 3. ALAN HESABI
@@ -300,6 +305,10 @@ internal static class FenKlasoruBelgeleri
 
     // ------------------------------------------------------------------ 6. DOP
 
+    /// <summary>
+    /// SAHA-017: resmî Netcad DOP formatı — tek dış çerçeve, etiket | <c>=</c> | değer sütunları (<c>=</c> işaretleri alt alta
+    /// hizalı), alan kalemleri ile oranlar ve "Düzenleme Ortaklık Payı Hesabı" yatay ayırıcılarla bölünür.
+    /// </summary>
     public static void Dop(IDocumentContainer c, CiktiPaketi p) => Sayfa(c, p, yatay: false, x => x.Column(col =>
     {
         var d = p.Dop;
@@ -307,34 +316,60 @@ internal static class FenKlasoruBelgeleri
         Baslik(col, "DOP");
         // Eşleme SORU-033 a / SORU-034 ile aynıdır. CKS eşlenemiyorsa (D1, D2 veya R3 ≠ 0) modelde karşılığı olmayan
         // kamulaştırılan/bağışlanan alanlar "—" basılır, D1 ve D2 kendi etiketleriyle ayrı satırdadır (reviewer M2).
-        var satirlar = new List<string[]>
+        var alanlar = new List<(string, string)>
         {
-            new[] { "Toplam Tahsis", F2(d.R2) },
-            new[] { "Toplam İmar Ada Alanı", F2(d.R2) },
-            new[] { "Toplam Ortak Katılım Alanı", F2(d.OrtakKatilimM2) },
-            new[] { "Toplam Düzenlemeye Giren (Dopal)", F2(d.R1) },
-            new[] { "Toplam Düzenlemeye Giren (Dopalma)", F2(d.R3) },
-            new[] { "Toplam Kamulaştırılan Alan", cks.IsSuccess ? F2(cks.Value.ToplamKamulastirilanAlanM2) : "—" },
-            new[] { "Toplam Bağışlanan Alan", cks.IsSuccess ? F2(cks.Value.ToplamBagislananAlanM2) : "—" },
-            new[] { "Toplam Kadastro Parsel Alanı", F2(d.R1) },
-            new[] { "Toplam Pay", F2(d.R1) },
+            ("Toplam Tahsis", F2(d.R2)),
+            ("Toplam İmar Ada Alanı", F2(d.R2)),
+            ("Toplam Ortak Katılım Alanı", F2(d.OrtakKatilimM2)),
+            ("Toplam Düzenlemeye Giren (Dopal)", F2(d.R1)),
+            ("Toplam Düzenlemeye Giren (Dopalma)", F2(d.R3)),
+            ("Toplam Kamulaştırılan Alan", cks.IsSuccess ? F2(cks.Value.ToplamKamulastirilanAlanM2) : "—"),
+            ("Toplam Bağışlanan Alan", cks.IsSuccess ? F2(cks.Value.ToplamBagislananAlanM2) : "—"),
+            ("Toplam Kadastro Parsel Alanı", F2(d.R1)),
+            ("Toplam Pay", F2(d.R1)),
         };
         if (cks.IsFailure)
         {
-            satirlar.Add(["D1 — Eski DOPO > Proje DOPO Olan Alanlar", F2(d.D1)]);
-            satirlar.Add(["D2 — Eski DOPO > Proje DOPO Olan Tahsisler", F2(d.D2)]);
+            alanlar.Add(("D1 — Eski DOPO > Proje DOPO Olan Alanlar", F2(d.D1)));
+            alanlar.Add(("D2 — Eski DOPO > Proje DOPO Olan Tahsisler", F2(d.D2)));
         }
 
-        satirlar.Add(["Ortak Katılım Oranı", Oran(d.Oko)]);
-        satirlar.Add(["DOPO", Oran(d.Dopo)]);
-        satirlar.Add(["DOPO(OKO ile birlikte)", Oran(d.DopoOkoIleBirlikte)]);
-        satirlar.Add(["Maksimum Dop Oranı", Oran(DopCalculator.YasalUstSinir)]);
-        col.Item().AlignCenter().Width(380).Element(e => Tablo(e, ["Kalem", "Değer"], satirlar, [3f, 1.4f], font: 8f));
-        col.Item().PaddingTop(10).AlignCenter().Width(380).Border(Ince).Padding(6).Column(h =>
+        (string, string)[] oranlar =
+        [
+            ("Ortak Katılım Oranı", Oran(d.Oko)), ("DOPO", Oran(d.Dopo)), ("DOPO(OKO ile birlikte)", Oran(d.DopoOkoIleBirlikte)),
+            ("Maksimum Dop Oranı", Oran(DopCalculator.YasalUstSinir)),
+        ];
+
+        // D1 = D2 = R3 = 0 iken DOPO = Kamuya Ayrılan / R1 (gerçek DOP.pdf düzeni); aksi hâlde tam formül sayılarla.
+        var dopIfadesi = d.D1 == 0m && d.D2 == 0m && d.R3 == 0m
+            ? $"{F2(d.KamuyaAyrilanM2)} / {F2(d.R1)} = {Oran(d.Dopo)}"
+            : $"({F2(d.R1)} - {F2(d.D1)} - {F2(d.R2)} + {F2(d.D2)} + {F2(d.R3)}) / ({F2(d.R1)} - {F2(d.D1)}) = {Oran(d.Dopo)}";
+
+        col.Item().PaddingTop(6).AlignCenter().Width(430).Border(Ince).PaddingVertical(8).PaddingHorizontal(14).Column(k =>
         {
-            h.Item().Text("Düzenleme Ortaklık Payı Hesabı").Bold().FontSize(9);
-            h.Item().Text($"Kamuya Ayrılan Alan = R1 − R2 = {F2(d.R1)} − {F2(d.R2)} = {F2(d.KamuyaAyrilanM2)}").FontSize(8);
-            h.Item().Text($"DOPO = (R1 − D1 − R2 + D2 + R3) / (R1 − D1) = ({F2(d.R1)} − {F2(d.D1)} − {F2(d.R2)} + {F2(d.D2)} + {F2(d.R3)}) / ({F2(d.R1)} − {F2(d.D1)}) = {Oran(d.Dopo)}").FontSize(8);
+            k.Spacing(2);
+            void Satir(string etiket, string deger, bool ifade = false) => k.Item().Row(r =>
+            {
+                r.ConstantItem(ifade ? 150 : 230).Text(etiket).FontSize(9);
+                r.ConstantItem(14).AlignCenter().Text("=").FontSize(9);
+                (ifade ? r.RelativeItem() : r.RelativeItem().AlignRight()).Text(deger).FontSize(9);
+            });
+
+            foreach (var (e, v) in alanlar)
+            {
+                Satir(e, v);
+            }
+
+            k.Item().PaddingVertical(3).LineHorizontal(Ince);
+            foreach (var (e, v) in oranlar)
+            {
+                Satir(e, v);
+            }
+
+            k.Item().PaddingVertical(3).LineHorizontal(Ince);
+            k.Item().PaddingBottom(2).Text("Düzenleme Ortaklık Payı Hesabı").Bold().FontSize(9);
+            Satir("Kamuya Ayrılan Alan", $"{F2(d.R1)} - {F2(d.R2)} = {F2(d.KamuyaAyrilanM2)}", ifade: true);
+            Satir("Düzenleme Ortaklık Payı", dopIfadesi, ifade: true);
         });
         if (cks.IsFailure)
         {
@@ -368,7 +403,7 @@ internal static class FenKlasoruBelgeleri
             k.ParselId, F2(k.TapuAlaniM2), "-", "-", "-", F2(k.Malikler.Sum(m => m.GirenM2)), "-", F2(k.Malikler.Sum(m => m.DopKesintisiM2)), F2(k.Malikler.Sum(m => m.NetHakM2)),
         }).ToList();
         var adalar = p.Parseller.Where(s => s.Rol == ParselRolu.Imar)
-            .GroupBy(s => s.TescilNo.Contains('/', StringComparison.Ordinal) ? AdaNo(s.TescilNo) : s.TescilNo, StringComparer.Ordinal)
+            .GroupBy(s => AdaParselli(Kimlik(s)) ? AdaNo(Kimlik(s)) : Kimlik(s), StringComparer.Ordinal)
             .OrderBy(g => g.Key, ParselNoKarsilastirici.Instance)
             .Select(g => new[] { g.Key, F2(g.Sum(s => s.DengelenmisAlanM2)) }).ToList();
         var n = Math.Max(kadastro.Count, adalar.Count);
@@ -391,7 +426,8 @@ internal static class FenKlasoruBelgeleri
             h.Item().Text($"Kamuya Ayrılan Alan = {F2(d.R1)} - {F2(d.R2)} = {F2(d.KamuyaAyrilanM2)}");
             h.Item().Text($"Düzenleme Ortaklık Payı = ({F2(d.R1)} - {F2(d.D1)} - {F2(d.R2)} + {F2(d.D2)} + {F2(d.R3)}) / ({F2(d.R1)} - {F2(d.D1)}) = {Oran(d.Dopo)}");
         });
-        col.Item().PaddingTop(6).Text(FenKlasoruZipUretici.NczNotu).FontSize(6).Italic();
+
+        // SAHA-017: resmî cetvele geliştirici notu basılmaz (NCZ notu yalnız ZIP açıklamasındadır).
     }));
 
     // ------------------------------------------------------------------ 8–9. MAL SAHİPLERİ / TESCİLE ESAS DAĞITIM
@@ -403,7 +439,7 @@ internal static class FenKlasoruBelgeleri
 
     private static readonly GrupBasligi[] DagitimGrup = [new("K A D A S T R O", 8), new("İ M A R", 4)];
 
-    private static void DagitimUstBilgi(ColumnDescriptor col, CiktiPaketi p, string altBaslik)
+    private static void DagitimUstBilgi(ColumnDescriptor col, CiktiPaketi p, string baslik, string altBaslik)
     {
         var d = p.Dop;
         var malik = p.KadastroParselleri;
@@ -419,7 +455,7 @@ internal static class FenKlasoruBelgeleri
             });
             r.RelativeItem(2).AlignCenter().Column(k =>
             {
-                k.Item().AlignCenter().Text("MAL SAHİPLERİ ARAŞTIRMA VE ÖZET FORMU").Bold().FontSize(11);
+                k.Item().AlignCenter().Text(baslik).Bold().FontSize(11);
                 k.Item().AlignCenter().Text(altBaslik).FontSize(8);
             });
             r.RelativeItem().Border(Ince).Padding(3).Column(k =>
@@ -445,7 +481,7 @@ internal static class FenKlasoruBelgeleri
 
     public static void MalSahipleri(IDocumentContainer c, CiktiPaketi p) => Sayfa(c, p, yatay: true, x => x.Column(col =>
     {
-        DagitimUstBilgi(col, p, "( KADASTRO PARSELİNE SIRALI )");
+        DagitimUstBilgi(col, p, "MAL SAHİPLERİ ARAŞTIRMA VE ÖZET FORMU", "( KADASTRO PARSELİNE SIRALI )");
         var sno = 0;
         var satirlar = new List<string[]>();
         foreach (var k in p.KadastroParselleri)
@@ -475,10 +511,11 @@ internal static class FenKlasoruBelgeleri
 
     public static void TesciliEsasDagitim(IDocumentContainer c, CiktiPaketi p) => Sayfa(c, p, yatay: true, x => x.Column(col =>
     {
-        DagitimUstBilgi(col, p, "( İMAR PARSELİNE SIRALI )");
+        // SAHA-017: başlık bu belgenin kendi adıdır (önceden yanlışlıkla Mal Sahipleri formu başlığı basılıyordu).
+        DagitimUstBilgi(col, p, "TESCİLE ESAS DAĞITIM CETVELİ", "( İMAR PARSELİNE SIRALI )");
         var sno = 0;
         var satirlar = new List<string[]>();
-        foreach (var g in p.ImarSirali.GroupBy(s => s.TescilNo, StringComparer.Ordinal))
+        foreach (var g in p.ImarSirali.GroupBy(s => ImarKodu(s.TescilNo, s.GeciciKod), StringComparer.Ordinal))
         {
             var ilk = true;
             foreach (var s in g)
@@ -493,7 +530,7 @@ internal static class FenKlasoruBelgeleri
                     string.Join("\n", km.Select(k => F2(k.Parsel?.TapuAlaniM2 ?? 0m) + " / " + F2(k.Malik?.GirenM2 ?? 0m))),
                     string.Join("\n", km.Select(k => k.Malik?.Hisse ?? "-")), ad + "\n" + baba, "-",
                     string.Join("\n", km.Select(k => F2(k.Malik?.DopKesintisiM2 ?? 0m) + " / " + F2(k.Malik?.NetHakM2 ?? 0m))),
-                    ilk ? s.TescilNo : string.Empty, ilk ? F2(s.ParselAlaniM2) : string.Empty, s.Hisse, F2(s.AlanM2),
+                    ilk ? g.Key : string.Empty, ilk ? F2(s.ParselAlaniM2) : string.Empty, s.Hisse, F2(s.AlanM2),
                 ]);
                 ilk = false;
             }
@@ -522,8 +559,8 @@ internal static class FenKlasoruBelgeleri
         });
 
         var satirlar = new List<string[]>();
-        foreach (var g in p.ImarSirali.Where(s => s.TescilNo.Contains('/', StringComparison.Ordinal) && AdaNo(s.TescilNo) == ada)
-                     .GroupBy(s => s.TescilNo, StringComparer.Ordinal).OrderBy(g => g.Key, ParselNoKarsilastirici.Instance))
+        foreach (var g in p.ImarSirali.Where(s => AdaParselli(ImarKodu(s.TescilNo, s.GeciciKod)) && AdaNo(ImarKodu(s.TescilNo, s.GeciciKod)) == ada)
+                     .GroupBy(s => ImarKodu(s.TescilNo, s.GeciciKod), StringComparer.Ordinal).OrderBy(g => g.Key, ParselNoKarsilastirici.Instance))
         {
             var ilk = true;
             foreach (var s in g)
@@ -533,7 +570,7 @@ internal static class FenKlasoruBelgeleri
                 var kad = s.KadastroParselleri.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(id => Kadastro(p, id)).ToArray();
                 satirlar.Add(
                 [
-                    string.Empty, string.Empty, ilk ? ParselNo(s.TescilNo) : string.Empty, ilk ? he : string.Empty, ilk ? m2 : string.Empty, ilk ? dm2 : string.Empty,
+                    string.Empty, string.Empty, ilk ? ParselNo(g.Key) : string.Empty, ilk ? he : string.Empty, ilk ? m2 : string.Empty, ilk ? dm2 : string.Empty,
                     ilk ? "ARSA" : string.Empty, s.Hisse,
                     string.Join("\n", kad.Select(k => k.Ada)), string.Join("\n", kad.Select(k => k.Parsel)),
                     string.Join("\n", kad.Select(k => k.Cilt)), string.Join("\n", kad.Select(k => k.Sayfa)), ad, baba,
@@ -570,26 +607,25 @@ internal static class FenKlasoruBelgeleri
                     k.Item().Text("Datum: " + DatumBasligi(p));
                     k.Item().Text("Projeksiyon: " + (p.Kunye?.DatumProjeksiyon is { Length: > 0 } dp ? dp : p.CrsAciklamasi));
                 });
-                var sonrasi = Noktalar(p, secili);
-                var oncesi = OncesiNoktalar(p, sonrasi);
+                // SAHA-017: Koordine Özet ile aynı ayrım — Öncesi yalnız kadastro (MK yok); Sonrası TK_Oluşan (MK) + kadastro (MK boş).
+                var (olusan, kadastro) = NoktaGruplari(p, secili, adaKapsami: ada is not null);
                 var datum = DatumBasligi(p);
 
                 // SAHA-014: dönüşüm yoksa yalnız tek "KOORDİNE ÖZET" basılır (Deprem Öncesi/Sonrası başlıkları zorlanmaz).
                 if (p.Donusum is not null)
                 {
                     sag.Item().PaddingTop(4).Text(datum + " KOORDİNE ÖZET(DEPREM ÖNCESİ)").Bold().FontSize(6.5f);
-                    Tablo(sag.Item(), ["Nokta No", "Y", "X"], oncesi.Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X) }), font: 6f);
+                    Tablo(sag.Item(), ["Nokta No", "Y", "X"], OncesiNoktalar(p, kadastro).Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X) }), font: 6f);
                 }
 
-                var mk = p.Donusum is { } d ? d.Girdi.Mk.ToString("0.00", Inv) : "-";
                 sag.Item().PaddingTop(4).Text(datum + (p.Donusum is null ? " KOORDİNE ÖZET" : " KOORDİNE ÖZET(DEPREM SONRASI)")).Bold().FontSize(6.5f);
-                Tablo(sag.Item(), ["Nokta No", "Y", "X", "MK"], sonrasi.Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X), mk }), [1f, 1.4f, 1.5f, 0.6f], font: 6f);
+                Tablo(sag.Item(), ["Nokta No", "Y", "X", "MK"], SonrasiSatirlari(p, olusan, kadastro), [1f, 1.4f, 1.5f, 0.6f], font: 6f);
             });
         });
 
         var adaParsel = ada is null
             ? string.Join(", ", p.KadastroParselleri.Select(k => k.ParselId))
-            : ada + "/" + string.Join("-", secili.Select(s => ParselNo(s.TescilNo)));
+            : ada + "/" + string.Join("-", secili.Select(s => ParselNo(Kimlik(s))));
         col.Item().PaddingTop(6).Row(r =>
         {
             r.RelativeItem(2).Element(e => Tablo(e, ["", ""],
@@ -634,9 +670,20 @@ internal static class FenKlasoruBelgeleri
         decimal Ex(GeodeticPoint k) => (k.Y - minY) * olcek;
         decimal Ey(GeodeticPoint k) => (maxX - k.X) * olcek;
 
+        // SAHA-017: okunaklı yazı + beyaz arka plan (halo); çizgiler yazının altında kalır. Halo yazı kopyası değil dikdörtgendir:
+        // PDF metni tek kez seçilir/kopyalanır.
+        void Yazi(StringBuilder b, decimal x, decimal y, string metin, int boyut, string renk, bool kalin = false) =>
+            HaloluYazi(b, S, x, y, metin, boyut, renk, kalin);
+
         var sb = new StringBuilder();
-        sb.Append("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 ").Append(S((maxY - minY) * olcek)).Append(' ').Append(S((maxX - minX) * olcek)).Append("\">");
+        var (vbG, vbY) = (S((maxY - minY) * olcek), S((maxX - minX) * olcek));
+        sb.Append("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 ").Append(vbG).Append(' ').Append(vbY).Append("\">");
+
+        // SAHA-017: seçili kutu dışındaki parseller kırpılır (çizgiler çerçeveden taşıp yan tabloların üstüne çizilmez).
+        sb.Append("<defs><clipPath id=\"kroki\"><rect x=\"0\" y=\"0\" width=\"").Append(vbG).Append("\" height=\"").Append(vbY)
+            .Append("\"/></clipPath></defs><g clip-path=\"url(#kroki)\">");
         var seciliKodlar = secili.Select(s => s.GeciciKod).ToHashSet(StringComparer.Ordinal);
+        var cizilenNoktalar = new HashSet<int>(); // ortak köşe (komşu parseller) numarası bir kez basılır
         foreach (var s in p.Parseller.OrderBy(s => s.Rol == ParselRolu.Kadastro ? 0 : seciliKodlar.Contains(s.GeciciKod) ? 2 : 1))
         {
             var sec = seciliKodlar.Contains(s.GeciciKod);
@@ -651,25 +698,63 @@ internal static class FenKlasoruBelgeleri
             }
 
             // Köşe, kenar ve nokta no dizileri aynı uzunlukta üretilir; yine de en kısasına göre gezilir (reviewer M6).
+            // SAHA-017: cephe yazısı kenar ortasından kenar normali yönünde parselin İÇİNE, nokta no köşeden iç noktaya
+            // zıt yönde DIŞARI kaydırılır (yazılar çizginin üstüne binmez); köşelerde küçük daire (○).
+            var ic = IcNokta(s.Koseler);
+            var (icX, icY) = (Ex(ic), Ey(ic));
             var n = Math.Min(s.Koseler.Count, Math.Min(s.Kenarlar.Count, s.NoktaNolari.Count));
             for (var i = 0; i < n; i++)
             {
                 var a = s.Koseler[i];
                 var b = s.Koseler[(i + 1) % s.Koseler.Count];
-                sb.Append("<text x=\"").Append(S((Ex(a) + Ex(b)) / 2m)).Append("\" y=\"").Append(S((Ey(a) + Ey(b)) / 2m))
-                    .Append("\" font-size=\"12\" fill=\"#374151\" text-anchor=\"middle\">").Append(F2(s.Kenarlar[i].CepheM)).Append("</text>");
-                sb.Append("<circle cx=\"").Append(S(Ex(a))).Append("\" cy=\"").Append(S(Ey(a))).Append("\" r=\"3\" fill=\"none\" stroke=\"#111111\" stroke-width=\"1\"/>");
-                sb.Append("<text x=\"").Append(S(Ex(a) + 5m)).Append("\" y=\"").Append(S(Ey(a) - 5m))
-                    .Append("\" font-size=\"11\" fill=\"#1d4ed8\">").Append(s.NoktaNolari[i].ToString(Inv)).Append("</text>");
+                var (mx, my) = ((Ex(a) + Ex(b)) / 2m, (Ey(a) + Ey(b)) / 2m);
+                var (dx, dy) = (Ex(b) - Ex(a), Ey(b) - Ey(a));
+                var uz = Imar18.Domain.Numerics.DecimalMath.Sqrt((dx * dx) + (dy * dy));
+                var (nx, ny) = uz == 0m ? (0m, 0m) : (-dy / uz, dx / uz);
+                if ((nx * (icX - mx)) + (ny * (icY - my)) < 0m)
+                {
+                    (nx, ny) = (-nx, -ny); // normal parselin içini göstersin
+                }
+
+                Yazi(sb, mx + (nx * 20m), my + (ny * 20m), F2(s.Kenarlar[i].CepheM), 16, "#374151");
             }
 
-            sb.Append("<text x=\"").Append(S(s.Koseler.Average(k => Ex(k)))).Append("\" y=\"").Append(S(s.Koseler.Average(k => Ey(k))))
-                .Append("\" font-size=\"20\" font-weight=\"bold\" fill=\"#111827\" text-anchor=\"middle\">")
-                .Append(SecurityElement.Escape(Kimlik(s))).Append("</text>");
+            for (var i = 0; i < n; i++)
+            {
+                if (!cizilenNoktalar.Add(s.NoktaNolari[i]))
+                {
+                    continue;
+                }
+
+                var a = s.Koseler[i];
+                var (vx, vy) = (Ex(a) - icX, Ey(a) - icY);
+                var uz = Imar18.Domain.Numerics.DecimalMath.Sqrt((vx * vx) + (vy * vy));
+                var (ux, uy) = uz == 0m ? (0m, -1m) : (vx / uz, vy / uz);
+                sb.Append("<circle cx=\"").Append(S(Ex(a))).Append("\" cy=\"").Append(S(Ey(a))).Append("\" r=\"4.5\" fill=\"#ffffff\" stroke=\"#111111\" stroke-width=\"1\"/>");
+                Yazi(sb, Ex(a) + (ux * 20m), Ey(a) + (uy * 20m), s.NoktaNolari[i].ToString(Inv), 16, "#1d4ed8");
+            }
+
+            Yazi(sb, icX, icY, Kimlik(s), 26, "#111827", kalin: true);
         }
 
-        sb.Append("</svg>");
+        sb.Append("</g></svg>");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// SAHA-017: ortalanmış yazı ve arkasında beyaz (yarı saydam olmayan) arka plan dikdörtgeni. Genişlik Arial için
+    /// ≈ 0.6 × boyut × karakter; dikey merkez <paramref name="y"/>. Yazı tek kez basılır (PDF metni temiz kopyalanır).
+    /// </summary>
+    internal static void HaloluYazi(StringBuilder b, Func<decimal, string> s, decimal x, decimal y, string metin, decimal boyut, string renk, bool kalin = false)
+    {
+        var gen = (0.6m * boyut * metin.Length) + (0.4m * boyut);
+        var yuk = 1.15m * boyut;
+        b.Append("<rect x=\"").Append(s(x - (gen / 2m))).Append("\" y=\"").Append(s(y - (yuk / 2m))).Append("\" width=\"").Append(s(gen))
+            .Append("\" height=\"").Append(s(yuk)).Append("\" fill=\"#ffffff\"/>");
+        b.Append("<text x=\"").Append(s(x)).Append("\" y=\"").Append(s(y + (boyut * 0.35m)))
+            .Append("\" font-family=\"Arial, Helvetica, sans-serif\" font-size=\"").Append(s(boyut)).Append("\" text-anchor=\"middle\"")
+            .Append(kalin ? " font-weight=\"bold\"" : string.Empty).Append(" fill=\"").Append(renk).Append("\">")
+            .Append(SecurityElement.Escape(metin)).Append("</text>");
     }
 
     // ------------------------------------------------------------------ 12. PARSELASYON HARİTASI
@@ -687,7 +772,7 @@ internal static class FenKlasoruBelgeleri
             r.ConstantItem(220).Element(e => Tablo(e, ["", ""],
             [
                 ["İli", Il(p)], ["İlçesi", Ilce(p)], ["Köy-Mah", Mahalle(p)], ["Pafta No", Pafta(p)],
-                ["Ada/Parsel No", string.Join(", ", ImarAdalari(p))],
+                ["Ada/Parsel No", KadastroAdaParselleri(p)], // SAHA-017: projedeki kadastro parselleri
             ], [1f, 2.2f]));
             r.RelativeItem().AlignCenter().AlignMiddle().Column(k =>
             {
@@ -759,15 +844,23 @@ internal static class FenKlasoruBelgeleri
                 .Append("\" font-size=\"").Append(S(yazi)).Append("\" fill=\"#6b7280\">X=").Append(gx.ToString("0", Inv)).Append("</text>");
         }
 
+        // SAHA-017: kadastro ince (0.18 mm) kesikli gri, oluşan parseller kalın (0.5 mm) net siyah; etiketler poligonun kendi iç
+        // noktasında (yol terki U/L biçimliyse bile kendi alanında, komşu imar etiketinin üstüne binmez). Kadastro etiketi kendi
+        // iç noktasının bir satır altına kaydırılır (içindeki imar etiketiyle çakışmasın).
         foreach (var s in p.Parseller.OrderBy(s => s.Rol == ParselRolu.Kadastro ? 0 : 1))
         {
             var kad = s.Rol == ParselRolu.Kadastro;
             sb.Append("<polygon points=\"").AppendJoin(' ', s.Koseler.Select(k => S(Ex(k.Y)) + "," + S(Ey(k.X))))
-                .Append("\" fill=\"none\" stroke=\"").Append(kad ? "#555555" : "#000000").Append("\" stroke-width=\"").Append(S((kad ? 0.2m : 0.6m) * mmM)).Append('"')
-                .Append(kad ? " stroke-dasharray=\"" + S(1.5m * mmM) + " " + S(1m * mmM) + "\"" : string.Empty).Append("/>");
-            sb.Append("<text x=\"").Append(S(s.Koseler.Average(k => Ex(k.Y)))).Append("\" y=\"").Append(S(s.Koseler.Average(k => Ey(k.X))))
-                .Append("\" font-size=\"").Append(S((kad ? 2m : 3m) * mmM)).Append("\" text-anchor=\"middle\" fill=\"")
-                .Append(kad ? "#555555" : "#000000").Append("\">").Append(SecurityElement.Escape(kad ? s.GeciciKod : Kimlik(s))).Append("</text>");
+                .Append("\" fill=\"none\" stroke=\"").Append(kad ? "#6b6b6b" : "#000000").Append("\" stroke-width=\"").Append(S((kad ? 0.18m : 0.5m) * mmM)).Append('"')
+                .Append(kad ? " stroke-dasharray=\"" + S(1.5m * mmM) + " " + S(1m * mmM) + "\"" : " stroke-linejoin=\"round\"").Append("/>");
+        }
+
+        foreach (var s in p.Parseller.OrderBy(s => s.Rol == ParselRolu.Kadastro ? 0 : 1))
+        {
+            var kad = s.Rol == ParselRolu.Kadastro;
+            var ic = IcNokta(s.Koseler);
+            var boy = (kad ? 2m : 3m) * mmM;
+            HaloluYazi(sb, S, Ex(ic.Y), Ey(ic.X) + (kad ? boy * 2m : 0m), kad ? s.GeciciKod : Kimlik(s), boy, kad ? "#555555" : "#000000", kalin: !kad);
         }
 
         // Kuzey oku (sağ üst).

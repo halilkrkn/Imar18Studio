@@ -149,6 +149,12 @@ public sealed record CiktiPaketi(
 
     /// <summary>P7.3-C3: kaynak <c>.NCZ</c> şablonu (yoksa <c>PARSELASYON HARİTASI.NCZ</c> iskelet modunda üretilir).</summary>
     public NczSablonu? NczSablonu { get; init; }
+
+    /// <summary>
+    /// SAHA-017: <c>.DNS</c> ileri dönüşümü aktifken kaynak <c>.NCZ</c> şablonu Deprem Öncesi koordinatlardadır; yazıcı şablonu
+    /// korur ve şablon kayıtlarını bu katsayılarla (<see cref="DonusumKatsayilari.Uygula"/>) Deprem Sonrası'na taşır (iskelet moduna düşülmez).
+    /// </summary>
+    public DonusumKatsayilari? NczSablonIleriDonusumu { get; init; }
 }
 
 /// <summary>Taslak çıktı üreticisi (Infrastructure: ClosedXML, QuestPDF, CKS). Hata durumunda istisna yerine Result döner.</summary>

@@ -48,7 +48,7 @@ public sealed class NczParselasyonYaziciTests
         return r.Value;
     }
 
-    private static CadLayerDocument Oku(byte[] ncz)
+    internal static CadLayerDocument Oku(byte[] ncz)
     {
         using var s = new MemoryStream(ncz, writable: false);
         var r = Adaptor.Read(s);
@@ -61,14 +61,14 @@ public sealed class NczParselasyonYaziciTests
     /// <summary>Sentetik şablon: başlık bölgesi işaretli, katman sonrası XML benzetimi, kadastro + eski imar + A1 kopyası + tip 14.</summary>
     internal static (byte[] Bayt, byte[] KadastroKaydi) SentetikSablon() => SentetikSablon(kadastroKatmani: 1, kadastroVar: true, tip14: true);
 
-    internal static (byte[] Bayt, byte[] KadastroKaydi) SentetikSablon(int kadastroKatmani, bool kadastroVar, bool tip14)
+    internal static (byte[] Bayt, byte[] KadastroKaydi) SentetikSablon(int kadastroKatmani, bool kadastroVar, bool tip14, Action<NczSentetikDosya>? ek = null)
     {
         var onBolge = new byte[600];
         Encoding.ASCII.GetBytes("SENTETIK-BASLIK-BOLGESI").CopyTo(onBolge, 120);
         var xml = Encoding.ASCII.GetBytes("<NetmapManager><Il>SENTETIK</Il></NetmapManager>" + new string(' ', 16));
         var x0 = (double)OrnekProje.X0;
         var y0 = (double)OrnekProje.Y0;
-        var dosya = new NczSentetikDosya { OnBolge = onBolge, KatmanSonrasiBolge = xml }
+        var dosya = new NczSentetikDosya { OnBolge = onBolge, KatmanSonrasiBolge = xml, NetcadBloklari = true }
             .Katman("0").Katman(NczParselasyonYazici.GirenKatmani).Katman(NczParselasyonYazici.OlusanKatmani);
         if (kadastroVar)
         {
@@ -78,13 +78,13 @@ public sealed class NczParselasyonYaziciTests
         dosya.Poligon(2, "ESKI", [(x0 + 50, y0, 0), (x0 + 50, y0 + 5, 0), (x0 + 55, y0 + 5, 0), (x0 + 50, y0, 0)])
             .Poligon(0, "ESKIA1", [(x0 + 10, y0, 0), (x0 + 10, y0 + 12, 0), (x0, y0 + 12, 0), (x0, y0, 0), (x0 + 10, y0, 0)])
             .Cizgi(0, (x0, y0), (x0 + 1, y0 + 1));
+        ek?.Invoke(dosya); // SAHA-017: ek şablon kayıtları (tip 1/5/6) tip 14'ten önce
         if (tip14)
         {
             dosya.HamKayit(0x15, Tip14());
         }
 
-        var bayt = dosya.Olustur();
-        NczSentetikDosya.BaslikYaz(bayt, 8, H(bayt, 7) + 89); // spike: h[8] = h[7] + 89 (katman sonrası bölgeyi gösterir)
+        var bayt = dosya.Olustur(); // SAHA-017: gerçek blok düzeni (h[7] = 0x0B font, h[8] = h[7] + 89 = 0x0C sembol)
         var kadastro = kadastroVar ? KayitBul(bayt, k => k.Yuk[0] == 7 && k.Yuk.Length > 100 && Turkce.GetString(k.Yuk, 82, k.Yuk[81]) == "K1") : [];
         return (bayt, kadastro);
     }
@@ -276,13 +276,13 @@ public sealed class NczParselasyonYaziciTests
 
         H(d, 3).Should().Be(H(sablon, 3), "katman tablosu ofseti değişmez");
         d.AsSpan(85, H(sablon, 3) - 85).ToArray().Should().Equal(sablon.AsSpan(85, H(sablon, 3) - 85).ToArray(), "başlık bölgesi (kapsam/sayaç dışında) aynen korunur");
-        var sablonKatmanSonu = H(sablon, 7) + 4;
-        var araBolge = sablon.AsSpan(sablonKatmanSonu, H(sablon, 11) - sablonKatmanSonu).ToArray();
-        Indeks(d, araBolge).Should().Be(H(d, 7) + 4, "font/sembol/XML bölgesi katman tablosundan hemen sonra aynen korunur");
+        var araBolge = sablon.AsSpan(H(sablon, 7), H(sablon, 11) - H(sablon, 7)).ToArray();
+        Indeks(d, araBolge).Should().Be(H(d, 7), "SAHA-017: font/sembol/XML bölgesi katman bloğunun hemen sonunda (h[7]) aynen korunur");
         Indeks(d, kadastroKaydi).Should().BeGreaterThan(H(d, 11), "kadastro kaydı bayt bayt kopyalanır");
         Katmanlar(d).Should().Equal("0", NczParselasyonYazici.GirenKatmani, NczParselasyonYazici.OlusanKatmani,
             NczParselasyonYazici.YolTerkKatmani, NczParselasyonYazici.NoktaKatmani);
-        d.AsSpan(H(d, 3), 22 + (29 * 3)).ToArray()[..16].Should().Equal(sablon.AsSpan(H(sablon, 3), 16).ToArray());
+        d.AsSpan(H(d, 3) + 5, 11).ToArray().Should().Equal(sablon.AsSpan(H(sablon, 3) + 5, 11).ToArray(), "katman ön başlığı (sayaç hariç) korunur");
+        d.AsSpan(H(d, 3) + 18, 29 * 3).ToArray().Should().Equal(sablon.AsSpan(H(sablon, 3) + 18, 29 * 3).ToArray(), "şablon katman kayıtları bayt bayt korunur");
     }
 
     [Fact]

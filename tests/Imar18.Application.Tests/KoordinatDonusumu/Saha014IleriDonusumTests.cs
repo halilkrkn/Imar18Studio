@@ -344,7 +344,7 @@ public sealed class Saha014IleriDonusumTests
     }
 
     [Fact]
-    public async Task CiktiPaketi_Ileri_Donusumde_Deprem_Oncesi_NCZ_Sablonu_Kullanilmamali_Uyari_Verilmeli()
+    public async Task CiktiPaketi_Ileri_Donusumde_NCZ_Sablonu_Korunmali_Katsayilarla_Ileri_Donusum_Istenmeli_SAHA_017()
     {
         var (yol, _, zaman) = await OrnekProje.TamProjeAsync();
         var sablon = NczSablonuTests.SentetikNcz();
@@ -354,7 +354,9 @@ public sealed class Saha014IleriDonusumTests
 
         var p = CiktiPaketiOlusturucu.Olustur(yol.Belge, ProjeDegerlendirici.Degerlendir(yol.Belge, OrnekProje.Topoloji), new HelmertAfinDonusumHesaplayici()).Value;
 
-        p.NczSablonu.Should().BeNull("şablon deprem öncesi koordinatlardadır; harita iskelet modunda üretilir");
+        // SAHA-017 (mühendis talebi): şablon iskelet moduna düşürülmez; yazıcı şablon kayıtlarını aynı .DNS katsayılarıyla taşır.
+        p.NczSablonu.Should().NotBeNull();
+        p.NczSablonIleriDonusumu.Should().Be(new DonusumKatsayilari(1m, 0m, 0m, 1m, 0.10m, -0.20m));
         p.Uyarilar.Should().Contain(u => u.Contains("PARSELASYON HARİTASI.NCZ", StringComparison.Ordinal) && u.Contains("Deprem Öncesi", StringComparison.Ordinal));
     }
 

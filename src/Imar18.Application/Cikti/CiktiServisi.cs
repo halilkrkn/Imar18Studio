@@ -46,7 +46,15 @@ public static class CiktiPaketiOlusturucu
 
         var uyarilar = new List<string>();
         var eslesme = ParselKimlikEslemesi.Olustur(belge.KimlikCiftleri);
-        string Tescil(string gecici) => eslesme.IsSuccess && eslesme.Value.TryTescilNo(gecici, out var t) ? t : "-";
+        // SAHA-017: eşleme yoksa "ada/parsel" biçimli geçici kod (kroki parselasyonu: 1/1, 2/3) doğrudan tescil no'dur.
+        // Reviewer O6: geçersiz (yinelenen) eşleme listesinde ve başka parsele atanmış tescil no ile çakışmada uygulanmaz.
+        var geriDonusSerbest = eslesme.IsSuccess || belge.KimlikCiftleri.Count == 0;
+        string? GeriDonus(string gecici) => geriDonusSerbest && AdaParselBicimiMi(gecici) ? string.Join('/', gecici.Split('/').Select(x => x.Trim())) : null;
+        bool Cakisiyor(string kod, string gecici) => eslesme.IsSuccess && eslesme.Value.TryGeciciKod(kod, out var diger) && diger != gecici;
+        string Tescil(string gecici) =>
+            eslesme.IsSuccess && eslesme.Value.TryTescilNo(gecici, out var t) ? t
+            : GeriDonus(gecici) is { } kod && !Cakisiyor(kod, gecici) ? kod
+            : "-";
 
         var dengelenmis = new Dictionary<string, decimal>(StringComparer.Ordinal);
         if (degerlendirme.Dengeleme is { } dz)
@@ -82,7 +90,9 @@ public static class CiktiPaketiOlusturucu
             var tescil = p.Geometri.Rol == ParselRolu.Kadastro ? p.Geometri.ParselId : Tescil(p.Geometri.ParselId);
             if (p.Geometri.Rol != ParselRolu.Kadastro && tescil == "-")
             {
-                uyarilar.Add("Tescil no eşlemesi yok: " + p.Geometri.ParselId);
+                uyarilar.Add(GeriDonus(p.Geometri.ParselId) is { } kod && Cakisiyor(kod, p.Geometri.ParselId)
+                    ? "Geçici kod başka parselin tescil no'suyla çakışıyor, tescil no atanmadı: " + p.Geometri.ParselId
+                    : "Tescil no eşlemesi yok: " + p.Geometri.ParselId);
             }
 
             var alan = p.Geometri.Rol != ParselRolu.Kadastro && dengelenmis.TryGetValue(p.Geometri.ParselId, out var da) ? da : p.AlanM2;
@@ -147,6 +157,7 @@ public static class CiktiPaketiOlusturucu
         KoordinatDonusumu.DonusumOzeti? donusum = null;
         AppError? donusumHatasi = null;
         var nczSablonu = belge.NczSablonu;
+        DonusumKatsayilari? nczSablonIleri = null;
         if (belge.IleriDonusum is { } ik && belge.Donusum is { } idg)
         {
             var ileri = KoordinatDonusumu.DonusumOzeti.Ileri(idg, ik, belge.DepremOncesiParseller ?? [], koordinatlar);
@@ -162,8 +173,9 @@ public static class CiktiPaketiOlusturucu
 
             if (nczSablonu is not null)
             {
-                nczSablonu = null;
-                uyarilar.Add("Kaynak NCZ Deprem Öncesi koordinatlarda olduğundan PARSELASYON HARİTASI.NCZ şablonsuz (iskelet) ve Deprem Sonrası koordinatlarla üretildi.");
+                // SAHA-017: şablon korunur; kayıtları yazıcıda aynı .DNS katsayılarıyla ileri dönüştürülür.
+                nczSablonIleri = ik;
+                uyarilar.Add("Kaynak NCZ Deprem Öncesi koordinatlarda; PARSELASYON HARİTASI.NCZ şablon korunarak, nokta/çizgi/yazı/poligon kayıtları .DNS katsayılarıyla Deprem Sonrası'na ileri dönüştürülerek üretildi; şablonda iç düzeni çözülmemiş kayıt (tip 6, 10 vb.) varsa iki koordinat sistemi karışmasın diye haritaya alınmaz.");
             }
         }
         else if (belge.Donusum is { } dg)
@@ -212,7 +224,15 @@ public static class CiktiPaketiOlusturucu
             Rehber = belge.MalikRehberi,
             KadastroParselleri = kadastroOzeti,
             NczSablonu = nczSablonu,
+            NczSablonIleriDonusumu = nczSablonIleri,
         });
+    }
+
+    /// <summary>SAHA-017: <c>"1/1"</c>, <c>" 2 / 3 "</c> gibi rakamlardan oluşan ada/parsel kodu mu?</summary>
+    public static bool AdaParselBicimiMi(string kod)
+    {
+        var parca = kod.Split('/');
+        return parca.Length == 2 && parca.All(x => x.Trim() is { Length: > 0 } t && t.All(char.IsAsciiDigit));
     }
 
     /// <summary>Kadastro hissesi: 1 ise "TAM", değilse sadeleştirilmiş "pay/payda".</summary>

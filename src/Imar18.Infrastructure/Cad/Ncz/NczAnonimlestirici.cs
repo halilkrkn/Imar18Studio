@@ -385,24 +385,36 @@ public static class NczAnonimlestirici
         byte[]? baslikBolgesi = null,
         int h4 = 0,
         byte[]? katmanOzniteligi = null,
-        bool bolumIsaretcisi = false)
+        bool bolumIsaretcisi = false,
+        byte[]? netcadKatmanBlogu = null)
     {
         var d = new List<byte> { NczParser.Signature };
         d.AddRange(new byte[4 * NczParser.HeaderIntCount]);
         d.AddRange(baslikBolgesi ?? []);
 
         var katmanOfseti = d.Count;
-        var tabloBasligi = new byte[NczParser.LayerTableHeaderSize];
-        BinaryPrimitives.WriteInt16LittleEndian(tabloBasligi.AsSpan(NczParser.LayerCountOffset), (short)katmanlar.Count);
-        d.AddRange(tabloBasligi);
-        var oznitelik = katmanOzniteligi ?? new byte[NczParser.LayerRecordSize - 1 - NczParser.LayerNameCapacity];
-        foreach (var ad in katmanlar)
+        int katmanSonu;
+        if (netcadKatmanBlogu is not null)
         {
-            d.AddRange(Pascal(ad, 1 + NczParser.LayerNameCapacity));
-            d.AddRange(oznitelik); // anonimleştiricide sıfırlanır
+            // SAHA-017: Netcad katman bloğu ([0x06][uzunluk][ön başlık][29 bayt kayıtlar]); blok sonu = h[7].
+            d.AddRange(netcadKatmanBlogu);
+            katmanSonu = d.Count;
+        }
+        else
+        {
+            var tabloBasligi = new byte[NczParser.LayerTableHeaderSize];
+            BinaryPrimitives.WriteInt16LittleEndian(tabloBasligi.AsSpan(NczParser.LayerCountOffset), (short)katmanlar.Count);
+            d.AddRange(tabloBasligi);
+            var oznitelik = katmanOzniteligi ?? new byte[NczParser.LayerRecordSize - 1 - NczParser.LayerNameCapacity];
+            foreach (var ad in katmanlar)
+            {
+                d.AddRange(Pascal(ad, 1 + NczParser.LayerNameCapacity));
+                d.AddRange(oznitelik); // anonimleştiricide sıfırlanır
+            }
+
+            katmanSonu = d.Count - NczParser.LayerTableEndBias;
         }
 
-        var katmanSonu = d.Count - NczParser.LayerTableEndBias;
         d.AddRange(xml);
         if (bolumIsaretcisi)
         {
