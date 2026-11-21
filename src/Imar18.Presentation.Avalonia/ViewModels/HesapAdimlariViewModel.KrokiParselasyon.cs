@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -17,12 +18,15 @@ namespace Imar18.Presentation.Avalonia.ViewModels;
 /// Kroki satırlarını doldurur ve DOP uygulanmışsa hak eşleştirmesini yazar; tuval uygulanmış (düz çizgili) parselasyona geçer.
 /// <b>✕ Taslağı İptal Et</b> yalnız önizlemeyi kaldırır. Proje içeriği önizlemeden sonra değişirse taslak kendiliğinden kalkar
 /// (reviewer M3); uygulanmış katman, proje parselleri artık o kodları taşımıyorsa kalkar ve alanları her yenilemede projeden hesaplanır.
+/// SAHA-016: önizleme kartı her parselin <b>Müstakil (TAM)</b> / <b>Müşterek (pay/payda + hissedarlar)</b> dağılımını
+/// (<see cref="KrokiParselDagilimi"/>), tuval etiketleri <c>TAM</c> / <c>Müşterek</c> durumunu gösterir; onaydan sonra dağılım
+/// uygulanan parselasyon için kalır.
 /// </summary>
 public sealed partial class HesapAdimlariViewModel
 {
     private KrokiParselasyonOnizleme? _parselasyonOnizleme;
     private RevisionId? _parselasyonRevizyonu;
-    private IReadOnlyDictionary<string, string>? _onayliMalikler;
+    private IReadOnlyDictionary<string, (string Malik, string Durum)>? _onayliMalikler;
     private bool _onaylaniyor;
 
     /// <summary>Tuvalde çizilecek parselasyon katmanı (taslak veya uygulanmış; yoksa null). Ana pencere tuvale aktarır.</summary>
@@ -32,6 +36,12 @@ public sealed partial class HesapAdimlariViewModel
     /// <summary>Tuval üstü bilgi şeridi metni (taslak varken dolu).</summary>
     [ObservableProperty]
     private string _krokiParselasyonOzeti = string.Empty;
+
+    /// <summary>SAHA-016: parsel bazında müstakil / müşterek dağılım satırları (taslak veya uygulanmış parselasyon).</summary>
+    public ObservableCollection<string> KrokiParselDagilimi { get; } = [];
+
+    /// <summary>Dağılım listesi dolu mu (görünüm).</summary>
+    public bool KrokiParselDagilimiVar => KrokiParselDagilimi.Count > 0;
 
     /// <summary>Onay bekleyen parselasyon taslağı var mı (görünüm: Onayla / İptal düğmeleri).</summary>
     public bool KrokiParselasyonTaslagiVar => _parselasyonOnizleme is not null;
@@ -84,14 +94,15 @@ public sealed partial class HesapAdimlariViewModel
             return;
         }
 
-        _onayliMalikler = o.Parseller.ToDictionary(p => p.Kod, p => p.MalikGorunumu(), StringComparer.Ordinal);
+        _onayliMalikler = o.Parseller.ToDictionary(p => p.Kod, p => (p.MalikGorunumu(), p.MulkiyetDurumu()), StringComparer.Ordinal);
         var metin = o.KrokiMetni();
         KrokiOnizlemesiniTemizle();
+        DagilimiGoster(o.DagilimSatirlari());
         OnayliParselasyonuDenetle(_alan.Yol.Belge);
         KrokiOzeti = "✅ Uygulanan kroki parselasyonu: " + o.Ozet();
         KrokiMetni = metin;
         var durum = string.Create(CultureInfo.InvariantCulture,
-            $"✅ Parselasyon çizimi onaylandı ve uygulandı: {o.Parseller.Count} kesin parsel projenin TK_Oluşan parselleri oldu; Kroki satırları dolduruldu.");
+            $"✅ Parselasyon çizimi onaylandı ve uygulandı: {o.Parseller.Count} kesin parsel projenin TK_Oluşan parselleri oldu ({o.MustakilSayisi} müstakil (TAM), {o.MusterekSayisi} müşterek (pay/payda)); Kroki satırları dolduruldu.");
         if (Degerlendirme?.Dop is not null)
         {
             await HakUygulaAsync().ConfigureAwait(true);
@@ -131,6 +142,7 @@ public sealed partial class HesapAdimlariViewModel
         }
 
         KrokiOnizlemesi = o.KrokiMetni();
+        DagilimiGoster(o.DagilimSatirlari());
         ParselasyonKatmani = new ParselasyonKatmani(o.Parseller.Select(p => new ParselasyonCizimParseli(p.Kod, p.Koseler, p.Etiket())).ToList(), Taslak: true);
         KrokiParselasyonOzeti = string.Create(CultureInfo.InvariantCulture,
             $"📐 Kroki parselasyon taslağı · {o.Ozet()} — kontrol edip onaylayın");
@@ -149,7 +161,20 @@ public sealed partial class HesapAdimlariViewModel
         _parselasyonRevizyonu = null;
         KrokiParselasyonOzeti = string.Empty;
         ParselasyonKatmani = null;
+        DagilimiGoster([]);
         OnayliParselasyonuDenetle(_alan.Yol.Belge);
+    }
+
+    /// <summary>Kart dağılım listesini yeniler.</summary>
+    private void DagilimiGoster(IReadOnlyList<string> satirlar)
+    {
+        KrokiParselDagilimi.Clear();
+        foreach (var d in satirlar)
+        {
+            KrokiParselDagilimi.Add(d);
+        }
+
+        OnPropertyChanged(nameof(KrokiParselDagilimiVar));
     }
 
     /// <summary>
@@ -186,16 +211,47 @@ public sealed partial class HesapAdimlariViewModel
         {
             _onayliMalikler = null;
             ParselasyonKatmani = null;
+            DagilimiGoster([]);
             OnPropertyChanged(nameof(UygulananKrokiParselSayisi));
             return;
         }
 
-        ParselasyonKatmani = new ParselasyonKatmani(
-            parseller.Select(p => new ParselasyonCizimParseli(
-                p!.ParselId,
-                p.Koseler,
-                KrokiParseli.Etiket(p.ParselId, _onayliMalikler[p.ParselId], GaussAreaCalculator.Compute(PolygonRing.FromOpen(p.Koseler).Value).AreaM2))).ToList(),
-            Taslak: false);
+        // Reviewer O5: projede hak eşleştirmesi varsa TAM / Müşterek durumu ve kart dağılımı onay anının kopyasından değil, güncel
+        // eşleştirme satırlarından türetilir (sonradan Kroki/geometri değişirse bayat kalmaz); yoksa onay anındaki dağılım kalır.
+        var eslestirme = belge.HakEslestirme?.Eslestirme;
+        var cizim = new List<ParselasyonCizimParseli>(parseller.Count);
+        var dagilim = new List<string>(parseller.Count);
+        foreach (var p in parseller)
+        {
+            var alan = GaussAreaCalculator.Compute(PolygonRing.FromOpen(p!.Koseler).Value).AreaM2;
+            var (malik, durum) = _onayliMalikler[p.ParselId];
+            if (eslestirme is not null)
+            {
+                var paydaslar = eslestirme.Where(e => string.Equals(e.ImarParselKodu, p.ParselId, StringComparison.Ordinal))
+                    .GroupBy(e => e.MalikId, StringComparer.Ordinal)
+                    .Select(g => (Malik: g.Key, Dm2: g.Sum(e => e.AlanM2) * 100m))
+                    .ToList();
+                durum = paydaslar.Count switch { 0 => string.Empty, 1 => "TAM", _ => "Müşterek" };
+                malik = paydaslar.Count == 0 ? malik : MalikEtiketi.Ayristir(paydaslar[0].Malik).AdSoyad
+                    + (paydaslar.Count > 1 ? string.Create(CultureInfo.InvariantCulture, $" +{paydaslar.Count - 1}") : string.Empty);
+                dagilim.Add(string.Create(CultureInfo.InvariantCulture, $"{p.ParselId} • {alan:0.00} m² • ") + (paydaslar.Count switch
+                {
+                    0 => "Hak eşleştirmesinde satır yok",
+                    1 => "Müstakil (TAM)",
+                    _ => string.Create(CultureInfo.InvariantCulture,
+                        $"Müşterek ({paydaslar.Count} hissedar: {string.Join(", ", paydaslar.Select(x => string.Create(CultureInfo.InvariantCulture, $"{MalikEtiketi.Ayristir(x.Malik).AdSoyad} {x.Dm2:0}/{alan * 100m:0}")))})"),
+                }));
+            }
+
+            cizim.Add(new ParselasyonCizimParseli(p.ParselId, p.Koseler, KrokiParseli.Etiket(p.ParselId, malik, alan, durum)));
+        }
+
+        ParselasyonKatmani = new ParselasyonKatmani(cizim, Taslak: false);
+        if (eslestirme is not null)
+        {
+            DagilimiGoster(dagilim);
+        }
+
         OnPropertyChanged(nameof(UygulananKrokiParselSayisi));
     }
 
@@ -207,6 +263,7 @@ public sealed partial class HesapAdimlariViewModel
         _onayliMalikler = null;
         ParselasyonKatmani = null;
         KrokiParselasyonOzeti = string.Empty;
+        DagilimiGoster([]);
         OnPropertyChanged(nameof(UygulananKrokiParselSayisi));
     }
 }

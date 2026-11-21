@@ -866,6 +866,17 @@
                               ToolTip.Tip="Malik kullanım alanları krokisi; blok içinde bölme çizgileri ve malik yazıları varsa kesin alanlı parselasyon taslağı tuvalde çizilir, yoksa TAKBİS hisseleriyle Kroki satırları üretilir." />
                       <ContentControl Content="{Binding KrokiOzeti}" ContentTemplate="{StaticResource OzetSablonu}"
                                       IsVisible="{Binding KrokiOzeti, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                      <!-- SAHA-016: parsel bazında Müstakil (TAM) / Müşterek (pay/payda + hissedarlar) dağılımı -->
+                      <StackPanel x:Name="ParselDagilimPaneli" Spacing="1" IsVisible="{Binding KrokiParselDagilimiVar}">
+                        <TextBlock Text="Parsel dağılımı (müstakil / müşterek)" Classes="etiket" />
+                        <ItemsControl ItemsSource="{Binding KrokiParselDagilimi}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                              <SelectableTextBlock Text="{Binding}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" />
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
                       <StackPanel Spacing="4" IsVisible="{Binding KrokiOnizlemesiVar}">
                         <TextBox Text="{Binding KrokiOnizlemesi, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" MaxHeight="140"
                                  FontFamily="Consolas" FontSize="11" />
