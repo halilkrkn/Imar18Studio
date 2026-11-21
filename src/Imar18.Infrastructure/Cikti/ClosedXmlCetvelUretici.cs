@@ -147,13 +147,26 @@ public sealed class ClosedXmlCetvelUretici : ICiktiUretici
         var r = BaslikSatiri + 1;
         foreach (var k in p.Koordinatlar)
         {
-            ws.Cell(r, 1).Value = k.NoktaNo;
+            NoktaHucresi(ws.Cell(r, 1), p, k.NoktaNo);
             Sayi(ws.Cell(r, 2), k.Y, "0.000");
             Sayi(ws.Cell(r, 3), k.X, "0.000");
             r++;
         }
 
         ws.Columns().AdjustToContents();
+    }
+
+    /// <summary>SAHA-020: arşiv noktası yoksa iç nokta no (sayı), varsa basılacak nokta adı (arşiv no / sıralı yeni no; metin).</summary>
+    private static void NoktaHucresi(IXLCell hucre, CiktiPaketi p, int noktaNo)
+    {
+        if (p.NoktaAdlari.Count == 0)
+        {
+            hucre.Value = noktaNo;
+        }
+        else
+        {
+            hucre.Value = p.NoktaAdi(noktaNo);
+        }
     }
 
     private static void NoktaliAlan(IXLWorksheet ws, CiktiPaketi p)
@@ -166,7 +179,7 @@ public sealed class ClosedXmlCetvelUretici : ICiktiUretici
             ws.Cell(r, 2).Value = s.GeciciKod;
             ws.Cell(r, 3).Value = RolAdi(s.Rol);
             Sayi(ws.Cell(r, 4), s.HesapAlaniM2);
-            ws.Cell(r, 5).Value = string.Join(", ", s.NoktaNolari);
+            ws.Cell(r, 5).Value = string.Join(", ", s.NoktaNolari.Select(p.NoktaAdi));
             r++;
         }
 
@@ -184,7 +197,7 @@ public sealed class ClosedXmlCetvelUretici : ICiktiUretici
             foreach (var k in s.Kenarlar)
             {
                 ws.Cell(r, 1).Value = s.TescilNo;
-                ws.Cell(r, 2).Value = k.NoktaNo;
+                NoktaHucresi(ws.Cell(r, 2), p, k.NoktaNo);
                 Sayi(ws.Cell(r, 3), k.Y, "0.000");
                 Sayi(ws.Cell(r, 4), k.X, "0.000");
                 var sonraki = r == son ? ilk : r + 1;

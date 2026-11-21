@@ -113,7 +113,8 @@ public sealed partial class HesapAdimlariViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(TecvizUygulaCommand), nameof(DopUygulaCommand), nameof(HakUygulaCommand), nameof(WebtapuIsteCommand),
         nameof(KrokiNczIsteCommand), nameof(TakbiseAktarCommand), nameof(KrokiyeAktarCommand), nameof(KrokiOnizlemesiniKaldirCommand), nameof(WebtapuOnizlemesiniKaldirCommand),
-        nameof(ParselasyonCiziminiOnaylaCommand), nameof(ParselasyonTaslaginiIptalEtCommand))]
+        nameof(ParselasyonCiziminiOnaylaCommand), nameof(ParselasyonTaslaginiIptalEtCommand), nameof(MusterekDuzenleCommand), nameof(MusterekSatirEkleCommand),
+        nameof(MusterekDuzenlemeyiUygulaCommand), nameof(OtomatikDagitimaDonCommand))]
     private bool _isBusy;
 
     [ObservableProperty]

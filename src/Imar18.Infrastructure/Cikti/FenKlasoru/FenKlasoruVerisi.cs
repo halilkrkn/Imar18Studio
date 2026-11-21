@@ -207,7 +207,10 @@ internal static class FenKlasoruVerisi
         return (Noktalar(p, secili.Where(s => s.Rol != ParselRolu.Kadastro)), Noktalar(p, kadastro));
     }
 
-    /// <summary>SAHA-017: Deprem Öncesi tablosu — yalnız kadastro köşelerinin dönüşüm öncesi koordinatları (MK yok).</summary>
+    /// <summary>
+    /// SAHA-017: Deprem Öncesi tablosu — yalnız kadastro köşelerinin dönüşüm öncesi koordinatları (MK yok). SAHA-020: arşiv noktası
+    /// eşlenen köşede arşiv onaylı koordinat.
+    /// </summary>
     public static IReadOnlyList<KoordinatSatiri> OncesiNoktalar(CiktiPaketi p, IReadOnlyList<KoordinatSatiri> kadastro)
     {
         if (p.Donusum is null)
@@ -215,16 +218,19 @@ internal static class FenKlasoruVerisi
             return [];
         }
 
+        // SAHA-020: arşiv noktası verilen kadastro köşesinde mühendisin arşiv onaylı Y, X'i basılır.
         var nolar = kadastro.Select(k => k.NoktaNo).ToHashSet();
-        return p.Donusum.DepremOncesi.Where(k => nolar.Contains(k.NoktaNo)).OrderBy(k => k.NoktaNo).ToArray();
+        return p.Donusum.DepremOncesi.Where(k => nolar.Contains(k.NoktaNo))
+            .Select(k => p.ArsivKoordinatlari.TryGetValue(k.NoktaNo, out var a) ? a : k)
+            .OrderBy(k => k.NoktaNo).ToArray();
     }
 
     /// <summary>SAHA-017: Deprem Sonrası / tek tablo satırları — önce TK_Oluşan (MK dolu), altına kadastro (MK boş, tire de yok).</summary>
     public static IReadOnlyList<string[]> SonrasiSatirlari(CiktiPaketi p, IReadOnlyList<KoordinatSatiri> olusan, IReadOnlyList<KoordinatSatiri> kadastro)
     {
         var mk = Mk(p);
-        return olusan.Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X), mk })
-            .Concat(kadastro.Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X), string.Empty }))
+        return olusan.Select(k => new[] { p.NoktaAdi(k.NoktaNo), F2(k.Y), F2(k.X), mk })
+            .Concat(kadastro.Select(k => new[] { p.NoktaAdi(k.NoktaNo), F2(k.Y), F2(k.X), string.Empty }))
             .ToArray();
     }
 

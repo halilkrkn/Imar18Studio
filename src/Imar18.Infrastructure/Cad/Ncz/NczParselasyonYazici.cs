@@ -591,7 +591,7 @@ public static class NczParselasyonYazici
         var nk = Katman(indeks, NoktaKatmani);
         foreach (var (no, v) in noktalar)
         {
-            kayitlar.Add((NczParser.EntityRecord, Nokta(nk, no.ToString(CultureInfo.InvariantCulture), v)));
+            kayitlar.Add((NczParser.EntityRecord, Nokta(nk, p.NoktaAdi(no), v))); // SAHA-020: Koordine Özet ile aynı ad
         }
 
         // İçerik damgası (SORU-050): "0" katmanında, parsellerin sol üstünde iki satır.

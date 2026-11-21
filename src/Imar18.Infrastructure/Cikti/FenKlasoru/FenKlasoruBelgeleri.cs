@@ -203,8 +203,8 @@ internal static class FenKlasoruBelgeleri
                 sag.Item().Text(string.Create(Inv, $"A= {P8(par.A)}   B= {P8(par.B)}   C= {P8(par.C)}   D= {P8(par.D)}   CY= {P3(par.Cy)}   CX= {P3(par.Cx)}")).Bold();
                 var oncesi = d.DepremOncesi.ToDictionary(k => k.NoktaNo);
                 var satirlar = p.Koordinatlar.Select(k => oncesi.TryGetValue(k.NoktaNo, out var o)
-                    ? new[] { k.NoktaNo.ToString(Inv), F2(o.Y), F2(o.X), F2(k.Y), F2(k.X) }
-                    : [k.NoktaNo.ToString(Inv), "-", "-", F2(k.Y), F2(k.X)]).ToArray();
+                    ? new[] { p.NoktaAdi(k.NoktaNo), F2(o.Y), F2(o.X), F2(k.Y), F2(k.X) }
+                    : [p.NoktaAdi(k.NoktaNo), "-", "-", F2(k.Y), F2(k.X)]).ToArray();
                 IkiBloklu(sag, ["Nokta no", "Dönüşecek Y", "Dönüşecek X", "Dönüşmüş Y", "Dönüşmüş X"], satirlar, 45, [0.9f, 1.3f, 1.4f, 1.3f, 1.4f]);
             });
         });
@@ -232,7 +232,7 @@ internal static class FenKlasoruBelgeleri
 
         Baslik(col, datum + " KOORDİNE ÖZET(DEPREM ÖNCESİ)", 11);
         IkiBloklu(col, ["Nokta No", "Y", "X"],
-            OncesiNoktalar(p, kadastro).Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X) }).ToArray(), 30);
+            OncesiNoktalar(p, kadastro).Select(k => new[] { p.NoktaAdi(k.NoktaNo), F2(k.Y), F2(k.X) }).ToArray(), 30);
 
         col.Item().PaddingTop(8);
         Baslik(col, datum + " KOORDİNE ÖZET(DEPREM SONRASI)", 11);
@@ -275,7 +275,7 @@ internal static class FenKlasoruBelgeleri
             HesapParselleri(p).Select(s => new[]
             {
                 Kimlik(s).Contains('/', StringComparison.Ordinal) ? AdaNo(Kimlik(s)) : string.Empty, ParselNo(Kimlik(s)),
-                string.Join(",", s.NoktaNolari.Select(n => n.ToString(Inv))), F2(s.DengelenmisAlanM2),
+                string.Join(",", s.NoktaNolari.Select(p.NoktaAdi)), F2(s.DengelenmisAlanM2),
             }),
             [0.7f, 0.7f, 5f, 1.1f]);
     }));
@@ -297,7 +297,7 @@ internal static class FenKlasoruBelgeleri
 
                     var serit = i < seritler.Count ? seritler[i] : [];
                     Tablo(r.RelativeItem(), ["Ada Parsel", "Hesap Alan", "Nokta No", "Y", "X", "Cephe"],
-                        serit.Select(s => new[] { s.AdaParsel, s.HesapAlan, s.NoktaNo.ToString(Inv), F2(s.Y), F2(s.X), F2(s.CepheM) }),
+                        serit.Select(s => new[] { s.AdaParsel, s.HesapAlan, p.NoktaAdi(s.NoktaNo), F2(s.Y), F2(s.X), F2(s.CepheM) }),
                         [1f, 0.9f, 0.7f, 1.2f, 1.3f, 0.7f], font: 6f);
                 }
             });
@@ -615,7 +615,7 @@ internal static class FenKlasoruBelgeleri
                 if (p.Donusum is not null)
                 {
                     sag.Item().PaddingTop(4).Text(datum + " KOORDİNE ÖZET(DEPREM ÖNCESİ)").Bold().FontSize(6.5f);
-                    Tablo(sag.Item(), ["Nokta No", "Y", "X"], OncesiNoktalar(p, kadastro).Select(k => new[] { k.NoktaNo.ToString(Inv), F2(k.Y), F2(k.X) }), font: 6f);
+                    Tablo(sag.Item(), ["Nokta No", "Y", "X"], OncesiNoktalar(p, kadastro).Select(k => new[] { p.NoktaAdi(k.NoktaNo), F2(k.Y), F2(k.X) }), font: 6f);
                 }
 
                 sag.Item().PaddingTop(4).Text(datum + (p.Donusum is null ? " KOORDİNE ÖZET" : " KOORDİNE ÖZET(DEPREM SONRASI)")).Bold().FontSize(6.5f);
@@ -731,10 +731,33 @@ internal static class FenKlasoruBelgeleri
                 var uz = Imar18.Domain.Numerics.DecimalMath.Sqrt((vx * vx) + (vy * vy));
                 var (ux, uy) = uz == 0m ? (0m, -1m) : (vx / uz, vy / uz);
                 sb.Append("<circle cx=\"").Append(S(Ex(a))).Append("\" cy=\"").Append(S(Ey(a))).Append("\" r=\"4.5\" fill=\"#ffffff\" stroke=\"#111111\" stroke-width=\"1\"/>");
-                Yazi(sb, Ex(a) + (ux * 20m), Ey(a) + (uy * 20m), s.NoktaNolari[i].ToString(Inv), 16, "#1d4ed8");
+                Yazi(sb, Ex(a) + (ux * 20m), Ey(a) + (uy * 20m), p.NoktaAdi(s.NoktaNolari[i]), 16, "#1d4ed8");
             }
 
             Yazi(sb, icX, icY, Kimlik(s), 26, "#111827", kalin: true);
+        }
+
+        // SAHA-020: arşiv noktası verilen kadastro köşeleri (seçili parsellerle ortak olmasa da) arşiv nokta no'suyla basılır; kutu
+        // dışındakiler kırpılır. Yazı kadastro parselinin iç noktasından dışa kaydırılır.
+        foreach (var s in p.Parseller.Where(s => s.Rol == ParselRolu.Kadastro && p.ArsivKoordinatlari.Count > 0))
+        {
+            var ic = IcNokta(s.Koseler);
+            var (icX, icY) = (Ex(ic), Ey(ic));
+            for (var i = 0; i < Math.Min(s.Koseler.Count, s.NoktaNolari.Count); i++)
+            {
+                var no = s.NoktaNolari[i];
+                var a = s.Koseler[i];
+                if (!p.ArsivKoordinatlari.ContainsKey(no) || a.X < minX || a.X > maxX || a.Y < minY || a.Y > maxY || !cizilenNoktalar.Add(no))
+                {
+                    continue;
+                }
+
+                var (vx, vy) = (Ex(a) - icX, Ey(a) - icY);
+                var uz = Imar18.Domain.Numerics.DecimalMath.Sqrt((vx * vx) + (vy * vy));
+                var (ux, uy) = uz == 0m ? (0m, -1m) : (vx / uz, vy / uz);
+                sb.Append("<circle cx=\"").Append(S(Ex(a))).Append("\" cy=\"").Append(S(Ey(a))).Append("\" r=\"4.5\" fill=\"#ffffff\" stroke=\"#555555\" stroke-width=\"1\"/>");
+                Yazi(sb, Ex(a) + (ux * 20m), Ey(a) + (uy * 20m), p.NoktaAdi(no), 16, "#1d4ed8");
+            }
         }
 
         sb.Append("</g></svg>");

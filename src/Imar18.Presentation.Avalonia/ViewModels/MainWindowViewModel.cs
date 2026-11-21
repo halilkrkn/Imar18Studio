@@ -170,12 +170,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 () => Hesap.KrokiNczIsteCommand.Execute(null), () => Hesap.KrokiNczIsteCommand.CanExecute(null)));
             Kunye = new KunyeDonusumViewModel(proje);
             Kunye.Uygulandi += (_, _) => LastProjeTask = OnayCikti.YenileAsync();
+            Arsiv = new ArsivNoktalariViewModel(proje);
+            Arsiv.Uygulandi += (_, _) => LastProjeTask = OnayCikti.YenileAsync();
 
             // SAHA-014: .DNS uygulanınca/kaldırılınca tuval Deprem Sonrası/Öncesi koordinatlarla yenilenir; 2–4. adım görünümleri tazelenir.
             Kunye.IleriDonusumDegisti += (_, _) =>
             {
                 LastReapplyTask = DonusumSahnesiniYenileAsync();
                 LastProjeTask = Hesap.YenileAsync();
+                Arsiv.Yenile();
             };
             Hesap.Uygulandi += (_, _) =>
             {
@@ -221,6 +224,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>P7.3-C2: 1. adım Proje Künyesi &amp; Dönüşüm kartı (proje çalışma alanı yoksa null).</summary>
     public KunyeDonusumViewModel? Kunye { get; }
+
+    /// <summary>SAHA-020: 1. adım Arşiv Onaylı Kadastro Noktaları kartı (proje çalışma alanı yoksa null).</summary>
+    public ArsivNoktalariViewModel? Arsiv { get; }
 
     /// <summary>Sihirbaz 5. adim: onay ve cikti (proje calisma alani yoksa null — P4 davranisi).</summary>
     public OnayCiktiViewModel? OnayCikti { get; }
@@ -319,6 +325,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
             Wizard.LoadLayers(result.Value.Layers);
             _lastDocument = result.Value;
+            Arsiv?.CadNoktalariniAyarla(result.Value.Points); // SAHA-020: .NCZ tip 1 noktaları → varsayılan arşiv nokta no
             var sablonNotu = await NczSablonunuGuncelleAsync(ncz, sablonSiniriAsildi).ConfigureAwait(true);
             await ApplyAsync(result.Value).ConfigureAwait(true);
             if (sablonNotu is not null)
@@ -427,6 +434,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Wizard.Sifirla();
         Hesap?.Sifirla();
         Kunye?.Sifirla();
+        Arsiv?.Sifirla();
         if (OnayCikti is not null)
         {
             await OnayCikti.YenileAsync().ConfigureAwait(true);
@@ -680,6 +688,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             await Hesap.YenileAsync().ConfigureAwait(true);
         }
 
+        Arsiv?.Yenile(); // SAHA-020: kadastro köşeleri değiştiyse arşiv tablosu yeniden kurulur
         return sonuc.IsSuccess;
     }
 

@@ -69,6 +69,12 @@ public sealed record CadText(string LayerName, string Text, GeodeticPoint Positi
 }
 
 /// <summary>
+/// SAHA-020: CAD nokta varligi (Netcad <c>.NCZ</c> tip 1): katman, nokta adi (ör. arsiv nokta no) ve jeodezik (X = Kuzey, Y = Dogu)
+/// konum. Yalniz yardimci veridir (kadastro kosesi ↔ arsiv nokta no eslemesi); geometriye girmez.
+/// </summary>
+public sealed record CadPoint(string LayerName, string Name, GeodeticPoint Position);
+
+/// <summary>
 /// Bicimden bagimsiz CAD okuma sonucu (spec 2.1 <c>CadLayerDocument</c>).
 /// <see cref="SkippedEntityCount"/>: taninan ama bu adaptorun cozmedigi varliklar (nokta, yazi, cizgi...).
 /// <see cref="UnrecognizedRecordCount"/>: bicimi bilinmeyen kayitlar (sessiz veri kaybini gorunur kilar).
@@ -82,4 +88,8 @@ public sealed record CadLayerDocument(
     int SkippedEntityCount,
     int UnrecognizedRecordCount,
     int OffGridVertexCount,
-    IReadOnlyList<AppError> Warnings);
+    IReadOnlyList<AppError> Warnings)
+{
+    /// <summary>SAHA-020: okunan nokta varliklari (yalniz <c>.NCZ</c> tip 1; diger bicimlerde bos).</summary>
+    public IReadOnlyList<CadPoint> Points { get; init; } = [];
+}

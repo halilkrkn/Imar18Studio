@@ -114,6 +114,12 @@ public sealed record ProjeRevizyonGirdisi(
     /// </summary>
     public string? NczSablonuOzeti { get; init; }
 
+    /// <summary>
+    /// SAHA-020: mühendisin verdiği arşiv onaylı kadastro (TK_PARSEL) nokta numaraları ve koordinatlarının SHA-256 özeti (Application
+    /// hesaplar). Fen Klasörü'ne basıldıkları için onaya bağlıdır; yalnız doluysa özete yazılır → arşivsiz projelerin RevisionId'si değişmez.
+    /// </summary>
+    public string? ArsivNoktalariOzeti { get; init; }
+
     /// <summary>SAHA-014: <c>.DNS</c> ileri dönüşüm katsayıları. Yalnız doluysa özete yazılır (DNS'siz projelerin RevisionId'si değişmez).</summary>
     public DonusumKatsayilari? IleriDonusum { get; init; }
 
@@ -232,6 +238,11 @@ public static class ProjeRevizyonu
         if (girdi.NczSablonuOzeti is { } ncz)
         {
             o.Ekle("ncz.sha256", ncz);
+        }
+
+        if (girdi.ArsivNoktalariOzeti is { } arsiv)
+        {
+            o.Ekle("arsiv.sha256", arsiv);
         }
 
         if (girdi.Kunye is { } kunye)

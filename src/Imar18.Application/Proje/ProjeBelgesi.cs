@@ -58,6 +58,12 @@ public sealed record ProjeBelgesi(
     /// </summary>
     public IReadOnlyList<ParselGeometrisi>? DepremOncesiParseller { get; init; }
 
+    /// <summary>
+    /// SAHA-020: mühendisin verdiği arşiv onaylı kadastro (TK_PARSEL) köşe noktaları (nokta no + arşiv Y, X). KOORDİNE ÖZET, RÖLÖVE ve
+    /// ALAN HESABI PDF'lerine basılır; yalnız doluysa özeti RevisionId'ye girer (eski projelerin kimliği değişmez).
+    /// </summary>
+    public IReadOnlyList<ArsivNoktaKaydi> ArsivKadastroNoktalari { get; init; } = [];
+
     /// <summary>Dönüşüm kipi: yok, P7.3-C2 elle ortak nokta (ters) veya SAHA-014 <c>.DNS</c> ileri dönüşüm.</summary>
     public DonusumKipi DonusumKipi => IleriDonusum is not null
         ? DonusumKipi.IleriDns
@@ -80,6 +86,7 @@ public sealed record ProjeBelgesi(
         NczSablonuOzeti = NczSablonu?.Sha256,
         IleriDonusum = IleriDonusum,
         DepremOncesiGeometri = IleriDonusum is null ? null : DepremOncesiParseller,
+        ArsivNoktalariOzeti = ArsivNoktalari.Ozet(ArsivKadastroNoktalari),
     });
 
     /// <summary>Onay var ve güncel içerik revizyonuna bağlıysa true.</summary>
