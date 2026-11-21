@@ -16,6 +16,9 @@
     <PackageReference Include="Semi.Avalonia" Version="11.2.0" />
   </ItemGroup>
   <ItemGroup>
+    <AvaloniaResource Include="Assets\Imar18Studio.ico" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="Imar18.Presentation.Tests" />
   </ItemGroup>
 </Project>

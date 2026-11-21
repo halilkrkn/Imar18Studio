@@ -28,7 +28,6 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         AvaloniaXamlLoader.Load(this);
-        Icon = Imar18Logo.PencereIkonu();
         DataContextChanged += OnDataContextChanged;
     }
 

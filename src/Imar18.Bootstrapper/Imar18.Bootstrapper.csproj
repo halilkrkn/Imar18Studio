@@ -2,7 +2,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <RootNamespace>Imar18.Bootstrapper</RootNamespace>
-    <AssemblyName>Imar18.Bootstrapper</AssemblyName>
+    <AssemblyName>Imar18Studio</AssemblyName>
+    <ApplicationIcon>Imar18Studio.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Imar18.Domain\Imar18.Domain.csproj" />

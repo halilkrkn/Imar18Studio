@@ -4,6 +4,7 @@
         xmlns:g="clr-namespace:Imar18.Presentation.Avalonia.Gorunum"
         xmlns:vm="clr-namespace:Imar18.Presentation.Avalonia.ViewModels"
         x:Class="Imar18.Presentation.Avalonia.Views.MainWindow"
+        Icon="avares://Imar18.Presentation.Avalonia/Assets/Imar18Studio.ico"
         Title="Imar18Studio — PİLOT (Resmî işlemde kullanılamaz)"
         Width="1440" Height="900" MinWidth="1024" MinHeight="640"
         Background="{DynamicResource CadBg}">

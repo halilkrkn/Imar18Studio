@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Imar18.Presentation.Avalonia.Views.SplashWindow"
+        Icon="avares://Imar18.Presentation.Avalonia/Assets/Imar18Studio.ico"
+        Title="Imar18Studio"
+        Width="540" Height="320" CanResize="False" ShowInTaskbar="False" Topmost="True"
+        SystemDecorations="None" WindowStartupLocation="CenterScreen"
+        Background="Transparent" TransparencyLevelHint="Transparent">
+  <!--
+    SAHA-018: Netcad tarzı açılış / yüklenme ekranı. Tema sözlüklerinden bağımsızdır (sabit koyu stüdyo renkleri); yalnızca
+    Imar18Logo kaynağını kullanır. Metinler Türkçedir; ilerleme ve durum metni SplashWindow.Ilerle ile güncellenir.
+  -->
+  <Border CornerRadius="18" Background="#0B1B3A" BorderBrush="#2D3F66" BorderThickness="1" ClipToBounds="True">
+    <Grid>
+      <Path Data="M0,0 V320 M30,0 V320 M60,0 V320 M90,0 V320 M120,0 V320 M150,0 V320 M180,0 V320 M210,0 V320 M240,0 V320 M270,0 V320 M300,0 V320 M330,0 V320 M360,0 V320 M390,0 V320 M420,0 V320 M450,0 V320 M480,0 V320 M510,0 V320 M540,0 V320 M0,0 H540 M0,30 H540 M0,60 H540 M0,90 H540 M0,120 H540 M0,150 H540 M0,180 H540 M0,210 H540 M0,240 H540 M0,270 H540 M0,300 H540" Stroke="#22D3EE" StrokeThickness="0.5" Opacity="0.10" Stretch="None" IsHitTestVisible="False" />
+      <Border Opacity="0.35" IsHitTestVisible="False">
+        <Border.Background>
+          <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="#1D4ED8" Offset="0" />
+            <GradientStop Color="#000B1B3A" Offset="0.6" />
+          </LinearGradientBrush>
+        </Border.Background>
+      </Border>
+      <Grid Margin="36,32,36,26" RowDefinitions="*,Auto,Auto,Auto">
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="20" VerticalAlignment="Center">
+          <Image x:Name="Logo" Source="{StaticResource Imar18Logo}" Width="96" Height="96" />
+          <StackPanel VerticalAlignment="Center" Spacing="6">
+            <TextBlock x:Name="Baslik" Text="Imar18Studio" FontSize="34" FontWeight="Bold" Foreground="#F1F5F9" />
+            <TextBlock x:Name="AltBaslik" Text="3194 Sayılı İmar Kanunu 18. Madde Uygulama Stüdyosu" FontSize="12.5" Foreground="#94A3B8" TextWrapping="Wrap" MaxWidth="330" />
+            <Border HorizontalAlignment="Left" Padding="10,2" CornerRadius="10" Background="#26FBBF24" BorderBrush="#FBBF24" BorderThickness="1" Margin="0,4,0,0">
+              <TextBlock x:Name="Rozet" Text="Evre 1 • Pilot" FontSize="11" FontWeight="SemiBold" Foreground="#FBBF24" />
+            </Border>
+          </StackPanel>
+        </StackPanel>
+        <TextBlock x:Name="Durum" Grid.Row="1" Text="Mevzuat ve hesap çekirdeği başlatılıyor..." FontSize="12" Foreground="#CBD5E1" Margin="0,0,0,8" />
+        <ProgressBar x:Name="Ilerleme" Grid.Row="2" Minimum="0" Maximum="100" Value="0" Height="6" CornerRadius="3" Foreground="#22D3EE" Background="#1E2A4A" />
+        <TextBlock Grid.Row="3" Text="PİLOT — Resmî işlemde kullanılamaz" FontSize="10" Foreground="#64748B" Margin="0,10,0,0" HorizontalAlignment="Right" />
+      </Grid>
+    </Grid>
+  </Border>
+</Window>
