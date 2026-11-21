@@ -2,6 +2,7 @@ using System.Globalization;
 using FluentAssertions;
 using Imar18.Application.Cad;
 using Imar18.Application.Girdi;
+using Imar18.Domain.Diagnostics;
 using Imar18.Domain.Geometry;
 using Imar18.Domain.Mevzuat.Tahsis;
 using Imar18.Domain.Numerics;
@@ -58,6 +59,13 @@ public sealed class Saha015KrokiGercekVeriTests
 
         var s = KrokiParselasyonMotoru.Olustur(new KrokiParselasyonGirdisi(kroki, parseller, [takbis], MalikRehberi.Bos, dopo), new KrokiBlokBolucu());
         s.IsSuccess.Should().BeTrue(s.IsFailure ? s.Error.Code : string.Empty);
+
+        // SAHA-016: onaylanacak satırlar hak eşleştirmesinden Σ parsel (ERR-TAPU-005) ve Σ malik (ERR-TAPU-006) bulgusu olmadan geçer.
+        // (Sentetik TAKBİS muvafakatsız olduğundan müstakil parsellerin Md. 17/1-(d) ERR-TAPU-007 bulgusu beklenir; ayrıca uyarılır.)
+        var hak = HakEslestirmeServisi.Eslestir(new HakEslestirmeGirdisi(dopo, [takbis],
+            s.Value.Parseller.Select(p => new ImarParseli(p.Kod, p.GaussAlanM2)).ToList(), KrokiGirdiDogrulayici.Dogrula(s.Value.Satirlar, [takbis]).Value));
+        hak.IsSuccess.Should().BeTrue();
+        hak.Value.Bulgular.Where(b => b.Code != ErrorCodes.TapuMuvafakatsizMustakilTahsis).Should().BeEmpty();
         return s.Value;
     }
 
@@ -66,12 +74,18 @@ public sealed class Saha015KrokiGercekVeriTests
         o.Parseller.Count.Should().Be(8);
         o.BolunenBloklar.Count.Should().Be(2);
         o.Parseller.GroupBy(p => p.BlokKimligi).Select(g => g.Count()).Order().Should().Equal(3, 5);
-        o.Parseller.Count(p => p.Malikler.Count != 1).Should().Be(0, "her parçada tam bir malik yazısı vardır");
-        o.Parseller.SelectMany(p => p.Malikler).Distinct(StringComparer.Ordinal).Count().Should().Be(8, "8 farklı malik 8 parsele düşer");
+        o.Parseller.Count(p => p.Malikler.Count == 0).Should().Be(0);
+        o.Parseller.Select(p => p.Malikler[0]).Distinct(StringComparer.Ordinal).Count().Should().Be(8, "her parçanın kroki maliki ilk paydaştır; 8 farklı malik");
+        o.Parseller.Count(p => p.GaussAlanM2 != p.HedefAlanM2).Should().Be(0, "SAHA-016: 2 ondalık Gauss alanı hedefe birebir eşittir");
+        o.Parseller.Count(p => o.Satirlar.Where(s => s.ImarParselKodu == p.Kod).Sum(s => s.AlanM2) != p.GaussAlanM2).Should().Be(0, "Σ parsel = parsel alanı");
+        o.Farklar.Count(f => f.FarkM2 is not { } x || Math.Abs(x) > 0.01m).Should().Be(0, "Σ malik = net hak (R2 dengelemesi ≤ 1 dm²)");
+        o.MustakilSayisi.Should().Be(7);
+        o.MusterekSayisi.Should().Be(1, "eşit hisseli sentetik TAKBİS'te blok 1'in 5 artanı blok 2'nin açık kapasitesine (tek parsel) aktarılır");
+        o.Parseller.Max(p => p.Hissedarlar.Count).Should().Be(6);
         o.Parseller.Count(p => Math.Abs(GaussAreaCalculator.Compute(PolygonRing.FromOpen(p.Koseler).Value).AreaM2Exact - p.HedefAlanM2) > 0.01m)
             .Should().Be(0, "her parselin Gauss alanı hedefe ≤ 0.01 m² eşittir");
         o.Parseller.Count(p => !System.Text.RegularExpressions.Regex.IsMatch(p.Kod, "^.+/[1-5]$")).Should().Be(0);
-        o.Satirlar.Count.Should().Be(8);
+        o.Satirlar.Count.Should().Be(13, "8 müstakil/kroki satırı + 5 müşterek aktarım satırı");
         o.Satirlar.Sum(s => s.AlanM2).Should().Be(o.ToplamAlanM2);
     }
 

@@ -22,8 +22,9 @@ public sealed record KrokiParselasyonGirdisi(
 
 /// <summary>
 /// Kesin alanlı yeni <c>TK_Oluşan</c> parseli. <see cref="Koseler"/> aktif sistemde açık halkadır; <see cref="HedefAlanM2"/> blok
-/// toplamına dengelenmiş kesin hak alanı, <see cref="GaussAlanM2"/> geometrinin 2 ondalık Gauss alanı, <see cref="TaslakAlanM2"/>
-/// mühendisin kabaca çizdiği bölgenin alanıdır. <see cref="Malikler"/> TAKBİS kimlikleridir (yerel ekran; denetime yazılmaz).
+/// toplamına dengelenmiş kesin alan (= 2 ondalık Gauss alanı <see cref="GaussAlanM2"/>), <see cref="TaslakAlanM2"/> mühendisin kabaca
+/// çizdiği bölgenin alanıdır. <see cref="Malikler"/> parselin tüm paydaşlarının TAKBİS kimlikleridir (krokideki malik önce; yerel ekran,
+/// denetime yazılmaz). SAHA-016: <see cref="Hissedarlar"/> müstakil (tek paydaş, <c>TAM</c>) veya müşterek (dm² pay/payda) dağılımdır.
 /// </summary>
 public sealed record KrokiParseli(
     string Kod,
@@ -34,16 +35,42 @@ public sealed record KrokiParseli(
     decimal TaslakAlanM2,
     IReadOnlyList<string> Malikler)
 {
+    /// <summary>SAHA-016: paydaşlar (alan + tescil hissesi). Boşsa dağıtım yapılmamıştır.</summary>
+    public IReadOnlyList<ParselHissedari> Hissedarlar { get; init; } = [];
+
+    /// <summary>Tek paydaşlı (TAM) müstakil parsel.</summary>
+    public bool Mustakil => Hissedarlar.Count == 1;
+
     /// <summary>Etiketteki malik görünümü: baba adısız ad soyad; birden çok malikte "+n"; malik yoksa "Malik ?".</summary>
     public string MalikGorunumu() => Malikler.Count == 0
         ? "Malik ?"
         : MalikEtiketi.Ayristir(Malikler[0]).AdSoyad + (Malikler.Count > 1 ? string.Create(CultureInfo.InvariantCulture, $" +{Malikler.Count - 1}") : string.Empty);
 
-    /// <summary>Tuval etiketi: <c>Ada/Parsel • Malik Adı • Alan m²</c>.</summary>
-    public string Etiket() => Etiket(Kod, MalikGorunumu(), GaussAlanM2);
+    /// <summary>Kısa mülkiyet durumu (tuval): <c>TAM</c>, <c>Müşterek</c>; dağıtım yoksa boş.</summary>
+    public string MulkiyetDurumu() => Hissedarlar.Count == 0 ? string.Empty : Mustakil ? "TAM" : "Müşterek";
+
+    /// <summary>
+    /// Önizleme kartı özeti: <c>Müstakil (TAM)</c> veya <c>Müşterek (2 hissedar: AD SOYAD 16040/31477, AD SOYAD 15437/31477)</c>
+    /// (baba adısız ad; pay/payda dm²).
+    /// </summary>
+    public string HisseOzeti() => Hissedarlar.Count switch
+    {
+        0 => "Dağıtım yok",
+        1 => "Müstakil (TAM)",
+        _ => string.Create(CultureInfo.InvariantCulture,
+            $"Müşterek ({Hissedarlar.Count} hissedar: {string.Join(", ", Hissedarlar.Select(h => MalikEtiketi.Ayristir(h.MalikId).AdSoyad + " " + h.Hisse))})"),
+    };
+
+    /// <summary>Önizleme kartı satırı: <c>101/1 • 511.77 m² • Müstakil (TAM)</c>.</summary>
+    public string DagilimSatiri() => string.Create(CultureInfo.InvariantCulture, $"{Kod} • {GaussAlanM2:0.00} m² • {HisseOzeti()}");
+
+    /// <summary>Tuval etiketi: <c>Ada/Parsel • Malik Adı • Alan m² • TAM|Müşterek</c>.</summary>
+    public string Etiket() => Etiket(Kod, MalikGorunumu(), GaussAlanM2, MulkiyetDurumu());
 
     /// <summary>Etiket biçimi (uygulanmış katmanda alan projeden yeniden hesaplanınca da kullanılır — reviewer L1).</summary>
-    public static string Etiket(string kod, string malik, decimal alanM2) => string.Create(CultureInfo.InvariantCulture, $"{kod} • {malik} • {alanM2:0.00} m²");
+    public static string Etiket(string kod, string malik, decimal alanM2, string? durum = null) => string.IsNullOrEmpty(durum)
+        ? string.Create(CultureInfo.InvariantCulture, $"{kod} • {malik} • {alanM2:0.00} m²")
+        : string.Create(CultureInfo.InvariantCulture, $"{kod} • {malik} • {alanM2:0.00} m² • {durum}");
 }
 
 /// <summary>Kroki parselasyon önizlemesi (projeye yazılmamış taslak): yeni parseller, bölünen bloklar, Kroki satırları, farklar ve uyarılar.</summary>
@@ -57,9 +84,18 @@ public sealed record KrokiParselasyonOnizleme(
     /// <summary>Yeni parsellerin hedef alan toplamı (= bölünen blokların Gauss toplamı).</summary>
     public decimal ToplamAlanM2 => Parseller.Sum(p => p.HedefAlanM2);
 
-    /// <summary>Kısa özet: blok/parsel sayısı ve alan toplamı.</summary>
+    /// <summary>Müstakil (TAM) parsel sayısı.</summary>
+    public int MustakilSayisi => Parseller.Count(p => p.Mustakil);
+
+    /// <summary>Müşterek (pay/payda) parsel sayısı.</summary>
+    public int MusterekSayisi => Parseller.Count(p => p.Hissedarlar.Count > 1);
+
+    /// <summary>Kısa özet: blok/parsel sayısı, alan toplamı, en büyük sapma ve müstakil/müşterek sayıları.</summary>
     public string Ozet() => string.Create(CultureInfo.InvariantCulture,
-        $"{BolunenBloklar.Count} blok · {Parseller.Count} parsel · Σ {ToplamAlanM2:0.00} m² · en büyük sapma {Parseller.Select(p => Math.Abs(p.GaussAlanM2 - p.HedefAlanM2)).DefaultIfEmpty(0m).Max():0.00} m²");
+        $"{BolunenBloklar.Count} blok · {Parseller.Count} parsel · Σ {ToplamAlanM2:0.00} m² · en büyük sapma {Parseller.Select(p => Math.Abs(p.GaussAlanM2 - p.HedefAlanM2)).DefaultIfEmpty(0m).Max():0.00} m² · {MustakilSayisi} müstakil (TAM) · {MusterekSayisi} müşterek (pay/payda)");
+
+    /// <summary>Önizleme kartının parsel dağılım satırları (<see cref="KrokiParseli.DagilimSatiri"/>).</summary>
+    public IReadOnlyList<string> DagilimSatirlari() => [.. Parseller.Select(p => p.DagilimSatiri())];
 
     /// <summary>Kroki kutusu metni: özet yorumu, <c>malik;kadastro;imar;alan</c> satırları ve malik bazında fark yorumları.</summary>
     public string KrokiMetni()
@@ -89,12 +125,20 @@ public sealed record KrokiParselasyonOnizleme(
 /// <item><b>Taslak bölgeler</b>: <see cref="IKrokiBlokBolucu.TaslakBol"/>; her bölgeye içine düşen kroki yazıları (görünen merkez)
 /// <see cref="YaklasikYerKrokisiEslestirici"/> çözücüsüyle (TAKBİS kimliği, rehber kişi no / ad, ≥ 5 karakterlik tekil önek, Türkçe
 /// büyük/küçük harf) TAKBİS malikine eşlenir.</item>
-/// <item><b>Hedef alanlar</b>: malik net hakkı = Σ (giren − DOP) (HakEslestirmeServisi yuvarlaması; DOPO yoksa giren). Birden çok
-/// bölgedeki malikin hakkı taslak alan oranında bölünür; bölge ağırlığı malik paylarının toplamıdır (malik yoksa taslak alan). Her
-/// blokta ağırlıklar <see cref="LargestRemainderAllocator"/> ile blok Gauss alanına 0.01 m² birimde tam dengelenir.</item>
+/// <item><b>Net haklar (SAHA-016)</b>: hak sahibi (malik, kadastro) net hakkı <see cref="HakEslestirmeServisi.GirenAlanM2"/> /
+/// <see cref="HakEslestirmeServisi.NetHakM2"/> (DOPO yoksa giren). Katılımcılar: projenin tüm imar blokları bölünüyorsa (tam kapsam)
+/// TAKBİS'in tüm malikleri, aksi halde yalnız krokide yazısı olan malikler. Katılımcı net hakları bölünen blokların Σ Gauss alanına
+/// (R) <see cref="LargestRemainderAllocator"/> ile 0.01 m² birimde dengelenir (Σ net = R ise birebir aynı; fark uyarılır).</item>
+/// <item><b>Hedef alanlar</b>: birden çok bölgedeki malikin hakkı taslak alan oranında bölünür (talep). Blokta Σ talep = blok alanı
+/// ise hedef = talep (hepsi müstakil); Σ talep &lt; blok alanı ise yazılı bölgeler talebini aynen alır, kalan yazısız bölgelere taslak
+/// alan oranında, yazısız bölge yoksa en büyük talepli bölgeye verilir (açık kapasite tek parselde toplanır); Σ talep &gt; blok alanı
+/// ise hedefler blok alanına orantılı (yazısız bölge taslak alanıyla) LR ile dengelenir.</item>
 /// <item><b>Kesin bölme</b>: <see cref="IKrokiBlokBolucu.KesinBol"/> her kesimi mühendisin çizgisine paralel kaydırır; her parselin
-/// decimal Gauss alanı hedefe <see cref="AlanToleransiM2"/> içinde, parseller toplamı blok alanına eşit olmalıdır (aksi
-/// <c>ERR-KUANT-001</c>).</item>
+/// decimal Gauss alanı hedefe <see cref="AlanToleransiM2"/> içinde ve 2 ondalık Gauss alanı hedefe birebir eşit, parseller toplamı
+/// blok alanına eşit olmalıdır (aksi <c>ERR-KUANT-001</c>).</item>
+/// <item><b>Müstakil + müşterek dağıtım (SAHA-016)</b>: <see cref="MustakilMusterekDagitici"/> önce talepleri parsellere müstakil
+/// yerleştirir, artan / krokide olmayan hakları açık kapasiteli parsellere müşterek (dm² pay/payda) aktarır; Σ parsel = parsel alanı ve
+/// Σ malik = dengelenmiş net hak 0.00 m² farkla sağlanır. AAD Md. 17/1-(d) muvafakat gerektiren müstakil parseller uyarılır.</item>
 /// <item><b>Kodlar</b>: <c>{ada}/{sıra}</c>; ada = blok kimliğinin ilk <c>/</c> öncesi; sıra taslak bölge sırası (batıdan doğuya).</item>
 /// </list>
 /// Uyarılar yalnız sayı, ada/parsel kodu ve alan içerir (malik adı yazmaz — KVKK); malik adları yalnız önizleme/tuval etiketinde.
@@ -234,20 +278,21 @@ public static class KrokiParselasyonMotoru
             uyarilar.Add(string.Create(CultureInfo.InvariantCulture, $"{sahipsiz} açık çizgi hiçbir imar bloğunun içinde değil; bölme çizgisi sayılmadı."));
         }
 
-        // Malik hakları (HakEslestirmeServisi ile aynı yuvarlama).
+        // Hak sahipleri (HakEslestirmeServisi ile aynı tek adım yuvarlama — architect R2).
         var kodlar = girdi.Takbis.SelectMany(k => k.Malikler.Select(m => m.MalikId)).Distinct(StringComparer.Ordinal).ToList();
         var hak = new Dictionary<(string Malik, string Kadastro), decimal>();
+        var mustakilOlabilir = new Dictionary<(string Malik, string Kadastro), bool>();
         foreach (var k in girdi.Takbis)
         {
             foreach (var m in k.Malikler)
             {
-                var giren = decimal.Round((Fraction.FromDecimal(k.TapuAlaniM2) * m.Hisse).ToDecimal(6), 2, MidpointRounding.AwayFromZero);
-                var net = girdi.Dopo is { } dopo ? giren - decimal.Round(giren * dopo, 2, MidpointRounding.AwayFromZero) : giren;
+                var giren = HakEslestirmeServisi.GirenAlanM2(k.TapuAlaniM2, m.Hisse);
+                var net = girdi.Dopo is { } dopo ? HakEslestirmeServisi.NetHakM2(giren, dopo) : giren;
                 hak[(m.MalikId, k.ParselId)] = hak.GetValueOrDefault((m.MalikId, k.ParselId)) + net;
+                mustakilOlabilir[(m.MalikId, k.ParselId)] = HakEslestirmeServisi.MustakilTahsisEdilebilir(k.Malikler.Count, m.Muvafakatli);
             }
         }
 
-        var malikHakki = kodlar.ToDictionary(m => m, m => hak.Where(h => h.Key.Malik == m).Sum(h => h.Value), StringComparer.Ordinal);
         if (girdi.Dopo is null)
         {
             uyarilar.Add("DOP girdisi yok: hedefler DOP öncesi giren alan oranıyla dengelendi (3. adımda DOP'u uygulayıp krokiyi yeniden yükleyin).");
@@ -322,34 +367,154 @@ public static class KrokiParselasyonMotoru
             uyarilar.Add(string.Create(CultureInfo.InvariantCulture, $"{disarida} kroki yazısı bölünen blokların içinde değil; dikkate alınmadı."));
         }
 
-        // Birden çok bölgedeki malikin hakkı taslak alan oranında bölünür.
-        var pay = new Dictionary<(Bolge Bolge, string Malik), decimal>();
-        foreach (var m in kodlar)
+        // SAHA-016: katılımcılar (tam kapsamda TAKBİS'in tümü, aksi halde krokide yazısı olanlar) ve R = bölünen blokların Σ Gauss alanı.
+        var tamKapsam = taslaklar.Count == bloklar.Count;
+        var blokAlani = taslaklar.Keys.ToDictionary(b => b, b => GaussAreaCalculator.Compute(PolygonRing.FromOpen(bloklar[b].Koseler).Value));
+        var r = blokAlani.Values.Sum(a => a.AreaM2);
+        var yazili = kodlar.Where(m => bolgeler.Any(g => g.Malikler.Contains(m, StringComparer.Ordinal))).ToHashSet(StringComparer.Ordinal);
+        var katilimci = kodlar.Where(m => tamKapsam || yazili.Contains(m)).ToList();
+        var hakSahipleri = hak.Where(h => katilimci.Contains(h.Key.Malik, StringComparer.Ordinal))
+            .OrderBy(h => h.Key.Kadastro, StringComparer.Ordinal).ThenBy(h => h.Key.Malik, StringComparer.Ordinal)
+            .Select(h => (h.Key.Malik, h.Key.Kadastro, Net: h.Value)).ToList();
+        var toplamNet = hakSahipleri.Sum(h => h.Net);
+        if (hakSahipleri.Count == 0 || toplamNet <= 0m)
         {
-            var mb = bolgeler.Where(g => g.Malikler.Contains(m, StringComparer.Ordinal)).ToList();
-            if (mb.Count == 0)
-            {
-                continue;
-            }
+            return Gecersiz("no positive owner right to distribute");
+        }
 
-            if (mb.Count == 1)
-            {
-                pay[(mb[0], m)] = malikHakki[m];
-                continue;
-            }
+        var hamHak = katilimci.ToDictionary(m => m, m => hakSahipleri.Where(h => h.Malik == m).Sum(h => h.Net), StringComparer.Ordinal);
 
-            var toplamTaslak = Fraction.FromDecimal(mb.Sum(g => g.TaslakAlan));
-            var bolum = LargestRemainderAllocator.AllocateAlanM2(malikHakki[m],
-                mb.Select((g, i) => new AllocationWeight(Sira(i), Fraction.FromDecimal(g.TaslakAlan) / toplamTaslak)).ToList());
+        // Ham talepler: malikin net hakkı; birden çok bölgedeyse taslak alan oranında (LR).
+        var pay = new Dictionary<(Bolge Bolge, string Malik), decimal>();
+        foreach (var m in katilimci)
+        {
+            var bolum = BolgelereBol(hamHak[m], bolgeler.Where(g => g.Malikler.Contains(m, StringComparer.Ordinal)).ToList());
             if (bolum.IsFailure)
             {
                 return Result<KrokiParselasyonOnizleme>.Failure(bolum.Error);
             }
 
-            for (var i = 0; i < mb.Count; i++)
+            foreach (var (g, alan) in bolum.Value)
             {
-                pay[(mb[i], m)] = bolum.Value.Single(s => s.Id == Sira(i)).ToAlanM2();
+                pay[(g, m)] = alan;
             }
+        }
+
+        // Kıymık emme: tüm bölgeleri yazılı ve Σ talep − blok alanı farkı kıymık eşiğinin altında olan blokta fark blok içinde orantılı
+        // dağıtılır (anlamsız dm² müşterek hisse üretilmez — ör. .DNS ölçek farkı); Σ talep = blok alanı ise blok zaten tamdır.
+        var emilen = new HashSet<int>();
+        var emilenPay = new Dictionary<(Bolge Bolge, string Malik), decimal>();
+        foreach (var b in taslaklar.Keys.Order())
+        {
+            var bb = bolgeler.Where(g => g.BlokSira == b).OrderBy(g => g.Sira).ToList();
+            var talep = bb.Sum(g => g.Malikler.Sum(m => pay.GetValueOrDefault((g, m))));
+            var fark = blokAlani[b].AreaM2 - talep;
+            if (bb.Any(g => g.Malikler.Count == 0) || talep <= 0m || Math.Abs(fark) >= YaklasikYerKrokisiEslestirici.KiymikEsigiM2
+                || bb.Any(g => g.Malikler.All(m => pay.GetValueOrDefault((g, m)) <= 0m)))
+            {
+                continue;
+            }
+
+            var bolgeHedefi = Bol(blokAlani[b].AreaM2, bb.Select((g, i) => (Sira(i), g.Malikler.Sum(m => pay.GetValueOrDefault((g, m))))).ToList());
+            if (bolgeHedefi.IsFailure)
+            {
+                return Result<KrokiParselasyonOnizleme>.Failure(bolgeHedefi.Error);
+            }
+
+            for (var i = 0; i < bb.Count; i++)
+            {
+                var malikler = bb[i].Malikler.Where(m => pay.GetValueOrDefault((bb[i], m)) > 0m).ToList();
+                var ic = Bol(bolgeHedefi.Value[i].Alan, malikler.Select(m => (m, pay[(bb[i], m)])).ToList());
+                if (ic.IsFailure)
+                {
+                    return Result<KrokiParselasyonOnizleme>.Failure(ic.Error);
+                }
+
+                foreach (var (m, alan) in ic.Value)
+                {
+                    emilenPay[(bb[i], m)] = alan;
+                }
+            }
+
+            emilen.Add(b);
+        }
+
+        // Kalan havuz: emilmeyen blokların alanı ↔ katılımcıların emilen bloklar dışındaki ham hakkı (krokide olmayanlar dahil).
+        var kalanAlan = r - emilen.Sum(b => blokAlani[b].AreaM2);
+        var kalanHak = katilimci.ToDictionary(m => m, m => hamHak[m] - pay.Where(x => x.Key.Malik == m && emilen.Contains(x.Key.Bolge.BlokSira)).Sum(x => x.Value),
+            StringComparer.Ordinal);
+        if (emilen.Count > 0 && (kalanHak.Values.Sum() <= 0m) != (kalanAlan <= 0m))
+        {
+            // Kalan hak yerleşemiyor (ör. krokide olmayan malik varken tüm bloklar emildi): emme kapatılır, tüm havuz dengelenir.
+            emilen.Clear();
+            emilenPay.Clear();
+            kalanAlan = r;
+            kalanHak = new Dictionary<string, decimal>(hamHak, StringComparer.Ordinal);
+        }
+
+        foreach (var b in emilen.Where(b => blokAlani[b].AreaM2 != bolgeler.Where(g => g.BlokSira == b).Sum(g => g.Malikler.Sum(m => pay.GetValueOrDefault((g, m))))))
+        {
+            var talep = bolgeler.Where(g => g.BlokSira == b).Sum(g => g.Malikler.Sum(m => pay.GetValueOrDefault((g, m))));
+            uyarilar.Add(string.Create(CultureInfo.InvariantCulture,
+                $"Blok {bloklar[b].Kimlik}: Σ net hak {talep:0.00} m² ≠ blok alanı {blokAlani[b].AreaM2:0.00} m² (fark {blokAlani[b].AreaM2 - talep:+0.00;-0.00;0.00} m²) kıymık eşiğinin ({YaklasikYerKrokisiEslestirici.KiymikEsigiM2:0.00} m²) altında; fark blok içinde hak oranında dağıtıldı (müşterek aktarım yapılmadı)."));
+        }
+
+        foreach (var x in emilenPay)
+        {
+            pay[x.Key] = x.Value;
+        }
+
+        // Kalan havuzun Largest Remainder ile 0.01 m² birimde emilmeyen blokların alanına dengelenmesi.
+        var kalanToplam = kalanHak.Values.Sum();
+        var dengeliKalan = katilimci.ToDictionary(m => m, _ => 0m, StringComparer.Ordinal);
+        if (kalanAlan > 0m)
+        {
+            var lr = Bol(kalanAlan, katilimci.Select(m => (m, kalanHak[m])).ToList());
+            if (lr.IsFailure)
+            {
+                return Result<KrokiParselasyonOnizleme>.Failure(lr.Error);
+            }
+
+            foreach (var (m, alan) in lr.Value)
+            {
+                dengeliKalan[m] = alan;
+            }
+
+            if (kalanToplam != kalanAlan)
+            {
+                uyarilar.Add(string.Create(CultureInfo.InvariantCulture,
+                    $"Σ net hak {kalanToplam:0.00} m² ≠ bölünen blokların alanı {kalanAlan:0.00} m² (fark {kalanAlan - kalanToplam:+0.00;-0.00;0.00} m²); haklar Largest Remainder ile 0.01 m² birimde blok toplamına dengelendi."));
+            }
+        }
+
+        // Emilmeyen bloklardaki talepler dengelenmiş kalan haktan yeniden kurulur.
+        foreach (var m in katilimci)
+        {
+            var bolum = BolgelereBol(dengeliKalan[m], bolgeler.Where(g => !emilen.Contains(g.BlokSira) && g.Malikler.Contains(m, StringComparer.Ordinal)).ToList());
+            if (bolum.IsFailure)
+            {
+                return Result<KrokiParselasyonOnizleme>.Failure(bolum.Error);
+            }
+
+            foreach (var (g, alan) in bolum.Value)
+            {
+                pay[(g, m)] = alan;
+            }
+        }
+
+        // Malikin son hakkı (emilen talepler + dengelenmiş kalan) hak sahiplerine (kadastro kaynakları) net hak oranında bölünür.
+        var dengeliHak = new List<(string Malik, string Kadastro, decimal Alan)>();
+        foreach (var m in katilimci)
+        {
+            var son = dengeliKalan[m] + pay.Where(x => x.Key.Malik == m && emilen.Contains(x.Key.Bolge.BlokSira)).Sum(x => x.Value);
+            var kaynaklar = hakSahipleri.Where(h => h.Malik == m).ToList();
+            var bolum = Bol(son, kaynaklar.Select(h => (h.Kadastro, h.Net)).ToList());
+            if (bolum.IsFailure)
+            {
+                return Result<KrokiParselasyonOnizleme>.Failure(bolum.Error);
+            }
+
+            dengeliHak.AddRange(bolum.Value.Select(x => (m, x.Kimlik, x.Alan)));
         }
 
         var cokParcali = kodlar.Count(m => bolgeler.Count(g => g.Malikler.Contains(m, StringComparer.Ordinal)) > 1);
@@ -358,52 +523,44 @@ public static class KrokiParselasyonMotoru
             uyarilar.Add(string.Create(CultureInfo.InvariantCulture, $"{cokParcali} malik birden çok parçada; net hakkı taslak alan oranında parçalara bölündü."));
         }
 
-        var krokideYok = kodlar.Count(m => !bolgeler.Any(g => g.Malikler.Contains(m, StringComparer.Ordinal)));
+        var krokideYok = kodlar.Count(m => !yazili.Contains(m));
         if (krokideYok > 0)
         {
-            uyarilar.Add(string.Create(CultureInfo.InvariantCulture, $"TAKBİS'teki {krokideYok} malik krokide yok; hakkı bu parselasyonda dağıtılmadı."));
+            uyarilar.Add(tamKapsam
+                ? string.Create(CultureInfo.InvariantCulture, $"TAKBİS'teki {krokideYok} malik krokide yok; hakkı açık kapasiteli parsellere müstakil/müşterek (pay/payda) olarak aktarıldı.")
+                : string.Create(CultureInfo.InvariantCulture, $"TAKBİS'teki {krokideYok} malik krokide yok; krokide bölme çizgisi olmayan imar blokları korunduğundan hakkı bu parselasyonda dağıtılmadı."));
         }
 
-        // Blok bazında hedefler (LR, 0.01 m²) ve kesin bölme.
+        // Blok bazında hedefler (0.01 m²) ve kesin bölme.
         // Reviewer H2: bölünen blokların kendi kimlikleri serbest kalır; adadaki korunan parsel numaralarından sonra devam edilir.
         var bolunecek = taslaklar.Keys.Select(b => bloklar[b].Kimlik).ToHashSet(StringComparer.Ordinal);
         var mevcutKimlikler = girdi.ProjeParselleri.Select(p => p.ParselId).Where(id => !bolunecek.Contains(id)).ToHashSet(StringComparer.Ordinal);
         var sonrakiNo = new Dictionary<string, int>(StringComparer.Ordinal);
-        var parseller = new List<KrokiParseli>();
-        var satirlar = new List<KrokiEslesmeGirdisi>();
+        var kesinler = new List<(string Kod, string Blok, IReadOnlyList<GeodeticPoint> Koseler, decimal Hedef, Bolge Bolge)>();
         var bolunen = new List<string>();
         foreach (var (b, taslak) in taslaklar.OrderBy(t => t.Key))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var blok = bloklar[b];
-            var blokGauss = GaussAreaCalculator.Compute(PolygonRing.FromOpen(blok.Koseler).Value);
+            var blokGauss = blokAlani[b];
             var bb = bolgeler.Where(g => g.BlokSira == b).OrderBy(g => g.Sira).ToList();
-            var agirlik = bb.Select(g => g.Malikler.Count == 0
-                ? decimal.Round(g.TaslakAlan, 2, MidpointRounding.AwayFromZero)
-                : g.Malikler.Sum(m => pay[(g, m)])).ToList();
-            if (agirlik.Sum() <= 0m)
+            var hedefSonucu = Hedefler(bb, pay, blokGauss.AreaM2);
+            if (hedefSonucu.IsFailure)
             {
-                agirlik = bb.Select(g => decimal.Round(g.TaslakAlan, 2, MidpointRounding.AwayFromZero)).ToList();
+                return BlokHatasi(hedefSonucu.Error, blok.Kimlik);
             }
 
-            var toplamAgirlik = Fraction.FromDecimal(agirlik.Sum());
-            var hedefler = LargestRemainderAllocator.AllocateAlanM2(blokGauss.AreaM2,
-                agirlik.Select((a, i) => new AllocationWeight(Sira(i), Fraction.FromDecimal(a) / toplamAgirlik)).ToList());
-            if (hedefler.IsFailure)
-            {
-                return Result<KrokiParselasyonOnizleme>.Failure(hedefler.Error);
-            }
-
-            var hedef = bb.Select((_, i) => hedefler.Value.Single(s => s.Id == Sira(i)).ToAlanM2()).ToList();
+            var hedef = hedefSonucu.Value;
             if (hedef.Any(h => h <= 0m))
             {
                 return BlokHatasi(GecersizHata("a sketch part received no target area"), blok.Kimlik);
             }
 
-            if (bb.All(g => g.Malikler.Count > 0) && agirlik.Sum() != blokGauss.AreaM2)
+            var talepToplami = bb.Sum(g => g.Malikler.Sum(m => pay.GetValueOrDefault((g, m))));
+            if (bb.All(g => g.Malikler.Count > 0) && talepToplami != blokGauss.AreaM2)
             {
                 uyarilar.Add(string.Create(CultureInfo.InvariantCulture,
-                    $"Blok {blok.Kimlik}: Σ net hak {agirlik.Sum():0.00} m² ≠ blok alanı {blokGauss.AreaM2:0.00} m² (fark {blokGauss.AreaM2 - agirlik.Sum():+0.00;-0.00;0.00} m²); hedefler blok alanına orantılı dengelendi."));
+                    $"Blok {blok.Kimlik}: Σ net hak {talepToplami:0.00} m² ≠ blok alanı {blokGauss.AreaM2:0.00} m² (fark {blokGauss.AreaM2 - talepToplami:+0.00;-0.00;0.00} m²); sığmayan / artan hak müstakil + müşterek (pay/payda) dağıtımla dengelendi."));
             }
 
             var kesin = bolucu.KesinBol(blok.Koseler, taslak.SiraliCizgiler, hedef, cancellationToken);
@@ -425,9 +582,11 @@ public static class KrokiParselasyonMotoru
 
                 var gauss = GaussAreaCalculator.Compute(halka.Value);
                 exactToplam += gauss.AreaM2Exact;
-                if (Math.Abs(gauss.AreaM2Exact - hedef[i]) > AlanToleransiM2)
+                // Architect R3: hak eşleştirmesi parselin 2 ondalık Gauss alanını kullanır; hedefe birebir eşit olmalıdır.
+                if (Math.Abs(gauss.AreaM2Exact - hedef[i]) > AlanToleransiM2 || gauss.AreaM2 != hedef[i])
                 {
-                    return AlanSapmasi(gauss.AreaM2Exact - hedef[i]);
+                    // Reviewer D4: 2 ondalık eşitsizlikte rapor edilen fark yuvarlanmış alanın farkıdır.
+                    return AlanSapmasi(gauss.AreaM2 != hedef[i] ? gauss.AreaM2 - hedef[i] : gauss.AreaM2Exact - hedef[i]);
                 }
 
                 var kod = SonrakiKod(ada, mevcutKimlikler, sonrakiNo);
@@ -441,25 +600,17 @@ public static class KrokiParselasyonMotoru
                     uyarilar.Add(string.Create(CultureInfo.InvariantCulture,
                         $"{kod}: malik yazısı kesin parsel sınırının dışında kaldı (taslak {bb[i].TaslakAlan:0.00} m² → kesin {hedef[i]:0.00} m²); kesim krokiden belirgin kaydı, mühendis kontrol etmeli."));
                 }
-                parseller.Add(new KrokiParseli(kod, blok.Kimlik, koseler, hedef[i], gauss.AreaM2, decimal.Round(bb[i].TaslakAlan, 2, MidpointRounding.AwayFromZero), bb[i].Malikler.AsReadOnly()));
+
                 if (bb[i].Malikler.Count == 0)
                 {
-                    uyarilar.Add($"{kod} parseline TAKBİS malikine eşlenen yazı düşmedi; hedef alanı taslak alan oranıyla verildi, Kroki satırı üretilmedi (mühendis tamamlamalı).");
-                    continue;
+                    uyarilar.Add($"{kod} parseline TAKBİS malikine eşlenen yazı düşmedi; hedef alanı blok kalanından (taslak alan oranıyla) verildi, krokide olmayan / artan haklar müstakil veya müşterek olarak yazıldı (mühendis kontrol etmeli).");
                 }
-
-                if (bb[i].Malikler.Count > 1)
+                else if (bb[i].Malikler.Count > 1)
                 {
                     uyarilar.Add(string.Create(CultureInfo.InvariantCulture, $"{kod} parselinde {bb[i].Malikler.Count} malik var (hisseli parsel; alan hak oranında paylaştırıldı)."));
                 }
 
-                var satir = Satirlar(kod, hedef[i], bb[i], pay, hak);
-                if (satir.IsFailure)
-                {
-                    return Result<KrokiParselasyonOnizleme>.Failure(satir.Error);
-                }
-
-                satirlar.AddRange(satir.Value);
+                kesinler.Add((kod, blok.Kimlik, koseler, hedef[i], bb[i]));
             }
 
             if (Math.Abs(exactToplam - blokGauss.AreaM2Exact) > AlanToleransiM2)
@@ -470,37 +621,107 @@ public static class KrokiParselasyonMotoru
             bolunen.Add(blok.Kimlik);
         }
 
+        // SAHA-016: müstakil (TAM) + müşterek (pay/payda) dağıtım.
+        var dagitim = MustakilMusterekDagitici.Dagit(
+            kesinler.Select(k => new DagitimParseli(k.Kod, k.Hedef,
+                k.Bolge.Malikler.Where(m => pay.GetValueOrDefault((k.Bolge, m)) > 0m).Select(m => new ParselTalebi(m, pay[(k.Bolge, m)])).ToList())
+            { Grup = k.Blok }).ToList(),
+            dengeliHak.Select(h => new DagitimHakki(h.Malik, h.Kadastro, h.Alan) { MustakilOlabilir = mustakilOlabilir[(h.Malik, h.Kadastro)] }).ToList());
+        if (dagitim.IsFailure)
+        {
+            return Result<KrokiParselasyonOnizleme>.Failure(dagitim.Error);
+        }
+
+        if (dagitim.Value.Md17IhlalliParseller.Count > 0)
+        {
+            uyarilar.Add(string.Create(CultureInfo.InvariantCulture,
+                $"{dagitim.Value.Md17IhlalliParseller.Count} müstakil parsel ({string.Join(", ", dagitim.Value.Md17IhlalliParseller)}) AAD Md. 17/1-(d) gereği muvafakat gerektiriyor (çok malikli kadastro parselinin muvafakatsız paydaşı tek başına); TAKBİS muvafakatını girin veya krokiyi düzeltin, aksi halde Hak Eşleştirme kritik bulgu verir."));
+        }
+
+        var parseller = kesinler.Select((k, i) =>
+        {
+            var d = dagitim.Value.Parseller[i];
+            var gauss = GaussAreaCalculator.Compute(PolygonRing.FromOpen(k.Koseler).Value);
+            return new KrokiParseli(k.Kod, k.Blok, k.Koseler, k.Hedef, gauss.AreaM2, decimal.Round(k.Bolge.TaslakAlan, 2, MidpointRounding.AwayFromZero),
+                d.Hissedarlar.Select(h => h.MalikId).ToList().AsReadOnly()) { Hissedarlar = d.Hissedarlar };
+        }).ToList();
+        var satirlar = dagitim.Value.Satirlar.Select(x => new KrokiEslesmeGirdisi(x.MalikId, x.KadastroParselId, x.ParselKodu, x.AlanM2)).ToList();
+
         return Result<KrokiParselasyonOnizleme>.Success(new KrokiParselasyonOnizleme(
             parseller.AsReadOnly(), bolunen.AsReadOnly(), satirlar.AsReadOnly(), Farklar(satirlar, girdi), uyarilar.AsReadOnly()));
     }
 
-    /// <summary>Parsel hedefi malik(ler)e (hak payı oranında), malik payı kadastro parsellerine (net hak oranında) LR ile bölünür.</summary>
-    private static Result<IReadOnlyList<KrokiEslesmeGirdisi>> Satirlar(
-        string kod, decimal hedef, Bolge bolge, Dictionary<(Bolge, string), decimal> pay, Dictionary<(string Malik, string Kadastro), decimal> hak)
+    /// <summary>
+    /// SAHA-016 blok hedefleri (0.01 m², Σ = blok alanı): Σ talep = blok ve yazısız bölge yoksa hedef = talep; Σ talep &lt; blok ise
+    /// yazılı bölgeler talebini alır, kalan yazısız bölgelere taslak alan oranında (LR), yazısız bölge yoksa en büyük talepli (eşitte ilk)
+    /// bölgeye eklenir; aksi halde ağırlıklar (talep; yazısız bölgede taslak alan) blok alanına orantılı LR ile dengelenir.
+    /// </summary>
+    private static Result<IReadOnlyList<decimal>> Hedefler(IReadOnlyList<Bolge> bb, Dictionary<(Bolge, string), decimal> pay, decimal blokAlani)
     {
-        var sonuc = new List<KrokiEslesmeGirdisi>();
-        var malikAlani = Bol(hedef, bolge.Malikler.Select(m => (m, pay[(bolge, m)])).ToList());
-        if (malikAlani.IsFailure)
+        var talep = bb.Select(g => g.Malikler.Sum(m => pay.GetValueOrDefault((g, m)))).ToList();
+        var yazisiz = Enumerable.Range(0, bb.Count).Where(i => bb[i].Malikler.Count == 0).ToList();
+        var toplam = talep.Sum();
+        var hedef = talep.ToList();
+        if (toplam == blokAlani && yazisiz.Count == 0)
         {
-            return Result<IReadOnlyList<KrokiEslesmeGirdisi>>.Failure(malikAlani.Error);
+            return Result<IReadOnlyList<decimal>>.Success(hedef);
         }
 
-        foreach (var (malik, alan) in malikAlani.Value)
+        if (toplam > 0m && toplam < blokAlani && talep.Where((_, i) => !yazisiz.Contains(i)).All(t => t > 0m))
         {
-            var parseller = hak.Where(h => h.Key.Malik == malik).OrderBy(h => h.Key.Kadastro, StringComparer.Ordinal).Select(h => (h.Key.Kadastro, h.Value)).ToList();
-            var kadastroAlani = Bol(alan, parseller);
-            if (kadastroAlani.IsFailure)
+            var kalan = blokAlani - toplam;
+            if (yazisiz.Count == 0)
             {
-                return Result<IReadOnlyList<KrokiEslesmeGirdisi>>.Failure(kadastroAlani.Error);
+                var enBuyuk = talep.IndexOf(talep.Max());
+                hedef[enBuyuk] += kalan;
+                return Result<IReadOnlyList<decimal>>.Success(hedef);
             }
 
-            sonuc.AddRange(kadastroAlani.Value.Where(k => k.Alan > 0m).Select(k => new KrokiEslesmeGirdisi(malik, k.Kimlik, kod, k.Alan)));
+            var bolum = Bol(kalan, yazisiz.Select(i => (Sira(i), decimal.Round(bb[i].TaslakAlan, 2, MidpointRounding.AwayFromZero))).ToList());
+            if (bolum.IsFailure)
+            {
+                return Result<IReadOnlyList<decimal>>.Failure(bolum.Error);
+            }
+
+            // Reviewer D3: kalan yazısız bölgelerin her birine pozitif alan veremeyecek kadar küçükse orantılı dengelemeye düşülür.
+            if (bolum.Value.All(x => x.Alan > 0m))
+            {
+                foreach (var (kimlik, alan) in bolum.Value)
+                {
+                    hedef[yazisiz.Single(i => Sira(i) == kimlik)] = alan;
+                }
+
+                return Result<IReadOnlyList<decimal>>.Success(hedef);
+            }
         }
 
-        return Result<IReadOnlyList<KrokiEslesmeGirdisi>>.Success(sonuc);
+        var agirlik = bb.Select((g, i) => g.Malikler.Count == 0 ? decimal.Round(g.TaslakAlan, 2, MidpointRounding.AwayFromZero) : talep[i]).ToList();
+        if (agirlik.Sum() <= 0m)
+        {
+            agirlik = bb.Select(g => decimal.Round(g.TaslakAlan, 2, MidpointRounding.AwayFromZero)).ToList();
+        }
+
+        var orantili = Bol(blokAlani, agirlik.Select((a, i) => (Sira(i), a)).ToList());
+        return orantili.IsFailure
+            ? Result<IReadOnlyList<decimal>>.Failure(orantili.Error)
+            : Result<IReadOnlyList<decimal>>.Success(orantili.Value.Select(x => x.Alan).ToList());
     }
 
-    /// <summary>Alanı ağırlıklarla (hepsi sıfırsa eşit) 0.01 m² birimde LR böler; tek kalemde alanın tamamı.</summary>
+    /// <summary>Malikin alanını bölgelerine taslak alan oranında (LR, 0.01 m²) böler; tek bölgede tamamı; bölge yoksa boş.</summary>
+    private static Result<IReadOnlyList<(Bolge Bolge, decimal Alan)>> BolgelereBol(decimal alan, IReadOnlyList<Bolge> bolgeler)
+    {
+        if (bolgeler.Count == 0)
+        {
+            return Result<IReadOnlyList<(Bolge, decimal)>>.Success([]);
+        }
+
+        var bolum = Bol(alan, bolgeler.Select((g, i) => (Sira(i), g.TaslakAlan)).ToList());
+        return bolum.IsFailure
+            ? Result<IReadOnlyList<(Bolge, decimal)>>.Failure(bolum.Error)
+            : Result<IReadOnlyList<(Bolge, decimal)>>.Success(bolgeler.Select((g, i) => (g, bolum.Value[i].Alan)).ToList());
+    }
+
+    /// <summary>Alanı ağırlıklarla (hepsi sıfırsa eşit) 0.01 m² birimde LR böler; tek kalemde alanın tamamı. Sonuç girdi sırasıyla.</summary>
     private static Result<IReadOnlyList<(string Kimlik, decimal Alan)>> Bol(decimal alan, IReadOnlyList<(string Kimlik, decimal Agirlik)> kalemler)
     {
         if (kalemler.Count == 1)
@@ -526,13 +747,7 @@ public static class KrokiParselasyonMotoru
             foreach (var m in k.Malikler.OrderBy(m => m.MalikId, StringComparer.Ordinal))
             {
                 var kroki = satirlar.Where(s => s.MalikKodu == m.MalikId && s.KadastroParselKimligi == k.ParselId).Sum(s => s.AlanM2);
-                decimal? net = null;
-                if (girdi.Dopo is { } dopo)
-                {
-                    var giren = decimal.Round((Fraction.FromDecimal(k.TapuAlaniM2) * m.Hisse).ToDecimal(6), 2, MidpointRounding.AwayFromZero);
-                    net = giren - decimal.Round(giren * dopo, 2, MidpointRounding.AwayFromZero);
-                }
-
+                decimal? net = girdi.Dopo is { } dopo ? HakEslestirmeServisi.NetHakM2(HakEslestirmeServisi.GirenAlanM2(k.TapuAlaniM2, m.Hisse), dopo) : null;
                 sonuc.Add(new KrokiFarki(m.MalikId, k.ParselId, kroki, net));
             }
         }

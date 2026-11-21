@@ -47,7 +47,8 @@ public sealed class Saha015KrokiParselasyonMotoruTests
             ? hisseler
             : [(Blok101Malikleri[0], 1, 5), (Blok101Malikleri[1], 3, 20), (Blok101Malikleri[2], 3, 20),
                .. Blok102Malikleri.Select(m => (m, 1, 10))];
-        return [new KadastroParseli("K1", 5000.00m, liste.Select(h => new KadastroMaliki(h.Malik, new Fraction(h.Pay, h.Payda), false)).ToList())];
+        // SAHA-016 (architect R1): çok malikli K1'in paydaşları muvafakatli — aksi halde her müstakil parsel AAD Md. 17/1-(d) uyarısı alır.
+        return [new KadastroParseli("K1", 5000.00m, liste.Select(h => new KadastroMaliki(h.Malik, new Fraction(h.Pay, h.Payda), true)).ToList())];
     }
 
     private static CadPolyline Cizgi(decimal x1, decimal y1, decimal x2, decimal y2) => new("0", "BOLME", null, [P(x1, y1), P(x2, y2)], false, null);
@@ -98,7 +99,8 @@ public sealed class Saha015KrokiParselasyonMotoruTests
         o.Satirlar.Should().HaveCount(8).And.Contain(new KrokiEslesmeGirdisi("ALİ VELİ (HASAN)", "K1", "101/1", 880.00m));
         o.Farklar.Should().OnlyContain(f => f.FarkM2 == 0m, "her malik net hakkını tam alır");
         o.KrokiMetni().Should().Contain("AYŞE KAYA (MEHMET);K1;101/2;660.00").And.StartWith("# Yaklaşık Yer Krokisi otomatik parselasyon: 2 blok · 8 parsel");
-        o.Parseller[0].Etiket().Should().Be("101/1 • ALİ VELİ • 880.00 m²");
+        o.Parseller[0].Etiket().Should().Be("101/1 • ALİ VELİ • 880.00 m² • TAM");
+        o.Parseller.Should().OnlyContain(p => p.Mustakil && p.HisseOzeti() == "Müstakil (TAM)", "SAHA-016: her malik net hakkı kadar kendi parselini alır");
     }
 
     [Fact]
@@ -114,31 +116,37 @@ public sealed class Saha015KrokiParselasyonMotoruTests
     }
 
     [Fact]
-    public void KrokiParselasyonMotoru_Blok_Hak_Toplami_Blok_Alanindan_Farkliysa_Hedefler_LR_Ile_Blok_Alanina_Dengelenmeli_Fark_Raporlanmali()
+    public void KrokiParselasyonMotoru_Blok_Hak_Toplami_Blok_Alanindan_Farkliysa_Artan_Musterek_Aktarilmali_Net_Hak_Korunmali_Fark_Raporlanmali()
     {
-        // Blok 101'e 880 + 440 + 440 = 1760 m² hak düşer → hedefler 2200 × (880, 440, 440) / 1760 = 1100, 550, 550.
+        // SAHA-016 (SORU-066): blok 101'e 880 + 440 + 440 = 1760 m² hak düşer → açık kapasite 440 en büyük talepli 101/1'de (1320, 440,
+        // 440); blok 102'de 660 + 660 + 3 × 440 = 2640 > 2200 → 5/6 orantılı (550, 550, 366.67, 366.67, 366.66), artan 440 m² 101/1'e.
         var takbis = Takbis((Blok101Malikleri[0], 1, 5), (Blok102Malikleri[0], 1, 10), (Blok102Malikleri[1], 1, 10),
             (Blok101Malikleri[1], 3, 20), (Blok101Malikleri[2], 3, 20), (Blok102Malikleri[2], 1, 10), (Blok102Malikleri[3], 1, 10), (Blok102Malikleri[4], 1, 10));
         var kroki = Kroki(["ALİ VELİ", "HÜSEYİN ÇELİK", "ZEYNEP ARSLAN", "AYŞE KAYA", "FATMA DEMİR", "MUSTAFA ÖZTÜRK", "EMİNE ŞAHİN", "HATİCE YILDIZ"]);
 
         var o = KrokiParselasyonMotoru.Olustur(Girdi(kroki, takbis), Bolucu).Value;
 
-        o.Parseller.Where(p => p.BlokKimligi == "101").Select(p => p.HedefAlanM2).Should().Equal(1100.00m, 550.00m, 550.00m);
+        o.Parseller.Where(p => p.BlokKimligi == "101").Select(p => p.HedefAlanM2).Should().Equal(1320.00m, 440.00m, 440.00m);
+        o.Parseller.Where(p => p.BlokKimligi == "102").Select(p => p.HedefAlanM2).Should().Equal(550.00m, 550.00m, 366.67m, 366.67m, 366.66m);
         o.Parseller.Where(p => p.BlokKimligi == "101").Sum(p => p.HedefAlanM2).Should().Be(2200.00m);
         o.Uyarilar.Should().Contain(u => u.Contains("Blok 101: Σ net hak 1760.00 m² ≠ blok alanı 2200.00 m²"));
-        o.Farklar.Should().Contain(new KrokiFarki("ALİ VELİ (HASAN)", "K1", 1100.00m, 880.00m));
+        o.Farklar.Should().OnlyContain(f => f.FarkM2 == 0m, "hiçbir malikin hakkı blok alanı yüzünden kırpılmaz veya şişirilmez");
+        o.Parseller.Single(p => p.Kod == "101/1").Hissedarlar.Should().HaveCount(6, "Ali + blok 102'nin 5 malikinin artanı");
+        o.Parseller.Where(p => p.Kod != "101/1").Should().OnlyContain(p => p.Mustakil);
     }
 
     [Fact]
-    public void KrokiParselasyonMotoru_Malike_Eslenemeyen_Parca_Taslak_Alan_Oraniyla_Hedef_Almali_Satir_Uretmemeli_Uyarmali()
+    public void KrokiParselasyonMotoru_Malike_Eslenemeyen_Parca_Blok_Kalanini_Almali_Krokide_Olmayan_Malik_Oraya_Yazilmali_Uyarmali()
     {
         var kroki = Kroki(["ALİ VELİ", "BİLİNMEYEN KİŞİ", "FATMA DEMİR", "HÜSEYİN ÇELİK", "ZEYNEP ARSLAN", "MUSTAFA ÖZTÜRK", "EMİNE ŞAHİN", "HATİCE YILDIZ"]);
 
         var o = KrokiParselasyonMotoru.Olustur(Girdi(kroki), Bolucu).Value;
 
         o.Parseller.Should().HaveCount(8);
-        o.Parseller[1].Malikler.Should().BeEmpty();
-        o.Satirlar.Should().NotContain(s => s.ImarParselKodu == "101/2");
+        // SAHA-016: blok 101'de yazılı talepler 880 + 660 = 1540 → yazısız 101/2 kalan 660'ı alır; krokide olmayan Ayşe (660) oraya TAM.
+        o.Parseller[1].Malikler.Should().Equal("AYŞE KAYA (MEHMET)");
+        o.Parseller[1].Mustakil.Should().BeTrue();
+        o.Satirlar.Should().Contain(new KrokiEslesmeGirdisi("AYŞE KAYA (MEHMET)", "K1", "101/2", 660.00m));
         o.Uyarilar.Should().Contain(u => u.StartsWith("101/2 parseline TAKBİS malikine eşlenen yazı düşmedi", StringComparison.Ordinal))
             .And.Contain(u => u.StartsWith("1 kroki yazısı TAKBİS malikine eşlenemedi", StringComparison.Ordinal))
             .And.Contain(u => u.Contains("TAKBİS'teki 1 malik krokide yok"));
@@ -160,7 +168,9 @@ public sealed class Saha015KrokiParselasyonMotoruTests
         o.Parseller.Single(p => p.Kod == "102/1").Malikler.Should().HaveCount(2);
         o.Uyarilar.Should().Contain(u => u.StartsWith("102/1 parselinde 2 malik var", StringComparison.Ordinal))
             .And.Contain(u => u.StartsWith("1 malik birden çok parçada", StringComparison.Ordinal));
-        o.Satirlar.Where(s => s.MalikKodu == "ALİ VELİ (HASAN)").Select(s => s.ImarParselKodu).Should().BeEquivalentTo("101/1", "102/5");
+        o.Satirlar.Where(s => s.MalikKodu == "ALİ VELİ (HASAN)").Select(s => s.ImarParselKodu).Should().BeEquivalentTo(["101/1", "101/2", "102/5"],
+            "taslak oranındaki iki parçası + blok 102 parçasının artanı, açık kapasitenin toplandığı 101/2'ye");
+        o.Farklar.Should().OnlyContain(f => f.FarkM2 == 0m, "SAHA-016: parçalı malik de net hakkını tam alır (artan müşterek aktarılır)");
         o.Parseller.Should().OnlyContain(p => Math.Abs(Gauss(p.Koseler) - p.HedefAlanM2) <= 0.01m);
         o.Satirlar.GroupBy(s => s.ImarParselKodu).Should().OnlyContain(g => g.Sum(s => s.AlanM2) == o.Parseller.Single(p => p.Kod == g.Key).HedefAlanM2);
     }

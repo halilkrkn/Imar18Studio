@@ -149,9 +149,11 @@ public sealed class Saha015KrokiParselasyonUiTests
         var katman = vm.ParselasyonKatmani!;
         katman.Taslak.Should().BeTrue();
         katman.Parseller.Select(p => p.Etiket).Should().Equal(
-            "101/1 • ALİ VELİ • 880.00 m²", "101/2 • AYŞE KAYA • 660.00 m²", "101/3 • FATMA DEMİR • 660.00 m²",
-            "102/1 • HÜSEYİN ÇELİK • 440.00 m²", "102/2 • ZEYNEP ARSLAN • 440.00 m²", "102/3 • MUSTAFA ÖZTÜRK • 440.00 m²",
-            "102/4 • EMİNE ŞAHİN • 440.00 m²", "102/5 • HATİCE YILDIZ • 440.00 m²");
+            "101/1 • ALİ VELİ • 880.00 m² • TAM", "101/2 • AYŞE KAYA • 660.00 m² • TAM", "101/3 • FATMA DEMİR • 660.00 m² • TAM",
+            "102/1 • HÜSEYİN ÇELİK • 440.00 m² • TAM", "102/2 • ZEYNEP ARSLAN • 440.00 m² • TAM", "102/3 • MUSTAFA ÖZTÜRK • 440.00 m² • TAM",
+            "102/4 • EMİNE ŞAHİN • 440.00 m² • TAM", "102/5 • HATİCE YILDIZ • 440.00 m² • TAM");
+        vm.KrokiParselDagilimi.Should().HaveCount(8).And.Contain("101/1 • 880.00 m² • Müstakil (TAM)");
+        vm.KrokiParselDagilimiVar.Should().BeTrue();
         vm.KrokiParselasyonOzeti.Should().Contain("2 blok · 8 parsel · Σ 4400.00 m²");
         vm.KrokiOnizlemesi.Should().Contain("ALİ VELİ (HASAN);K1;101/1;880.00");
         vm.KrokiMetni.Should().BeEmpty("onaylanmadan Kroki kutusu değişmez");
@@ -353,5 +355,86 @@ public sealed class Saha015KrokiParselasyonUiTests
         mw.Canvas.ParselasyonKatmani.Should().BeNull();
         w.FindControl<Border>("ParselasyonSeridi")!.IsVisible.Should().BeFalse();
         w.Close();
+    }
+
+    /// <summary>
+    /// SAHA-016: blok 101'e 880 + 440 + 440 = 1760 m², blok 102'ye 660 + 660 + 3 × 440 = 2640 m² hak düşen TAKBİS (muvafakatli).
+    /// Açık kapasite 101/1'de toplanır (1320 m²); blok 102'nin artanları oraya müşterek aktarılır, diğer 7 parsel müstakil kalır.
+    /// </summary>
+    private const string FarkliTakbis = """
+        K1;ALİ VELİ (HASAN);1/5;E
+        K1;AYŞE KAYA (MEHMET);1/10;E
+        K1;FATMA DEMİR (OSMAN);1/10;E
+        K1;HÜSEYİN ÇELİK (İBRAHİM);3/20;E
+        K1;ZEYNEP ARSLAN (YUSUF);3/20;E
+        K1;MUSTAFA ÖZTÜRK (KEMAL);1/10;E
+        K1;EMİNE ŞAHİN (HALİL);1/10;E
+        K1;HATİCE YILDIZ (RECEP);1/10;E
+        """;
+
+    [AvaloniaFact]
+    public async Task Saha016_Onizleme_Karti_Mustakil_Ve_Musterek_Dagilimi_Tuval_Etiketleri_Durumu_Gostermeli()
+    {
+        var (alan, vm) = await HazirlaAsync();
+        vm.TakbisMetni = FarkliTakbis;
+        await vm.YaklasikYerKrokisiYukleAsync(Akis(), ".ncz");
+
+        vm.KrokiParselDagilimi.Should().HaveCount(8);
+        vm.KrokiParselDagilimi[0].Should().StartWith("101/1 • 1320.00 m² • Müşterek (6 hissedar: ALİ VELİ 88000/132000, ");
+        vm.KrokiParselDagilimi.Skip(1).Should().OnlyContain(d => d.EndsWith(" • Müstakil (TAM)", StringComparison.Ordinal));
+        vm.ParselasyonKatmani!.Parseller[0].Etiket.Should().Be("101/1 • ALİ VELİ +5 • 1320.00 m² • Müşterek");
+        vm.KrokiParselasyonOzeti.Should().Contain("7 müstakil (TAM) · 1 müşterek (pay/payda)");
+        var main = new MainWindow { DataContext = new MainWindowViewModel(new CadImportService([new SahteKrokiAdaptoru(Kroki())]), alan), Width = 1440, Height = 900 };
+        main.Show();
+        Dispatcher.UIThread.RunJobs();
+        main.FindControl<StackPanel>("ParselDagilimPaneli").Should().NotBeNull("kart dağılım paneli görünümde tanımlı");
+        main.Close();
+        alan.Yol.Belge.HakEslestirme.Should().BeNull("taslak projeye yazılmaz");
+    }
+
+    [AvaloniaFact]
+    public async Task Saha016_Onaylaninca_Hak_Eslestirme_Kritik_Bulgusuz_Gecmeli_Tescilde_TAM_Ve_PayPayda_Olmali()
+    {
+        var (alan, vm) = await HazirlaAsync();
+        vm.TakbisMetni = FarkliTakbis;
+        await vm.YaklasikYerKrokisiYukleAsync(Akis(), ".ncz");
+
+        await vm.ParselasyonCiziminiOnaylaCommand.ExecuteAsync(null);
+
+        var b = alan.Yol.Belge;
+        b.HakEslestirme.Should().NotBeNull();
+        b.HakEslestirme!.Eslestirme.Where(e => e.ImarParselKodu == "101/1").Should().HaveCount(6);
+        var hak = vm.Degerlendirme!.Hak!;
+        hak.Bulgular.Where(x => x.Code.StartsWith("ERR-TAPU", StringComparison.Ordinal)).Should().BeEmpty("Σ parsel = alan, Σ malik = net hak (0.00 m²)");
+        hak.ImarParselleri.Where(p => p.GeciciKod != "101/1").Should().OnlyContain(p => p.Mustakil && p.Paydaslar[0].Hisse.ToString() == "TAM");
+        hak.ImarParselleri.Single(p => p.GeciciKod == "101/1").Paydaslar.Single(x => x.MalikId == "ALİ VELİ (HASAN)").Hisse.ToString().Should().Be("88000/132000");
+        vm.ParselasyonKatmani!.Taslak.Should().BeFalse();
+        vm.ParselasyonKatmani.Parseller[0].Etiket.Should().EndWith(" • Müşterek");
+        vm.KrokiParselDagilimi.Should().HaveCount(8, "onaydan sonra uygulanan dağılım kartta kalır");
+        vm.DurumMetni.Should().Contain("(7 müstakil (TAM), 1 müşterek (pay/payda))");
+    }
+
+    [AvaloniaFact]
+    public async Task Saha016_Onay_Sonrasi_Hak_Eslestirme_Degisince_Dagilim_Karti_Ve_Etiket_Guncellenmeli()
+    {
+        // Reviewer O5: onay anındaki kopya değil, projedeki güncel eşleştirme esas alınır.
+        var (alan, vm) = await HazirlaAsync();
+        vm.TakbisMetni = FarkliTakbis;
+        await vm.YaklasikYerKrokisiYukleAsync(Akis(), ".ncz");
+        await vm.ParselasyonCiziminiOnaylaCommand.ExecuteAsync(null);
+        var b = alan.Yol.Belge;
+        var e = b.HakEslestirme!;
+
+        // 101/2 (Hüseyin, 440) ile 101/3 (Zeynep, 440) satırlarını tek parselde birleştir: 101/2 müşterek, 101/3 satırsız görünmeli.
+        var yeni = e with
+        {
+            Eslestirme = [.. e.Eslestirme.Select(x => x.ImarParselKodu == "101/3" ? x with { ImarParselKodu = "101/2" } : x)],
+        };
+        (await alan.Yol.GonderAsync(new HakEslestirmeAyarlaKomutu(yeni), OrnekProje.Muhendis)).IsSuccess.Should().BeTrue();
+        await vm.YenileAsync();
+
+        vm.KrokiParselDagilimi.Should().Contain(d => d.StartsWith("101/2 • 440.00 m² • Müşterek (2 hissedar: ", StringComparison.Ordinal))
+            .And.Contain("101/3 • 440.00 m² • Hak eşleştirmesinde satır yok");
+        vm.ParselasyonKatmani!.Parseller.Single(p => p.Kod == "101/2").Etiket.Should().EndWith(" • Müşterek");
     }
 }

@@ -145,6 +145,19 @@ public static class HakEslestirmeServisi
     /// <summary>İmar parseli eşleştirme toplamı ile parsel alanı arasında izin verilen fark (spec 25.2: ±1 dm²).</summary>
     public const int IzinVerilenParselFarkiDm2 = 1;
 
+    /// <summary>
+    /// Giren alan (resmî dağıtım cetveli): round(tapu × hisse, 2, AwayFromZero) — tek adımda dm²'ye yuvarlanır (çift yuvarlama yok;
+    /// SAHA-016 architect R2). Kroki parselasyonu ve hak eşleştirmesi aynı fonksiyonu kullanır.
+    /// </summary>
+    public static decimal GirenAlanM2(decimal tapuAlaniM2, Fraction hisse) =>
+        new Fraction(new BigInteger((Fraction.FromDecimal(tapuAlaniM2) * hisse * Fraction.FromInteger(100)).ToDecimal(0)), 100).ToDecimal(2);
+
+    /// <summary>Net hak (spec 4.4): giren − round(giren × DOPO, 2, AwayFromZero).</summary>
+    public static decimal NetHakM2(decimal girenAlanM2, decimal dopo) => girenAlanM2 - Math.Round(girenAlanM2 * dopo, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>AAD Md. 17/1-(d): paydaş tek başına müstakil parsele tahsis edilebilir mi (kadastro tek malikli veya paydaş muvafakatli).</summary>
+    public static bool MustakilTahsisEdilebilir(int kadastroMalikSayisi, bool muvafakatli) => kadastroMalikSayisi <= 1 || muvafakatli;
+
     private const char Ayirac = '\u001F';
 
     public static Result<HakEslestirmeSonucu> Eslestir(HakEslestirmeGirdisi girdi)
@@ -206,8 +219,8 @@ public static class HakEslestirmeServisi
             // Giren alan: resmî dağıtım cetveli gibi malik bazında tapu × hisse, 2 ondalık AwayFromZero (SORU-031 g).
             foreach (var m in k.Malikler)
             {
-                var girenDm2 = (Fraction.FromDecimal(k.TapuAlaniM2) * m.Hisse * Fraction.FromInteger(100)).ToDecimal(0);
-                haklar.Add(Anahtar(k.ParselId, m.MalikId), new HakSahibi(k.ParselId, m.MalikId, m.Muvafakatli, new BigInteger(girenDm2)));
+                var girenDm2 = new BigInteger(GirenAlanM2(k.TapuAlaniM2, m.Hisse) * 100m);
+                haklar.Add(Anahtar(k.ParselId, m.MalikId), new HakSahibi(k.ParselId, m.MalikId, m.Muvafakatli, girenDm2));
             }
         }
 
@@ -284,7 +297,7 @@ public static class HakEslestirmeServisi
             if (malikIdleri.Count == 1)
             {
                 var ihlal = rows.FirstOrDefault(r =>
-                    malikSayisi[haklar[r.HakAnahtari].KadastroParselId] > 1 && !haklar[r.HakAnahtari].Muvafakatli);
+                    !MustakilTahsisEdilebilir(malikSayisi[haklar[r.HakAnahtari].KadastroParselId], haklar[r.HakAnahtari].Muvafakatli));
                 if (ihlal.HakAnahtari is not null)
                 {
                     bulgular.Add(HataSablonu.Doldur(ErrorCodes.TapuMuvafakatsizMustakilTahsis,
@@ -339,8 +352,8 @@ public static class HakEslestirmeServisi
         foreach (var (anahtar, hak) in haklar)
         {
             var giren = new Fraction(hak.GirenDm2, 100).ToDecimal(2);
-            var dop = Math.Round(giren * girdi.Dopo, 2, MidpointRounding.AwayFromZero);
-            var net = giren - dop;
+            var net = NetHakM2(giren, girdi.Dopo);
+            var dop = giren - net;
             var tahsisM2 = new Fraction(tahsis[anahtar], 100).ToDecimal(2);
             var mh = new MalikHakki(hak.KadastroParselId, hak.MalikId, hak.Muvafakatli, giren, dop, net, tahsisM2);
             malikHaklari.Add(mh);
