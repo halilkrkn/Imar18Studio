@@ -14,7 +14,10 @@ namespace Imar18.Infrastructure.Cad.Ncz;
 /// <list type="bullet">
 /// <item><b>Şablon modu</b> (<see cref="CiktiPaketi.NczSablonu"/> varsa): başlık bölgesi, katman tablosu, font/sembol blokları, XML
 /// ve şablon kayıtları bayt bayt korunur. Eksik <see cref="OlusanKatmani"/>, <see cref="YolTerkKatmani"/>, <see cref="NoktaKatmani"/>
-/// katmanları eklenir (29 bayt/katman; <c>h[7]</c>, <c>h[8]</c>, <c>h[10]</c>, <c>h[11]</c> kayar). Bu katmanlardaki şablon kayıtları
+/// katmanları katman bloğunun gerçek sonuna (<c>h[3] + 5 + uzunluk = h[7]</c>, font bloğundan hemen önce) 29 baytlık Netcad kaydı
+/// olarak eklenir; blok uzunluğu ve sayaç güncellenir, <c>h[7]</c>, <c>h[8]</c>, <c>h[10]</c>, <c>h[11]</c> kayar ve font (<c>0x0B</c>) / sembol
+/// (<c>0x0C</c>) / <c>0x0D</c> / <c>0x17</c> değişmezleri çıktıda zorunludur (SAHA-017). <c>.DNS</c> ileri dönüşümünde şablon korunur, şablon
+/// kayıtları <see cref="CiktiPaketi.NczSablonIleriDonusumu"/> ile Deprem Sonrası'na taşınır. Bu katmanlardaki şablon kayıtları
 /// ve köşe dizisi (döngüsel/ters yönden bağımsız) projedeki kadastro dışı bir parselle aynı olan şablon poligonları yeniden
 /// yazıldığı için düşer; <see cref="GirenKatmani"/> ve projedeki kadastro halkalarıyla aynı poligonlar asla düşmez. Yeni kayıtlar
 /// sondaki tip-14 kaydının önüne eklenir; <c>h[1]</c>, ofset 81 sayacı ve 49..80 çizim kapsamı yeniden hesaplanır.</item>
@@ -45,6 +48,63 @@ public static class NczParselasyonYazici
     /// <summary>Spike §1: katman tablosundan sonraki bölgeyi gösteren başlık alanları (h[8], h[10], h[11]); h[4]/h[9] tablodan öncedir.</summary>
     private static readonly int[] KayanBasliklar = [8, NczParser.HeaderEntityStream - 1, NczParser.HeaderEntityStream];
 
+    // SAHA-017 (bayt incelemesi, Yaklasik_Yer_Krokisi.NCZ + 3 PARSELASYON HARİTASI): h[3]'teki katman bloğu
+    // [0x06][int32 uzunluk][13 bayt ön başlık (ofset 16: int16 sayaç)][n × 29 bayt kayıt] biçimindedir ve h[3] + 5 + uzunluk = h[7]
+    // adresinde font bloğu (0x0B, *.NCF) başlar. Kayıt: [0xFD][bayrak][0x12][0x00][ad uzunluğu][20 bayt CP1254 ad][4 bayt renk/kalem].
+    // Ayrıştırıcının "ad + 8 bayt" modeli (LayerTableHeaderSize = 22) aynı adlara 4 bayt kayık bakar; yazıcı blok modelini kullanır.
+    internal const byte KatmanBlokTipi = 0x06;
+    internal const byte FontBlokTipi = 0x0B;
+    internal const byte SembolBlokTipi = 0x0C;
+    internal const byte BolumBlokTipi = 0x0D;
+    internal const byte VarlikBolumTipi = 0x17;
+    internal const int BlokBasligiBoyutu = 5;
+    internal const int KatmanOnBasligiBoyutu = 13;
+    private const int SembolBasligi = 8;
+
+    /// <summary>Gözlenen kayıt öneki (görünür katman): <c>FD 80 12 00</c>.</summary>
+    private static readonly byte[] KatmanKayitOneki = [0xFD, 0x80, 0x12, 0x00];
+
+    /// <summary>Gözlenen ön başlık (sayaç hariç, mühendisin PARSELASYON HARİTASI.NCZ örneği) — iskelet modu için.</summary>
+    private static readonly byte[] IskeletOnBasligi = [0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0];
+
+    /// <summary>Renk/kalem (4 bayt): mühendisin PARSELASYON HARİTASI.NCZ örneğindeki aynı adlı/rollü katmanlardan (kişisel veri değildir).</summary>
+    private static byte[] KatmanRengi(string ad) => ad switch
+    {
+        OlusanKatmani => [0x04, 0x00, 0x01, 0x00],
+        YolTerkKatmani => [0x79, 0x00, 0x01, 0x00],
+        GirenKatmani or NoktaKatmani => [0x11, 0x00, 0x01, 0x00],
+        _ => [0x01, 0x00, 0x01, 0x00],
+    };
+
+    /// <summary>29 baytlık Netcad katman kaydı (şablondaki kayıtlarla aynı düzen).</summary>
+    internal static byte[] KatmanKaydi(string ad)
+    {
+        var k = new byte[NczParser.LayerRecordSize];
+        KatmanKayitOneki.CopyTo(k, 0);
+        Pascal(ad, 1 + NczParser.LayerNameCapacity).CopyTo(k, KatmanKayitOneki.Length);
+        KatmanRengi(ad).CopyTo(k, KatmanKayitOneki.Length + 1 + NczParser.LayerNameCapacity);
+        return k;
+    }
+
+    /// <summary>İskelet modu katman bloğu: [0x06][uzunluk][ön başlık + sayaç][kayıtlar] (blok sonu = h[7]).</summary>
+    internal static byte[] IskeletKatmanBlogu(IReadOnlyList<string> katmanlar)
+    {
+        var d = new List<byte>(BlokBasligiBoyutu + KatmanOnBasligiBoyutu + (NczParser.LayerRecordSize * katmanlar.Count)) { KatmanBlokTipi };
+        var n = new byte[4];
+        BinaryPrimitives.WriteInt32LittleEndian(n, KatmanOnBasligiBoyutu + (NczParser.LayerRecordSize * katmanlar.Count));
+        d.AddRange(n);
+        d.AddRange(IskeletOnBasligi);
+        var sayac = new byte[2];
+        BinaryPrimitives.WriteInt16LittleEndian(sayac, (short)katmanlar.Count);
+        d.AddRange(sayac);
+        foreach (var ad in katmanlar)
+        {
+            d.AddRange(KatmanKaydi(ad));
+        }
+
+        return [.. d];
+    }
+
     private const string SifirKatmani = "0";
     private const int KapsamOfseti = 49;
     private const int SayacOfseti = 81;
@@ -55,6 +115,8 @@ public static class NczParselasyonYazici
 
     private const byte NoktaTipi = 1;
     private const byte YaziTipi = 5;
+    private const byte CizgiTipi = 2;
+    private const int CizgiBitisOfseti = 81; // spike §2.3: bitiş (double × 2) 81..96
     private const byte SonKayitTipi = 14;
     private const int OrtakBaslikBoyutu = 81;
     private const int KatmanBaytOfseti = 2;
@@ -73,9 +135,6 @@ public static class NczParselasyonYazici
 
     /// <summary>Spike §2.4: sınır kutusu genişliği ≈ 0.8 × yükseklik × karakter sayısı.</summary>
     private const decimal KarakterGenislikOrani = 0.8m;
-
-    /// <summary>Spike §1: <c>0</c> katmanında gözlenen öznitelik (kişisel veri değildir).</summary>
-    private static readonly byte[] VarsayilanKatmanOzniteligi = [0x01, 0x00, 0x01, 0x00, 0xFD, 0x80, 0x12, 0x00];
 
     /// <summary>Sessiz <c>?</c> yerine istisna: gösterilemeyen karakter tescil no'yu bozmasın.</summary>
     private static readonly Encoding Kati = CodePagesEncodingProvider.Instance.GetEncoding(1254, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback)
@@ -108,6 +167,12 @@ public static class NczParselasyonYazici
     {
         /// <summary>Şablon modunda şablondan kopyalanması gereken proje kadastro halkaları (kanonik; reviewer H2).</summary>
         public IReadOnlyList<List<(decimal N, decimal E)>> Kadastro { get; init; } = [];
+
+        /// <summary>SAHA-017: yazıcının eklediği ilk katman kaydının indeksi (iskelette 0).</summary>
+        public int IlkYeniKatman { get; init; }
+
+        /// <summary>SAHA-017: şablon modunda font/sembol/XML/0x0D bölgesi (şablonun h[7]..h[11] baytları; çıktıda aynen olmalı).</summary>
+        public byte[]? SablonAraBolge { get; init; }
     }
 
     /// <summary>Yapısal yazım hatası (iletisi yalnız yapısal neden taşır; koordinat/etiket yazılmaz).</summary>
@@ -131,7 +196,7 @@ public static class NczParselasyonYazici
         bolge[PngIsaretcisiOfseti - NczParser.HeaderSize] = PngIsaretcisi;
 
         var bayt = NczAnonimlestirici.Iskelet(katmanlar, "<NetmapManager></NetmapManager>"u8.ToArray(), kayitlar,
-            bolge, PngIsaretcisiOfseti + 5, VarsayilanKatmanOzniteligi, bolumIsaretcisi: true);
+            bolge, PngIsaretcisiOfseti + 5, bolumIsaretcisi: true, netcadKatmanBlogu: IskeletKatmanBlogu(katmanlar));
         BaslikBolgesiniGuncelle(bayt, null, kayitlar.Select(k => k.Yuk));
         return new Yazim(bayt, 0, beklenen);
     }
@@ -155,7 +220,10 @@ public static class NczParselasyonYazici
         var tablo = h[NczParser.HeaderLayerTable];
         var katmanlar = ayristirma.Value.Layers.Select(l => l.Name).ToList();
         var eskiSayi = katmanlar.Count;
-        var tabloSonu = tablo + NczParser.LayerTableHeaderSize + (NczParser.LayerRecordSize * eskiSayi);
+
+        // SAHA-017: yeni katmanlar katman bloğunun gerçek sonuna (h[3] + 5 + uzunluk = h[7], font bloğundan hemen önce) eklenir.
+        var blokSonu = SablonKatmanBlogunuDogrula(s, h, eskiSayi);
+        var eskiUzunluk = BinaryPrimitives.ReadInt32LittleEndian(s[(tablo + 1)..]);
         var yonetilen = new HashSet<int>();
         foreach (var ad in new[] { OlusanKatmani, YolTerkKatmani, NoktaKatmani })
         {
@@ -188,6 +256,8 @@ public static class NczParselasyonYazici
         var yeni = YeniKayitlar(p, indeks, sablonlu: true, beklenen, ct);
 
         // Şablon kayıtları: yönetilen katmanlar ve projedeki kadastro dışı parselle aynı halka düşer; kadastro korunur.
+        // SAHA-017: .DNS ileri dönüşümünde şablon (Deprem Öncesi) kayıtları aynı katsayılarla Deprem Sonrası'na taşınır.
+        var donusum = p.NczSablonIleriDonusumu;
         var yeniden = p.Parseller.Where(x => x.Rol != ParselRolu.Kadastro).Select(x => Kanonik(x.Koseler)).ToList();
         var kadastro = p.Parseller.Where(x => x.Rol == ParselRolu.Kadastro).Select(x => Kanonik(x.Koseler)).ToList();
         var korunan = new List<(byte Bayrak, byte[] Yuk)>();
@@ -197,12 +267,22 @@ public static class NczParselasyonYazici
             ct.ThrowIfCancellationRequested();
             var bayrak = s[pos];
             var n = BinaryPrimitives.ReadInt32LittleEndian(s[(pos + 1)..]);
-            var yuk = s.Slice(pos + NczParser.RecordHeaderSize, n);
+            var yuk = s.Slice(pos + NczParser.RecordHeaderSize, n).ToArray();
             pos += NczParser.RecordHeaderSize + n;
             var varlik = bayrak is NczParser.EntityRecord or NczParser.ExtendedEntityRecord && n > KatmanOfseti + 1;
             if (varlik)
             {
-                int katman = BinaryPrimitives.ReadInt16LittleEndian(yuk[KatmanOfseti..]);
+                if (donusum is not null)
+                {
+                    if (IleriDonustur(yuk, bayrak == NczParser.ExtendedEntityRecord, donusum) is not { } donmus)
+                    {
+                        continue; // çözülmemiş tip: Deprem Öncesi'nde kalıp sistemleri karıştırmasın (reviewer Y1)
+                    }
+
+                    yuk = donmus;
+                }
+
+                int katman = BinaryPrimitives.ReadInt16LittleEndian(yuk.AsSpan(KatmanOfseti));
                 var poligon = yuk[0] == NczParser.PolylineType;
                 var halka = poligon ? Kanonik(SablonKoseleri(yuk, bayrak == NczParser.ExtendedEntityRecord)) : null;
                 var korunmali = katman == giren || (halka is not null && kadastro.Any(k => k.SequenceEqual(halka)));
@@ -215,7 +295,7 @@ public static class NczParselasyonYazici
                 korunanPoligon += poligon ? 1 : 0;
             }
 
-            korunan.Add((bayrak, yuk.ToArray()));
+            korunan.Add((bayrak, yuk));
         }
 
         // Spike §2: son kayıt tip 14 ise yeni kayıtlar onun önüne eklenir.
@@ -225,20 +305,18 @@ public static class NczParselasyonYazici
             : korunan.Count;
         korunan.InsertRange(ekleme, yeni);
 
-        // Bayt düzeni: [başlık + başlık bölgesi + katman tablosu] + yeni katmanlar + [font/sembol/XML/0x0D] + akış.
-        var d = new List<byte>(s.Length + (eklenen * NczParser.LayerRecordSize) + yeni.Sum(k => k.Yuk.Length + 5));
-        d.AddRange(s[..tabloSonu].ToArray());
-        BinaryPrimitives.WriteInt16LittleEndian(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(d).Slice(tablo + NczParser.LayerCountOffset), (short)katmanlar.Count);
-        var oznitelik = katmanlar.IndexOf(SifirKatmani) is var z and >= 0 && z < eskiSayi
-            ? s.Slice(tablo + NczParser.LayerTableHeaderSize + (NczParser.LayerRecordSize * z) + 1 + NczParser.LayerNameCapacity, NczParser.LayerRecordSize - 1 - NczParser.LayerNameCapacity).ToArray()
-            : VarsayilanKatmanOzniteligi;
+        // Bayt düzeni: [başlık + başlık bölgesi + katman bloğu (h[3]..h[7])] + yeni 29 baytlık kayıtlar
+        // + [font (h[7]) / sembol (h[8]) / XML / 0x0D (h[10]) — bayt bayt] + [0x17 (h[11]) + kayıt akışı].
+        var kayma = eklenen * NczParser.LayerRecordSize;
+        var d = new List<byte>(s.Length + kayma + yeni.Sum(k => k.Yuk.Length + 5));
+        d.AddRange(s[..blokSonu].ToArray());
         foreach (var ad in katmanlar.Skip(eskiSayi))
         {
-            d.AddRange(Pascal(ad, 1 + NczParser.LayerNameCapacity));
-            d.AddRange(oznitelik);
+            d.AddRange(KatmanKaydi(ad));
         }
 
-        d.AddRange(s[tabloSonu..h[NczParser.HeaderEntityStream]].ToArray());
+        var araBolge = s[blokSonu..h[NczParser.HeaderEntityStream]].ToArray();
+        d.AddRange(araBolge);
         var boyut = new byte[4];
         foreach (var (bayrak, yuk) in korunan)
         {
@@ -249,7 +327,8 @@ public static class NczParselasyonYazici
         }
 
         var bayt = d.ToArray();
-        var kayma = eklenen * NczParser.LayerRecordSize;
+        BinaryPrimitives.WriteInt32LittleEndian(bayt.AsSpan(tablo + 1), eskiUzunluk + kayma);
+        BinaryPrimitives.WriteInt16LittleEndian(bayt.AsSpan(tablo + NczParser.LayerCountOffset), (short)katmanlar.Count);
         for (var i = 0; i < NczParser.HeaderIntCount; i++)
         {
             var deger = h[i];
@@ -259,11 +338,11 @@ public static class NczParselasyonYazici
             }
             else if (i == NczParser.HeaderLayerTableEnd)
             {
-                deger = tabloSonu + kayma - NczParser.LayerTableEndBias;
+                deger = blokSonu + kayma; // font bloğunun yeni başlangıcı
             }
-            else if (KayanBasliklar.Contains(i) && deger >= tabloSonu)
+            else if (KayanBasliklar.Contains(i) && deger >= blokSonu)
             {
-                deger += kayma; // yalnız h[8], h[10], h[11] (spike: katman tablosundan sonraki mutlak ofsetler)
+                deger += kayma; // yalnız h[8], h[10], h[11] (katman bloğundan sonraki mutlak ofsetler)
             }
 
             BinaryPrimitives.WriteInt32LittleEndian(bayt.AsSpan(1 + (4 * i)), deger);
@@ -271,14 +350,155 @@ public static class NczParselasyonYazici
 
         if (tablo >= BaslikBolgesiEnAz)
         {
-            var eskiKapsam = Kapsam(s);
+            // Dönüşümde eski kapsam Deprem Öncesi'dir: tüm (dönüşmüş) varlıklardan yeniden hesaplanır.
+            var eskiKapsam = donusum is null ? Kapsam(s) : null;
             var varliklar = korunan.Where(k => k.Bayrak is NczParser.EntityRecord or NczParser.ExtendedEntityRecord && k.Yuk.Length > 0).Select(k => k.Yuk).ToList();
 
             // Eski kapsam geçersizse (ör. sıfır dolgu) tüm varlıklar, geçerliyse yalnız yeniler kapsamı genişletir (küçültülmez).
             BaslikBolgesiniGuncelle(bayt, eskiKapsam, varliklar, eskiKapsam is null ? varliklar : yeni.Select(k => k.Yuk));
         }
 
-        return new Yazim(bayt, korunanPoligon, beklenen) { Kadastro = kadastro };
+        return new Yazim(bayt, korunanPoligon, beklenen) { Kadastro = kadastro, SablonAraBolge = araBolge, IlkYeniKatman = eskiSayi };
+    }
+
+    /// <summary>
+    /// SAHA-017: şablonun Netcad 8.5 blok düzenini doğrular ve katman bloğunun sonunu (= h[7]) döndürür. Şablonda
+    /// <c>s[h[3]] = 0x06</c>, <c>uzunluk = 13 + 29 × sayaç</c>, <c>h[3] + 5 + uzunluk = h[7]</c>, <c>s[h[7]] = 0x0B</c> (font),
+    /// <c>s[h[8]] = 0x0C</c> (sembol), <c>s[h[10]] = 0x0D</c>, <c>s[h[11]] = 0x17</c> sağlanmazsa yazım reddedilir (bozuk dosya üretilmez).
+    /// </summary>
+    private static int SablonKatmanBlogunuDogrula(ReadOnlySpan<byte> s, ReadOnlySpan<int> h, int sayac)
+    {
+        var tablo = h[NczParser.HeaderLayerTable];
+        if (tablo + BlokBasligiBoyutu > s.Length || s[tablo] != KatmanBlokTipi)
+        {
+            throw new YazimHatasi("template layer block (0x06) not found at h[3]");
+        }
+
+        var uzunluk = BinaryPrimitives.ReadInt32LittleEndian(s[(tablo + 1)..]);
+        if (uzunluk != KatmanOnBasligiBoyutu + (NczParser.LayerRecordSize * sayac) || tablo + BlokBasligiBoyutu + uzunluk != h[NczParser.HeaderLayerTableEnd])
+        {
+            throw new YazimHatasi("template layer block length does not end at h[7]");
+        }
+
+        BlokTipleriniDogrula(s, h, "template");
+        return tablo + BlokBasligiBoyutu + uzunluk;
+    }
+
+    /// <summary>h[7] = 0x0B (font), h[8] = 0x0C (sembol), h[10] = 0x0D, h[11] = 0x17 ve h[7] ≤ h[8] &lt; h[10] &lt; h[11].</summary>
+    private static void BlokTipleriniDogrula(ReadOnlySpan<byte> d, ReadOnlySpan<int> h, string kaynak)
+    {
+        var (h7, h8, h10, h11) = (h[NczParser.HeaderLayerTableEnd], h[8], h[NczParser.HeaderEntityStream - 1], h[NczParser.HeaderEntityStream]);
+        var sirali = h7 >= 0 && h7 <= h8 && h8 < h10 && h10 < h11 && h11 < d.Length;
+        if (!sirali || d[h7] != FontBlokTipi || d[h8] != SembolBlokTipi || d[h10] != BolumBlokTipi || d[h11] != VarlikBolumTipi)
+        {
+            throw new YazimHatasi(kaynak + " font/symbol block layout (h[7]=0x0B, h[8]=0x0C, h[10]=0x0D, h[11]=0x17) is broken");
+        }
+    }
+
+    /// <summary>Katman bloğu değişmezi: <c>d[h[3]] = 0x06</c>, <c>uzunluk = 13 + 29 × sayaç</c>, <c>h[3] + 5 + uzunluk = h[7]</c>.</summary>
+    private static void KatmanBlogunuDogrula(ReadOnlySpan<byte> d, ReadOnlySpan<int> h, int ilkYeni)
+    {
+        var tablo = h[NczParser.HeaderLayerTable];
+        int sayac = BinaryPrimitives.ReadInt16LittleEndian(d[(tablo + NczParser.LayerCountOffset)..]);
+        var uzunluk = BinaryPrimitives.ReadInt32LittleEndian(d[(tablo + 1)..]);
+        if (d[tablo] != KatmanBlokTipi || uzunluk != KatmanOnBasligiBoyutu + (NczParser.LayerRecordSize * sayac)
+            || tablo + BlokBasligiBoyutu + uzunluk != h[NczParser.HeaderLayerTableEnd])
+        {
+            throw new YazimHatasi("written layer block (0x06) does not end at h[7]");
+        }
+
+        // Şablon kayıtlarının öneki değişkendir (gerçek dosyada FD 80 12 00, FD 7E FF FF, DD 00 02 00); yalnız yeniler denetlenir.
+        for (var i = ilkYeni; i < sayac; i++)
+        {
+            if (!d.Slice(tablo + BlokBasligiBoyutu + KatmanOnBasligiBoyutu + (NczParser.LayerRecordSize * i), KatmanKayitOneki.Length).SequenceEqual(KatmanKayitOneki))
+            {
+                throw new YazimHatasi("written layer record does not start with FD 80 12 00");
+            }
+        }
+    }
+
+    /// <summary>
+    /// SAHA-017: şablon varlık kaydını <see cref="DonusumKatsayilari.Uygula"/> (decimal, 6 ondalık) ile ileri dönüştürür.
+    /// Beyaz liste (spike §2'de düzeni doğrulanmış tipler): poligon (tip 7) köşeleri, çizgi (tip 2) başlangıç/bitiş, nokta
+    /// (tip 1) ve yazı (tip 5) ekleme noktası; sınır kutusu dönüşmüş noktalardan yeniden hesaplanır, kot korunur. Tip 14
+    /// koordinatsızdır, aynen kalır. Reviewer Y1: iç düzeni çözülmemiş tipler (6, 10, …) yarım dönüştürülüp iki koordinat
+    /// sistemini karıştırmasın diye <see langword="null"/> döner (kayıt haritaya alınmaz; <c>CiktiServisi</c> uyarısı). Reviewer Y2:
+    /// beyaz listedeki bir kaydın kısa olması veya bir koordinatının çözülememesi yazımı reddeder (sessiz kısmi dönüşüm yok).
+    /// </summary>
+    private static byte[]? IleriDonustur(byte[] yuk, bool genis, DonusumKatsayilari k)
+    {
+        if (yuk[0] == SonKayitTipi)
+        {
+            return yuk;
+        }
+
+        if (yuk[0] is not (NoktaTipi or CizgiTipi or YaziTipi or NczParser.PolylineType))
+        {
+            return null;
+        }
+
+        if (yuk.Length < KutuOfseti + 32 || (yuk[0] == CizgiTipi && yuk.Length < CizgiBitisOfseti + 16))
+        {
+            throw new YazimHatasi("template record is too short to transform");
+        }
+
+        var y = (byte[])yuk.Clone();
+        var kutu = new List<GeodeticPoint>();
+        if (y[0] == NczParser.PolylineType)
+        {
+            var o = NczParser.PolylineStringsOffset + (genis ? NczParser.ExtendedClassFieldSize : 0) + NczParser.LabelFieldSize + NczParser.PolylineFlagsSize + NczParser.DeclaredAreaSize;
+            for (; o + NczParser.VertexSize <= y.Length; o += NczParser.VertexSize)
+            {
+                kutu.Add(Tasi(y, o, k));
+            }
+
+            if (kutu.Count == 0)
+            {
+                throw new YazimHatasi("template polygon has no vertices to transform");
+            }
+        }
+        else
+        {
+            kutu.Add(Tasi(y, RefOfseti, k));
+            if (y[0] == CizgiTipi)
+            {
+                kutu.Add(Tasi(y, CizgiBitisOfseti, k));
+            }
+            else
+            {
+                // Nokta / yazı: kutunun dört köşesi dönüştürülür (afinde kutu dönüşmüş köşelerin zarfıdır).
+                var mn = NoktaOku(y, KutuOfseti) ?? throw new YazimHatasi("template bounding box cannot be decoded");
+                var mx = NoktaOku(y, KutuOfseti + 16) ?? throw new YazimHatasi("template bounding box cannot be decoded");
+                kutu.Add(k.Uygula(mn));
+                kutu.Add(k.Uygula(mx));
+                kutu.Add(k.Uygula(new GeodeticPoint(mn.X, mx.Y)));
+                kutu.Add(k.Uygula(new GeodeticPoint(mx.X, mn.Y)));
+            }
+        }
+
+        NoktaYaz(y, KutuOfseti, new GeodeticPoint(kutu.Min(v => v.X), kutu.Min(v => v.Y)));
+        NoktaYaz(y, KutuOfseti + 16, new GeodeticPoint(kutu.Max(v => v.X), kutu.Max(v => v.Y)));
+        return y;
+    }
+
+    private static GeodeticPoint? NoktaOku(byte[] y, int o) =>
+        Ieee754Decimal.TryDecode(BinaryPrimitives.ReadUInt64LittleEndian(y.AsSpan(o)), NczParser.CoordinateScale, out var n)
+        && Ieee754Decimal.TryDecode(BinaryPrimitives.ReadUInt64LittleEndian(y.AsSpan(o + 8)), NczParser.CoordinateScale, out var e)
+            ? new GeodeticPoint(n, e)
+            : null;
+
+    private static void NoktaYaz(byte[] y, int o, GeodeticPoint v)
+    {
+        BinaryPrimitives.WriteDoubleLittleEndian(y.AsSpan(o), (double)v.X);
+        BinaryPrimitives.WriteDoubleLittleEndian(y.AsSpan(o + 8), (double)v.Y);
+    }
+
+    private static GeodeticPoint Tasi(byte[] y, int o, DonusumKatsayilari k)
+    {
+        var v = NoktaOku(y, o) ?? throw new YazimHatasi("template coordinate cannot be decoded for transformation");
+        var a = k.Uygula(v);
+        NoktaYaz(y, o, a);
+        return a;
     }
 
     /// <summary>Şablondaki 49..80 kapsamı; geçersizse (min ≥ max, ör. sıfır dolgu) null.</summary>
@@ -613,6 +833,25 @@ public static class NczParselasyonYazici
 
     private static void Dogrula(Yazim y, CancellationToken ct)
     {
+        // SAHA-017 (SORU-042): Netcad 8.5 blok değişmezleri — katman bloğu h[7]'de biter; şablon modunda font (0x0B), sembol
+        // (0x0C), 0x0D ve 0x17 bölümleri kaymış başlık ofsetlerinde ve şablondaki baytlarla aynıdır.
+        Span<int> h = stackalloc int[NczParser.HeaderIntCount];
+        for (var i = 0; i < NczParser.HeaderIntCount; i++)
+        {
+            h[i] = BinaryPrimitives.ReadInt32LittleEndian(y.Bayt.AsSpan(1 + (4 * i)));
+        }
+
+        KatmanBlogunuDogrula(y.Bayt, h, y.IlkYeniKatman);
+        if (y.SablonAraBolge is { } ara)
+        {
+            BlokTipleriniDogrula(y.Bayt, h, "written file");
+            var h7 = h[NczParser.HeaderLayerTableEnd];
+            if (h7 + ara.Length != h[NczParser.HeaderEntityStream] || !y.Bayt.AsSpan(h7, ara.Length).SequenceEqual(ara))
+            {
+                throw new YazimHatasi("font/symbol/XML region was not preserved byte for byte");
+            }
+        }
+
         var okunan = NczParser.Parse(y.Bayt, ct);
         if (okunan.IsFailure)
         {

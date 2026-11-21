@@ -125,8 +125,10 @@ public sealed class NczParselasyonYaziciGercekVeriTests
         H(d, 11).Should().Be(H(sablon, 11) + eklenen);
         (H(d, 8) - H(d, 7)).Should().Be(89, "spike: h[8] = h[7] + 89");
         d.AsSpan(85, H(sablon, 3) - 85).SequenceEqual(sablon.AsSpan(85, H(sablon, 3) - 85)).Should().BeTrue("başlık bölgesi (PNG, çizgi tipleri) aynen korunur");
-        var ara = H(sablon, 7) + 4;
-        d.AsSpan(H(d, 7) + 4, H(sablon, 11) - ara).SequenceEqual(sablon.AsSpan(ara, H(sablon, 11) - ara)).Should().BeTrue("font/sembol/XML bölgesi aynen korunur");
+        var ara = H(sablon, 7);
+        d.AsSpan(H(d, 7), H(sablon, 11) - ara).SequenceEqual(sablon.AsSpan(ara, H(sablon, 11) - ara)).Should().BeTrue("SAHA-017: font/sembol/XML bölgesi h[7]'den itibaren aynen korunur");
+        Saha017NczKatmanBloguTests.BlokDegismezleriTutmali(sablon);
+        Saha017NczKatmanBloguTests.BlokDegismezleriTutmali(d);
         var varliklar = Kayitlar(d).Where(Varlik).ToList();
         BinaryPrimitives.ReadInt32LittleEndian(d.AsSpan(81)).Should().Be(varliklar.Count - 1);
         Kayitlar(d)[^1].Yuk[0].Should().Be(14);

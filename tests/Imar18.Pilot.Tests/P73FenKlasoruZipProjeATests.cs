@@ -90,7 +90,7 @@ public sealed class P73FenKlasoruZipProjeATests
         using var _ = alan;
 
         Bosluksuz(Metin(d["DOP.pdf"])).Should().Contain("0.1240195").And.Contain("8699.44").And.Contain("7620.54").And.Contain("=1078.90")
-            .And.Contain("MaksimumDopOranı0.4500000");
+            .And.Contain("MaksimumDopOranı=0.4500000").And.Contain("DüzenlemeOrtaklıkPayı=1078.90/8699.44=0.1240195", "SAHA-017 Netcad DOP düzeni");
         Bosluksuz(Metin(d["ÖZET CETVELİ.pdf"])).Should().Contain("8699.44").And.Contain("7620.54").And.Contain("1078.90").And.Contain("0.1240195");
         var alanHesabi = Metin(d["ALAN HESABI.pdf"]);
         alanHesabi.Should().Contain("Tapu Alanı 8699.44").And.Contain("HESAPLANAN 8699.32").And.Contain("FARK 0.12").And.Contain("TECVİZ 21.02");
