@@ -18,7 +18,20 @@ public sealed record KrokiParselasyonGirdisi(
     IReadOnlyList<ParselGeometrisi> ProjeParselleri,
     IReadOnlyList<KadastroParseli> Takbis,
     MalikRehberi Rehber,
-    decimal? Dopo);
+    decimal? Dopo)
+{
+    /// <summary>SAHA-021: varsayılan başlangıç imar ada numarası.</summary>
+    public const int VarsayilanBaslangicAdaNo = 101;
+
+    /// <summary>SAHA-021: başlangıç ada numarasının üst sınırı (parsel kodu 64 karakter sınırının çok altında).</summary>
+    public const int EnBuyukBaslangicAdaNo = 9_999_999;
+
+    /// <summary>
+    /// SAHA-021: blok etiketi boş, sayısal olmayan veya <c>100</c>'den küçük sıra numarası (<c>"1"</c>, <c>"2"</c>) olan bölünen
+    /// blokların yeni imar ada numarası buradan başlar (<c>101</c>, <c>102</c>…); mühendis 4. adımda <c>201</c>, <c>301</c> verebilir.
+    /// </summary>
+    public int BaslangicAdaNo { get; init; } = VarsayilanBaslangicAdaNo;
+}
 
 /// <summary>
 /// Kesin alanlı yeni <c>TK_Oluşan</c> parseli. <see cref="Koseler"/> aktif sistemde açık halkadır; <see cref="HedefAlanM2"/> blok
@@ -142,7 +155,9 @@ public sealed record KrokiParselasyonOnizleme(
 /// <item><b>Müstakil + müşterek dağıtım (SAHA-016)</b>: <see cref="MustakilMusterekDagitici"/> önce talepleri parsellere müstakil
 /// yerleştirir, artan / krokide olmayan hakları açık kapasiteli parsellere müşterek (dm² pay/payda) aktarır; Σ parsel = parsel alanı ve
 /// Σ malik = dengelenmiş net hak 0.00 m² farkla sağlanır. AAD Md. 17/1-(d) muvafakat gerektiren müstakil parseller uyarılır.</item>
-/// <item><b>Kodlar</b>: <c>{ada}/{sıra}</c>; ada = blok kimliğinin ilk <c>/</c> öncesi; sıra taslak bölge sırası (batıdan doğuya).</item>
+/// <item><b>Kodlar</b>: <c>{ada}/{sıra}</c>; ada = blok kimliğinin ilk <c>/</c> öncesi — SAHA-021: <c>≥ 100</c> ada numarasıysa aynen,
+/// boş / sayısal olmayan / <c>100</c>'den küçük sıra numarasıysa (<c>"1"</c>, <c>"2"</c>) <see cref="KrokiParselasyonGirdisi.BaslangicAdaNo"/>'dan
+/// (<c>101</c>, <c>102</c>…) yeni ada no; sıra taslak bölge sırası (batıdan doğuya).</item>
 /// </list>
 /// Uyarılar yalnız sayı, ada/parsel kodu ve alan içerir (malik adı yazmaz — KVKK); malik adları yalnız önizleme/tuval etiketinde.
 /// </summary>
@@ -229,6 +244,11 @@ public static class KrokiParselasyonMotoru
         if (girdi.Takbis is null || girdi.Takbis.Count == 0)
         {
             return Gecersiz("TAKBIS shares are required before the sketch can be subdivided");
+        }
+
+        if (girdi.BaslangicAdaNo is < 1 or > KrokiParselasyonGirdisi.EnBuyukBaslangicAdaNo)
+        {
+            return Gecersiz("starting block number must be between 1 and 9999999");
         }
 
         var uyarilar = new List<string>();
@@ -538,6 +558,16 @@ public static class KrokiParselasyonMotoru
         // Reviewer H2: bölünen blokların kendi kimlikleri serbest kalır; adadaki korunan parsel numaralarından sonra devam edilir.
         var bolunecek = taslaklar.Keys.Select(b => bloklar[b].Kimlik).ToHashSet(StringComparer.Ordinal);
         var mevcutKimlikler = girdi.ProjeParselleri.Select(p => p.ParselId).Where(id => !bolunecek.Contains(id)).ToHashSet(StringComparer.Ordinal);
+        var yeniAdalar = YeniAdaNumaralari(taslaklar.Keys.Order().Select(b => AdaKodu(bloklar[b].Kimlik)).ToList(), mevcutKimlikler, girdi.BaslangicAdaNo);
+
+        // Reviewer D6: yeniden numaralama (ve kullanılmış ada no atlaması) sessiz geçmez. Serbest etiket kişisel veri içerebileceğinden
+        // yalnız rakamlı etiket yazılır (reviewer L2 ilkesi).
+        foreach (var (kod, ada) in yeniAdalar.OrderBy(x => int.Parse(x.Value, NumberStyles.None, CultureInfo.InvariantCulture)))
+        {
+            var etiket = kod.Length is > 0 and <= 9 && kod.All(char.IsAsciiDigit) ? "\"" + kod + "\" etiketli blok" : "Ada numarası olmayan blok";
+            uyarilar.Add(string.Create(CultureInfo.InvariantCulture,
+                $"{etiket} yeni imar adası {ada} olarak numaralandı (Başlangıç Ada No {girdi.BaslangicAdaNo}; projede kullanılan ada numaraları atlanır)."));
+        }
         var sonrakiNo = new Dictionary<string, int>(StringComparer.Ordinal);
         var kesinler = new List<(string Kod, string Blok, IReadOnlyList<GeodeticPoint> Koseler, decimal Hedef, Bolge Bolge)>();
         var bolunen = new List<string>();
@@ -573,7 +603,7 @@ public static class KrokiParselasyonMotoru
             }
 
             var exactToplam = 0m;
-            var ada = AdaKodu(blok.Kimlik);
+            var ada = yeniAdalar.GetValueOrDefault(AdaKodu(blok.Kimlik), AdaKodu(blok.Kimlik));
             for (var i = 0; i < bb.Count; i++)
             {
                 var koseler = kesin.Value[i];
@@ -764,6 +794,43 @@ public static class KrokiParselasyonMotoru
         var t = blokKimligi.Trim();
         var i = t.IndexOf('/', StringComparison.Ordinal);
         return i > 0 ? t[..i] : t;
+    }
+
+    /// <summary>SAHA-021: imar ada numarası olarak korunan etiket — en çok 9 rakam ve değeri <c>≥ 100</c> (<c>101</c>, <c>436</c>).</summary>
+    internal static bool AdaNumarasiMi(string ada) =>
+        ada.Length is > 0 and <= 9 && ada.All(char.IsAsciiDigit) && int.Parse(ada, NumberStyles.None, CultureInfo.InvariantCulture) >= 100;
+
+    /// <summary>
+    /// SAHA-021: bölünen blokların ada kodu → yeni imar ada numarası. Ada numarası olan (<c>≥ 100</c>) kod aynen kalır (haritada yok).
+    /// Boş, sayısal olmayan (<c>ADA1</c>) veya <c>100</c>'den küçük (<c>"1"</c>, <c>"2"</c>) kodlar <paramref name="baslangic"/>'tan
+    /// (<c>101</c>) itibaren sıralı numara alır: önce sayısal kodlar değer sırasıyla, sonra diğerleri blok sırasıyla; aynı kod tek ada
+    /// olur. Projede (bölünmeyen parsel kimliklerinde) veya korunan bloklarda zaten kullanılan ada numarası atlanır.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> YeniAdaNumaralari(IReadOnlyList<string> adaKodlari, IEnumerable<string> mevcutKimlikler, int baslangic)
+    {
+        var kullanilan = mevcutKimlikler.Select(AdaKodu).Concat(adaKodlari.Where(AdaNumarasiMi))
+            .Where(a => a.Length is > 0 and <= 9 && a.All(char.IsAsciiDigit))
+            .Select(a => int.Parse(a, NumberStyles.None, CultureInfo.InvariantCulture))
+            .ToHashSet();
+        var yeniden = adaKodlari.Where(a => !AdaNumarasiMi(a)).Distinct(StringComparer.Ordinal)
+            .Select((a, i) => (Kod: a, Sira: i, Sayi: a.Length is > 0 and <= 9 && a.All(char.IsAsciiDigit) ? int.Parse(a, NumberStyles.None, CultureInfo.InvariantCulture) : (int?)null))
+            .OrderBy(x => x.Sayi is null).ThenBy(x => x.Sayi).ThenBy(x => x.Sira)
+            .ToList();
+        var sonuc = new Dictionary<string, string>(StringComparer.Ordinal);
+        var n = baslangic;
+        foreach (var (kod, _, _) in yeniden)
+        {
+            while (kullanilan.Contains(n))
+            {
+                n++;
+            }
+
+            kullanilan.Add(n);
+            sonuc[kod] = n.ToString(CultureInfo.InvariantCulture);
+            n++;
+        }
+
+        return sonuc;
     }
 
     /// <summary>

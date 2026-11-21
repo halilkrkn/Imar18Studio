@@ -165,6 +165,13 @@ public sealed record CiktiPaketi(
     /// <summary>SAHA-020: arşiv noktası eşlenen kadastro köşelerinin arşiv onaylı (Deprem Öncesi) koordinatı (nokta no → Y, X).</summary>
     public IReadOnlyDictionary<int, KoordinatSatiri> ArsivKoordinatlari { get; init; } = new Dictionary<int, KoordinatSatiri>();
 
+    /// <summary>
+    /// SAHA-021: projede mühendisin girdiği arşiv onaylı kadastro noktalarından en az biri bir kadastro köşesine eşlendi mi (hiçbiri
+    /// eşlenmezse "ARŞİV ONAYLI" başlığı CAD koordinatıyla basılmaz — reviewer D4). <c>.DNS</c> / ortak noktalı dönüşüm olmasa da KOORDİNE
+    /// ÖZET ve RÖLÖVE "DEPREM ÖNCESİ / ARŞİV ONAYLI" + "DEPREM SONRASI" iki tablosuyla basılır.
+    /// </summary>
+    public bool ArsivNoktalariVar { get; init; }
+
     /// <summary>SAHA-020: basılacak nokta adı (arşiv no, sıralı yeni no veya iç nokta no).</summary>
     public string NoktaAdi(int noktaNo) =>
         NoktaAdlari.TryGetValue(noktaNo, out var ad) ? ad : noktaNo.ToString(System.Globalization.CultureInfo.InvariantCulture);

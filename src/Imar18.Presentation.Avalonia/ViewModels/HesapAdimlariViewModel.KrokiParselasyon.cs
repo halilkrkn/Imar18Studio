@@ -35,6 +35,34 @@ public sealed partial class HesapAdimlariViewModel
     public const string MusterekBekleyenDuzenlemeUyarisi =
         "Müşterek dağılım panelinde önizlemeye uygulanmamış değişiklik var; önce \"✅ Düzenlemeyi Önizlemeye Uygula\" veya \"🔄 Otomatik Dağıtıma Dön\" deyin.";
 
+    /// <summary>SAHA-021: "Başlangıç Ada No" kutusu geçersizken gösterilen hata.</summary>
+    public const string KrokiBaslangicAdaNoHatasi = "Başlangıç Ada No 1 ile 9999999 arasında bir tam sayı olmalı (varsayılan 101; ör. 201, 301).";
+
+    /// <summary>
+    /// SAHA-021: 4. adım kroki parselasyon kartındaki isteğe bağlı "Başlangıç Ada No" (varsayılan <c>101</c>). Blok etiketi boş veya
+    /// <c>100</c>'den küçük sıra numarası olan bloklar bu numaradan başlayarak <c>101/1</c>, <c>102/1</c>… kodlarını alır.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(KrokiBaslangicAdaNoHatali))]
+    private string _krokiBaslangicAdaNo = KrokiParselasyonGirdisi.VarsayilanBaslangicAdaNo.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>Kutucuk geçersiz mi (görünüm kırmızı çerçeve).</summary>
+    public bool KrokiBaslangicAdaNoHatali => !KrokiBaslangicAdaNoOku(out _);
+
+    /// <summary>Kutucuğu okur; boşsa varsayılan <c>101</c>.</summary>
+    internal bool KrokiBaslangicAdaNoOku(out int adaNo)
+    {
+        var t = (KrokiBaslangicAdaNo ?? string.Empty).Trim();
+        if (t.Length == 0)
+        {
+            adaNo = KrokiParselasyonGirdisi.VarsayilanBaslangicAdaNo;
+            return true;
+        }
+
+        return int.TryParse(t, NumberStyles.None, CultureInfo.InvariantCulture, out adaNo)
+            && adaNo is >= 1 and <= KrokiParselasyonGirdisi.EnBuyukBaslangicAdaNo;
+    }
+
     /// <summary>Tuvalde çizilecek parselasyon katmanı (taslak veya uygulanmış; yoksa null). Ana pencere tuvale aktarır.</summary>
     [ObservableProperty]
     private ParselasyonKatmani? _parselasyonKatmani;
